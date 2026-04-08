@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc \"AI 教学平台项目开题调研.docx\" -o /tmp/ai_platform_research.md)",
+      "Bash(pandoc \"/c/Users/patri/OneDrive - bjtu.edu.cn/Files/实训IV/AI 教学平台项目开题调研.docx\" -o /tmp/ai_platform_research.md)",
+      "Bash(node gen_proposal.js)"
+    ]
+  }
+}
