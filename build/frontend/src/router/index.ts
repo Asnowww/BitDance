@@ -181,6 +181,48 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '活动日历', requiresAuth: true }
   },
   {
+    path: '/community',
+    name: 'community',
+    component: () => import('@/pages/community/CommunityFeedPage.vue'),
+    meta: { title: '社区' }
+  },
+  {
+    path: '/community/post/:id',
+    name: 'post-detail',
+    component: () => import('@/pages/community/PostDetailPage.vue'),
+    meta: { title: '动态' }
+  },
+  {
+    path: '/community/publish',
+    name: 'publish-post',
+    component: () => import('@/pages/community/PublishPostPage.vue'),
+    meta: { title: '发动态', requiresAuth: true }
+  },
+  {
+    path: '/community/topics',
+    name: 'topics',
+    component: () => import('@/pages/community/TopicsPage.vue'),
+    meta: { title: '话题广场' }
+  },
+  {
+    path: '/community/topic/:name',
+    name: 'topic-detail',
+    component: () => import('@/pages/community/TopicDetailPage.vue'),
+    meta: { title: '话题' }
+  },
+  {
+    path: '/community/following',
+    name: 'following',
+    component: () => import('@/pages/community/FollowingPage.vue'),
+    meta: { title: '关注', requiresAuth: true }
+  },
+  {
+    path: '/community/search',
+    name: 'community-search',
+    component: () => import('@/pages/community/CommunitySearchPage.vue'),
+    meta: { title: '社区搜索' }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')

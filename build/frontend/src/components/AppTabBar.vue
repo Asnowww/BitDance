@@ -24,7 +24,8 @@ const onPublishClick = () => {
     actions: [
       { name: '训练打卡', subname: '记录今天练了多久', callback: () => router.push('/publish/checkin') },
       { name: '发起约练', subname: '找个搭子一起练', callback: () => router.push('/publish/practice') },
-      { name: '写评价', subname: '聊聊舞室、老师或课程', callback: () => router.push('/publish/review') }
+      { name: '写评价', subname: '聊聊舞室、老师或课程', callback: () => router.push('/publish/review') },
+      { name: '发动态', subname: '图文 / 视频 / 话题', callback: () => router.push('/community/publish') }
     ]
   });
   sheetVisible.value = true;
