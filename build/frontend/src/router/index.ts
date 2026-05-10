@@ -103,6 +103,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的试听', requiresAuth: true }
   },
   {
+    path: '/studio/:id/reviews',
+    name: 'studio-reviews',
+    component: () => import('@/pages/studio/StudioReviewsPage.vue'),
+    meta: { title: '评价' }
+  },
+  {
+    path: '/me/reviews',
+    name: 'my-reviews',
+    component: () => import('@/pages/user/MyReviewsPage.vue'),
+    meta: { title: '我的评价', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')
