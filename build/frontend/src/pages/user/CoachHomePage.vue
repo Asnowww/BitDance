@@ -9,9 +9,11 @@ import {
   removeMyCoachWork,
   type CoachProfile
 } from '@/api/coach';
+import { fetchCoachDashboard, type CoachDashboard } from '@/api/coachOps';
 
 const router = useRouter();
 const profile = ref<CoachProfile | null>(null);
+const dashboard = ref<CoachDashboard | null>(null);
 const editing = ref(false);
 const editIntro = ref('');
 const editTeachStyle = ref('');
@@ -22,7 +24,10 @@ const STYLES = ['Hiphop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waa
 const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 const reload = async () => {
-  profile.value = await fetchMyCoachProfile();
+  [profile.value, dashboard.value] = await Promise.all([
+    fetchMyCoachProfile(),
+    fetchCoachDashboard()
+  ]);
 };
 
 const enterEdit = () => {
@@ -96,6 +101,32 @@ onMounted(reload);
       <div class="avatar">{{ profile.name.charAt(0) }}</div>
       <div class="name">{{ profile.name }}</div>
       <div class="rating">★ {{ profile.ratingAvg }} · {{ profile.reviewCount }} 条评价</div>
+    </section>
+
+    <section v-if="dashboard && !editing" class="kpi">
+      <div class="kpi__cell">
+        <div class="kpi__num">{{ dashboard.monthSessions }}</div>
+        <div class="kpi__label">本月授课</div>
+      </div>
+      <div class="kpi__cell">
+        <div class="kpi__num">¥{{ dashboard.monthIncome }}</div>
+        <div class="kpi__label">本月收益</div>
+      </div>
+      <div class="kpi__cell">
+        <div class="kpi__num">{{ dashboard.pendingReplies }}</div>
+        <div class="kpi__label">待回复</div>
+      </div>
+      <div class="kpi__cell">
+        <div class="kpi__num">{{ dashboard.conversionRate }}%</div>
+        <div class="kpi__label">转化率</div>
+      </div>
+    </section>
+
+    <section v-if="!editing" class="ops">
+      <button class="op" @click="router.push('/coach/orders')">📋 学员订单与核销</button>
+      <button class="op" @click="router.push('/coach/replies')">💬 评价回复</button>
+      <button class="op" @click="router.push('/coach/workshop-create')">🎤 创建 Workshop</button>
+      <button class="op" @click="router.push('/coach/dashboard')">📊 经营看板</button>
     </section>
 
     <template v-if="!editing">
@@ -242,6 +273,47 @@ onMounted(reload);
   margin-top: 4px;
   font-size: 12px;
   color: var(--bd-text-secondary);
+}
+.kpi {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--bd-border);
+  margin-top: 8px;
+  &__cell {
+    background: #fff;
+    padding: 12px 6px;
+    text-align: center;
+  }
+  &__num {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--bd-primary);
+  }
+  &__label {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--bd-text-secondary);
+  }
+}
+.ops {
+  background: #fff;
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+.op {
+  border: none;
+  background: none;
+  padding: 14px;
+  text-align: left;
+  font-size: 13px;
+  border-right: 1px solid var(--bd-border);
+  border-bottom: 1px solid var(--bd-border);
+  cursor: pointer;
+  &:nth-child(even) {
+    border-right: none;
+  }
 }
 .block {
   margin-top: 8px;

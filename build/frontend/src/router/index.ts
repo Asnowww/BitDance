@@ -247,6 +247,36 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '训练目标', requiresAuth: true }
   },
   {
+    path: '/coach/appeal',
+    name: 'coach-appeal',
+    component: () => import('@/pages/coach/AppealPage.vue'),
+    meta: { title: '评价申诉', requiresAuth: true }
+  },
+  {
+    path: '/coach/workshop-create',
+    name: 'coach-workshop-create',
+    component: () => import('@/pages/coach/CoachWorkshopCreatePage.vue'),
+    meta: { title: '创建 Workshop', requiresAuth: true }
+  },
+  {
+    path: '/coach/orders',
+    name: 'coach-orders',
+    component: () => import('@/pages/coach/CoachOrdersPage.vue'),
+    meta: { title: '学员订单与核销', requiresAuth: true }
+  },
+  {
+    path: '/coach/replies',
+    name: 'coach-replies',
+    component: () => import('@/pages/coach/ReplyReviewsPage.vue'),
+    meta: { title: '评价回复', requiresAuth: true }
+  },
+  {
+    path: '/coach/dashboard',
+    name: 'coach-dashboard',
+    component: () => import('@/pages/coach/CoachDashboardPage.vue'),
+    meta: { title: '经营看板', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')
