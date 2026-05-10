@@ -21,6 +21,10 @@ if (USE_MOCK) {
   void import('./modules/growth');
   void import('./modules/message');
   void import('./modules/trial');
+  void import('./modules/coach');
+  void import('./modules/workshop');
+  void import('./modules/community');
+  void import('./modules/buddy');
 
   axios.interceptors.request.use(async (config) => {
     const method = (config.method ?? 'get').toLowerCase();
