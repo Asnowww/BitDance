@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
+import { getToken } from '@/utils/request';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -21,19 +22,19 @@ const routes: RouteRecordRaw[] = [
     path: '/publish/checkin',
     name: 'publish-checkin',
     component: () => import('@/pages/publish/PublishCheckinPage.vue'),
-    meta: { title: '训练打卡' }
+    meta: { title: '训练打卡', requiresAuth: true }
   },
   {
     path: '/publish/practice',
     name: 'publish-practice',
     component: () => import('@/pages/publish/PublishPracticePage.vue'),
-    meta: { title: '发起约练' }
+    meta: { title: '发起约练', requiresAuth: true }
   },
   {
     path: '/publish/review',
     name: 'publish-review',
     component: () => import('@/pages/publish/PublishReviewPage.vue'),
-    meta: { title: '写评价' }
+    meta: { title: '写评价', requiresAuth: true }
   },
   {
     path: '/growth',
@@ -45,7 +46,7 @@ const routes: RouteRecordRaw[] = [
     path: '/me',
     name: 'me',
     component: () => import('@/pages/user/UserCenterPage.vue'),
-    meta: { tab: 'me', title: '我的' }
+    meta: { tab: 'me', title: '我的', requiresAuth: true }
   },
   {
     path: '/login',
@@ -66,6 +67,13 @@ const router = createRouter({
   scrollBehavior() {
     return { top: 0 };
   }
+});
+
+router.beforeEach((to) => {
+  if (to.meta?.requiresAuth && !getToken()) {
+    return { path: '/login', query: { redirect: to.fullPath } };
+  }
+  return true;
 });
 
 router.afterEach((to) => {
