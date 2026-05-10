@@ -1,0 +1,25 @@
+# 仓库根级忽略 —— 避免 Claude Code 协作产物与无关大体积资源入库
+.claude/
+node_modules/
+dist/
+build/node_modules/
+build/dist/
+*.log
+
+# 环境变量与本地配置
+.env
+.env.*
+!*.example
+*.local
+application-local.yml
+application-local.yaml
+application-local.properties
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# 旧版 chores 草稿目录（保留在工作树内，但不入库；如需归档另行决定）
+chores/
