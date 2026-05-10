@@ -61,6 +61,30 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '搜索' }
   },
   {
+    path: '/studio/:id',
+    name: 'studio-detail',
+    component: () => import('@/pages/studio/StudioDetailPage.vue'),
+    meta: { title: '舞室详情' }
+  },
+  {
+    path: '/course/:id',
+    name: 'course-detail',
+    component: () => import('@/pages/studio/CourseDetailPage.vue'),
+    meta: { title: '课程详情' }
+  },
+  {
+    path: '/coach/:id',
+    name: 'coach-detail',
+    component: () => import('@/pages/studio/CoachDetailPage.vue'),
+    meta: { title: '教练详情' }
+  },
+  {
+    path: '/favorites',
+    name: 'favorites',
+    component: () => import('@/pages/user/FavoritesPage.vue'),
+    meta: { title: '我的收藏', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')
