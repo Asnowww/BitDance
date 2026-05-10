@@ -121,6 +121,36 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '约练详情' }
   },
   {
+    path: '/me/profile',
+    name: 'profile-edit',
+    component: () => import('@/pages/user/ProfileEditPage.vue'),
+    meta: { title: '资料与偏好', requiresAuth: true }
+  },
+  {
+    path: '/me/privacy',
+    name: 'privacy',
+    component: () => import('@/pages/user/PrivacyPage.vue'),
+    meta: { title: '隐私设置', requiresAuth: true }
+  },
+  {
+    path: '/me/practices',
+    name: 'my-practices',
+    component: () => import('@/pages/user/MyPracticesPage.vue'),
+    meta: { title: '我的约练', requiresAuth: true }
+  },
+  {
+    path: '/me/coach-home',
+    name: 'coach-home',
+    component: () => import('@/pages/user/CoachHomePage.vue'),
+    meta: { title: '教练主页', requiresAuth: true }
+  },
+  {
+    path: '/messages',
+    name: 'messages',
+    component: () => import('@/pages/user/MessagesPage.vue'),
+    meta: { title: '消息中心', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')
