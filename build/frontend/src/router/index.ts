@@ -151,6 +151,36 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '消息中心', requiresAuth: true }
   },
   {
+    path: '/workshops',
+    name: 'workshop-list',
+    component: () => import('@/pages/workshop/WorkshopListPage.vue'),
+    meta: { title: 'Workshop' }
+  },
+  {
+    path: '/workshop/:id',
+    name: 'workshop-detail',
+    component: () => import('@/pages/workshop/WorkshopDetailPage.vue'),
+    meta: { title: 'Workshop' }
+  },
+  {
+    path: '/workshop-checkin/:id',
+    name: 'workshop-checkin',
+    component: () => import('@/pages/workshop/WorkshopCheckinPage.vue'),
+    meta: { title: 'Workshop 签到', requiresAuth: true }
+  },
+  {
+    path: '/me/workshop-orders',
+    name: 'my-workshop-orders',
+    component: () => import('@/pages/user/MyWorkshopOrdersPage.vue'),
+    meta: { title: '我的 Workshop 订单', requiresAuth: true }
+  },
+  {
+    path: '/me/workshop-calendar',
+    name: 'workshop-calendar',
+    component: () => import('@/pages/user/WorkshopCalendarPage.vue'),
+    meta: { title: '活动日历', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')
