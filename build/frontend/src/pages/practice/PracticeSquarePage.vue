@@ -72,6 +72,7 @@ const STATUS_LABEL: Record<string, string> = {
     <nav class="scope">
       <button class="scope__item" :class="{ active: scope === 'city' }" @click="scope = 'city'; load(true)">同城</button>
       <button class="scope__item" :class="{ active: scope === 'nearby' }" @click="scope = 'nearby'; load(true)">附近</button>
+      <button class="scope__more" @click="router.push('/practice/recommend')">推荐与搭子 →</button>
     </nav>
     <section class="filter">
       <div class="filter__row">
@@ -172,6 +173,14 @@ const STATUS_LABEL: Record<string, string> = {
     background: rgba(255, 36, 66, 0.06);
     color: var(--bd-primary);
   }
+}
+.scope__more {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--bd-primary);
+  font-size: 13px;
+  cursor: pointer;
 }
 .filter {
   background: #fff;

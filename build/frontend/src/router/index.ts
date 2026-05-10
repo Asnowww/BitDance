@@ -223,6 +223,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '社区搜索' }
   },
   {
+    path: '/practice/recommend',
+    name: 'practice-recommend',
+    component: () => import('@/pages/practice/RecommendPage.vue'),
+    meta: { title: '推荐与搭子' }
+  },
+  {
+    path: '/practice/:id/rate',
+    name: 'practice-rate',
+    component: () => import('@/pages/practice/PracticeRatingPage.vue'),
+    meta: { title: '约练评价', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')

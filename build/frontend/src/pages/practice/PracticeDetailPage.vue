@@ -125,6 +125,13 @@ const STATUS_LABEL: Record<string, string> = {
           {{ detail.takenCount >= detail.capacity ? '人满了' : (user.isLogin ? '申请加入' : '登录后加入') }}
         </button>
       </template>
+      <button
+        v-if="detail.status === 'CONFIRMED' || detail.status === 'COMPLETED'"
+        class="btn btn--ghost"
+        @click="router.push(`/practice/${detail.id}/rate?to=${detail.authorId}`)"
+      >
+        给 TA 评价
+      </button>
     </footer>
   </div>
 </template>
