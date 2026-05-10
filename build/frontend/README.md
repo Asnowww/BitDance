@@ -24,6 +24,27 @@ npm run dev
 
 必须保持 hash 模式，否则后续 Capacitor 打包 APK 会失效。
 
+## 打包 Android APK（Capacitor）
+
+首次：
+
+```bash
+cd frontend
+npm install                  # 第一次需要安装 @capacitor/cli @capacitor/core @capacitor/android
+npm run build                # 产出 dist/
+npm run cap:add:android      # 仅首次执行，创建 android/ 平台目录
+npm run cap:sync             # 同步 web 资源到 Android 工程
+npm run cap:open:android     # 打开 Android Studio 进行签名打包
+```
+
+后续每次只需 `npm run cap:sync`。`capacitor.config.ts` 已设置 appId `com.bitdance.app`、appName BitDance、主题色 `#FF2442`、SplashScreen、StatusBar。
+
+注意：
+
+- 路由必须保持 hash 模式
+- `androidScheme: 'https'` 表示 Android WebView 通过 https 协议加载本地资源，避免 cookie / WebRTC 等被降级
+- 如需后端联调，确保 `.env.production` 的 `VITE_API_BASE` 指向真实可访问的 https 后端
+
 ## 目录约定
 
 - `src/pages` 路由级页面，按业务模块分子目录（home / studio / review / practice / growth / community / workshop / coach / user）
