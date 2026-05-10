@@ -64,6 +64,69 @@ mock('get', /\/growth\/stats$/, () => {
   };
 });
 
+const WORK_KEY = 'bitdance_mock_growth_works';
+const GOAL_KEY = 'bitdance_mock_growth_goal';
+
+interface Work {
+  id: number;
+  type: 'image' | 'video';
+  title: string;
+  description: string;
+  style?: string;
+  visibility: 'public' | 'private' | 'friends';
+  createdAt: number;
+}
+
+const loadWorks = (): Work[] => {
+  try {
+    return JSON.parse(localStorage.getItem(WORK_KEY) ?? '[]') as Work[];
+  } catch {
+    return [];
+  }
+};
+const saveWorks = (items: Work[]) => localStorage.setItem(WORK_KEY, JSON.stringify(items));
+
+mock('get', /\/growth\/works$/, () => loadWorks());
+
+mock('post', /\/growth\/works$/, ({ data }) => {
+  const body = data as Record<string, unknown>;
+  const items = loadWorks();
+  const item: Work = {
+    id: Date.now(),
+    type: (body.type as 'image' | 'video') ?? 'image',
+    title: (body.title as string) ?? '',
+    description: (body.description as string) ?? '',
+    style: body.style as string | undefined,
+    visibility: (body.visibility as Work['visibility']) ?? 'public',
+    createdAt: Date.now()
+  };
+  items.unshift(item);
+  saveWorks(items);
+  return item;
+});
+
+mock('delete', /\/growth\/works\/\d+$/, ({ url }) => {
+  const id = Number(url.split('/').pop());
+  const items = loadWorks();
+  const next = items.filter((w) => w.id !== id);
+  saveWorks(next);
+  return { deleted: items.length !== next.length };
+});
+
+mock('get', /\/growth\/goal$/, () => {
+  try {
+    const raw = localStorage.getItem(GOAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+});
+
+mock('put', /\/growth\/goal$/, ({ data }) => {
+  localStorage.setItem(GOAL_KEY, JSON.stringify(data));
+  return data;
+});
+
 mock('get', /\/growth\/timeline$/, () => {
   const out: Array<Record<string, unknown>> = [];
   load().forEach((c) => {
@@ -119,5 +182,14 @@ mock('get', /\/growth\/timeline$/, () => {
   } catch {
     /* ignore */
   }
+  loadWorks().forEach((w) => {
+    out.push({
+      id: `work-${w.id}`,
+      type: 'work',
+      title: `上传作品 · ${w.title}`,
+      subtitle: w.description,
+      ts: w.createdAt
+    });
+  });
   return out.sort((a, b) => Number(b.ts) - Number(a.ts));
 });

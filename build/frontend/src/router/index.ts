@@ -235,6 +235,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '约练评价', requiresAuth: true }
   },
   {
+    path: '/me/works',
+    name: 'my-works',
+    component: () => import('@/pages/growth/WorksPage.vue'),
+    meta: { title: '阶段作品', requiresAuth: true }
+  },
+  {
+    path: '/me/goal',
+    name: 'my-goal',
+    component: () => import('@/pages/growth/GoalPage.vue'),
+    meta: { title: '训练目标', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')

@@ -23,6 +23,13 @@ const editId = computed(() => (route.query.editId ? Number(route.query.editId) :
 const text = ref('');
 const scores = ref<Record<string, number>>({});
 const submitting = ref(false);
+const attachments = ref<Array<{ type: 'image' | 'video'; placeholder: string }>>([]);
+
+const addAttachment = (type: 'image' | 'video') => {
+  if (attachments.value.length >= 9) return;
+  attachments.value.push({ type, placeholder: type === 'image' ? '🖼' : '▶' });
+};
+const removeAttachment = (i: number) => attachments.value.splice(i, 1);
 
 const dims = computed(() => REVIEW_DIMENSIONS[targetType.value] ?? []);
 
@@ -72,6 +79,7 @@ const onSubmit = async () => {
         targetId: targetId.value,
         text: text.value,
         dimensionScores: scores.value,
+        images: attachments.value.filter((a) => a.type === 'image').map(() => 'mock-image'),
         idempotencyToken: `review-${targetType.value}-${targetId.value}-${Date.now()}`
       });
       showSuccessToast('评价已发布');
@@ -124,6 +132,14 @@ const TYPE_TABS: Array<{ key: ReviewTargetType; label: string }> = [
         rows="6"
         placeholder="说说你的真实体验，至少 5 个字。诚实 + 具体 = 帮到下一个人。"
       />
+      <div class="attach">
+        <div v-for="(a, i) in attachments" :key="i" class="attach__item">
+          <span class="attach__icon">{{ a.placeholder }}</span>
+          <button class="attach__del" @click="removeAttachment(i)">×</button>
+        </div>
+        <button v-if="attachments.length < 9" class="attach__add" @click="addAttachment('image')">+ 图</button>
+        <button v-if="attachments.length < 9" class="attach__add" @click="addAttachment('video')">+ 频</button>
+      </div>
     </section>
     <footer class="footer">
       <button class="btn" :disabled="!canSubmit" @click="onSubmit">
@@ -231,6 +247,47 @@ const TYPE_TABS: Array<{ key: ReviewTargetType; label: string }> = [
   outline: none;
   &:focus {
     border-color: var(--bd-primary);
+  }
+}
+.attach {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  &__item {
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ffd2da, #ff7799);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    position: relative;
+  }
+  &__del {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  &__add {
+    width: 64px;
+    height: 64px;
+    border: 1px dashed var(--bd-border);
+    background: #fafafa;
+    border-radius: 10px;
+    color: var(--bd-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
   }
 }
 .footer {

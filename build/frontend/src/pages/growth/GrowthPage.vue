@@ -69,6 +69,14 @@ const TYPE_ICON: Record<string, string> = {
         <span class="action__icon">🔥</span>
         <span>立即打卡</span>
       </button>
+      <button class="action" @click="router.push('/me/works')">
+        <span class="action__icon">🎬</span>
+        <span>阶段作品</span>
+      </button>
+      <button class="action" @click="router.push('/me/goal')">
+        <span class="action__icon">🎯</span>
+        <span>训练目标</span>
+      </button>
       <button class="action" @click="router.push('/favorites')">
         <span class="action__icon">⭐</span>
         <span>我的收藏</span>
@@ -143,11 +151,11 @@ const TYPE_ICON: Record<string, string> = {
 }
 .actions {
   margin: 12px 12px 8px;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 .action {
-  flex: 1;
   background: #fff;
   border: none;
   border-radius: 12px;
