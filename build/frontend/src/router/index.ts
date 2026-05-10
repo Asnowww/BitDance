@@ -18,10 +18,22 @@ const routes: RouteRecordRaw[] = [
     meta: { tab: 'practice', title: '约练广场' }
   },
   {
-    path: '/publish',
-    name: 'publish',
-    component: () => import('@/pages/publish/PublishEntryPage.vue'),
-    meta: { tab: 'publish', title: '发布' }
+    path: '/publish/checkin',
+    name: 'publish-checkin',
+    component: () => import('@/pages/publish/PublishCheckinPage.vue'),
+    meta: { title: '训练打卡' }
+  },
+  {
+    path: '/publish/practice',
+    name: 'publish-practice',
+    component: () => import('@/pages/publish/PublishPracticePage.vue'),
+    meta: { title: '发起约练' }
+  },
+  {
+    path: '/publish/review',
+    name: 'publish-review',
+    component: () => import('@/pages/publish/PublishReviewPage.vue'),
+    meta: { title: '写评价' }
   },
   {
     path: '/growth',
