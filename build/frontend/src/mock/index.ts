@@ -13,19 +13,22 @@ export function mock(method: string, pattern: RegExp, handler: Handler) {
 }
 
 if (USE_MOCK) {
-  // 注册各业务模块的 mock 路由（按需在每次新增功能点时往这里挂）
   void import('./modules/auth');
   void import('./modules/studio');
+  void import('./modules/course');
+  void import('./modules/review');
+  void import('./modules/practice');
+  void import('./modules/growth');
+  void import('./modules/message');
+  void import('./modules/trial');
 
   axios.interceptors.request.use(async (config) => {
     const method = (config.method ?? 'get').toLowerCase();
     const url = (config.url ?? '').replace(config.baseURL ?? '', '');
     const matched = handlers.find((h) => h.method === method && h.pattern.test(url));
     if (!matched) return config;
-    const data =
-      typeof config.data === 'string' ? safeJson(config.data) : config.data;
+    const data = typeof config.data === 'string' ? safeJson(config.data) : config.data;
     const result = await matched.handler({ url, method, data, params: config.params });
-    // 通过 adapter 短路返回
     config.adapter = async () =>
       ({
         data: { code: 0, message: 'ok', data: result, traceId: `mock-${Date.now()}` },
