@@ -85,6 +85,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的收藏', requiresAuth: true }
   },
   {
+    path: '/studio/:id/trial',
+    name: 'trial-booking',
+    component: () => import('@/pages/studio/TrialBookingPage.vue'),
+    meta: { title: '试听预约', requiresAuth: true }
+  },
+  {
+    path: '/studio/:id/schedule',
+    name: 'studio-schedule',
+    component: () => import('@/pages/studio/StudioSchedulePage.vue'),
+    meta: { title: '周课表' }
+  },
+  {
+    path: '/me/trials',
+    name: 'my-trials',
+    component: () => import('@/pages/user/MyTrialsPage.vue'),
+    meta: { title: '我的试听', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue')
