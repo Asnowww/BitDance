@@ -1,0 +1,16 @@
+# Copy to application-local.yml (gitignored) and fill in real credentials.
+spring:
+  datasource:
+    url: jdbc:postgresql://98.142.241.155:5432/bitdance?currentSchema=bitdance
+    username: BitDance
+    password: REPLACE_ME
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+bitdance:
+  jwt:
+    secret: REPLACE_WITH_32_BYTE_RANDOM_STRING
+  sms:
+    mock: true
