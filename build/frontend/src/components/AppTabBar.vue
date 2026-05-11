@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showActionSheet } from 'vant';
 
 const route = useRoute();
 const router = useRouter();
@@ -14,21 +13,27 @@ const tabs = [
   { key: 'me', label: '我的', icon: '👤', to: '/me' }
 ];
 
+interface PublishAction {
+  name: string;
+  subname: string;
+  to: string;
+}
+
 const sheetVisible = ref(false);
+const publishActions: PublishAction[] = [
+  { name: '训练打卡', subname: '记录今天练了多久', to: '/publish/checkin' },
+  { name: '发起约练', subname: '找个搭子一起练', to: '/publish/practice' },
+  { name: '写评价', subname: '聊聊舞室、老师或课程', to: '/publish/review' },
+  { name: '发动态', subname: '图文 / 视频 / 话题', to: '/community/publish' }
+];
 
 const onPublishClick = () => {
-  showActionSheet({
-    title: '发布',
-    description: '选择想发布的内容',
-    cancelText: '取消',
-    actions: [
-      { name: '训练打卡', subname: '记录今天练了多久', callback: () => router.push('/publish/checkin') },
-      { name: '发起约练', subname: '找个搭子一起练', callback: () => router.push('/publish/practice') },
-      { name: '写评价', subname: '聊聊舞室、老师或课程', callback: () => router.push('/publish/review') },
-      { name: '发动态', subname: '图文 / 视频 / 话题', callback: () => router.push('/community/publish') }
-    ]
-  });
   sheetVisible.value = true;
+};
+
+const onPickPublish = (a: PublishAction) => {
+  sheetVisible.value = false;
+  router.push(a.to);
 };
 
 const goTab = (to: string) => {
@@ -63,6 +68,16 @@ const goTab = (to: string) => {
       <span class="tabbar__label">{{ tab.label }}</span>
     </button>
   </nav>
+  <van-action-sheet
+    v-model:show="sheetVisible"
+    title="发布"
+    description="选择想发布的内容"
+    :actions="publishActions"
+    cancel-text="取消"
+    close-on-click-action
+    @select="onPickPublish"
+    @cancel="sheetVisible = false"
+  />
 </template>
 
 <style lang="scss" scoped>

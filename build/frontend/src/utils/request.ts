@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios from 'axios';
+import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { showFailToast } from 'vant';
 
 export interface ApiResp<T = unknown> {

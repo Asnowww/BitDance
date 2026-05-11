@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast, showFailToast, showActionSheet } from 'vant';
+import { showSuccessToast, showFailToast } from 'vant';
 import {
   fetchPostDetail,
   togglePostLike,
@@ -40,21 +40,22 @@ const onCollect = async () => {
   post.value.collectCount = r.collectCount;
 };
 
+const reportSheetVisible = ref(false);
+const reportActions = [
+  { name: '内容不实' },
+  { name: '广告 / 引流' },
+  { name: '低俗 / 不适' },
+  { name: '其他' }
+];
+
 const onReport = () => {
-  showActionSheet({
-    cancelText: '取消',
-    actions: [
-      { name: '内容不实', callback: () => doReport('内容不实') },
-      { name: '广告 / 引流', callback: () => doReport('广告') },
-      { name: '低俗 / 不适', callback: () => doReport('低俗') },
-      { name: '其他', callback: () => doReport('其他') }
-    ]
-  });
+  reportSheetVisible.value = true;
 };
 
-const doReport = async (reason: string) => {
+const onPickReport = async (a: { name: string }) => {
+  reportSheetVisible.value = false;
   if (!post.value) return;
-  await reportPost(post.value.id, reason);
+  await reportPost(post.value.id, a.name);
   showSuccessToast('已提交举报，感谢反馈');
 };
 
@@ -123,6 +124,14 @@ onMounted(reload);
       <button class="action" :class="{ active: post.collected }" @click="onCollect">⭐ {{ post.collectCount }}</button>
       <button class="send" @click="onSendComment">发送</button>
     </footer>
+    <van-action-sheet
+      v-model:show="reportSheetVisible"
+      :actions="reportActions"
+      cancel-text="取消"
+      close-on-click-action
+      @select="onPickReport"
+      @cancel="reportSheetVisible = false"
+    />
   </div>
 </template>
 
