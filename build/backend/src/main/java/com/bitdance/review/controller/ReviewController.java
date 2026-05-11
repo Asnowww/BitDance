@@ -1,0 +1,61 @@
+package com.bitdance.review.controller;
+
+import com.bitdance.common.web.ApiResponse;
+import com.bitdance.iam.security.CurrentUser;
+import com.bitdance.review.dto.CreateReviewRequest;
+import com.bitdance.review.dto.ReviewDto;
+import com.bitdance.review.dto.ReviewListResponse;
+import com.bitdance.review.dto.ReviewSummary;
+import com.bitdance.review.service.ReviewService;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping
+public class ReviewController {
+
+    private final ReviewService service;
+
+    public ReviewController(ReviewService service) {
+        this.service = service;
+    }
+
+    @PostMapping("/h5/reviews")
+    public ApiResponse<ReviewDto> create(@Valid @RequestBody CreateReviewRequest body) {
+        return ApiResponse.ok(service.create(CurrentUser.getId(), body));
+    }
+
+    @DeleteMapping("/h5/reviews/{id}")
+    public ApiResponse<Map<String, Object>> delete(@PathVariable Long id) {
+        service.delete(CurrentUser.getId(), id);
+        return ApiResponse.ok(Map.of("deleted", true));
+    }
+
+    @GetMapping("/public/reviews")
+    public ApiResponse<ReviewListResponse> list(
+        @RequestParam String targetType,
+        @RequestParam Long targetId,
+        @RequestParam(required = false) String sort,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.ok(service.list(targetType, targetId, sort, page, pageSize));
+    }
+
+    @GetMapping("/public/reviews/summary")
+    public ApiResponse<ReviewSummary> summary(
+        @RequestParam String targetType,
+        @RequestParam Long targetId
+    ) {
+        return ApiResponse.ok(service.summary(targetType, targetId));
+    }
+}

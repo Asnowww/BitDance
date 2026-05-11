@@ -1,0 +1,233 @@
+package com.bitdance.review.service;
+
+import com.bitdance.booking.domain.TrialBooking;
+import com.bitdance.booking.repository.TrialBookingRepository;
+import com.bitdance.common.exception.BizException;
+import com.bitdance.iam.domain.AppUser;
+import com.bitdance.iam.repository.AppUserRepository;
+import com.bitdance.review.domain.Review;
+import com.bitdance.review.domain.ReviewDimensionScore;
+import com.bitdance.review.dto.CreateReviewRequest;
+import com.bitdance.review.dto.DimensionScoreDto;
+import com.bitdance.review.dto.ReviewDto;
+import com.bitdance.review.dto.ReviewListResponse;
+import com.bitdance.review.dto.ReviewSummary;
+import com.bitdance.review.repository.ReviewDimensionScoreRepository;
+import com.bitdance.review.repository.ReviewRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Service
+public class ReviewService {
+
+    private final ReviewRepository reviewRepo;
+    private final ReviewDimensionScoreRepository dimRepo;
+    private final ReviewRiskService riskService;
+    private final TrialBookingRepository trialRepo;
+    private final AppUserRepository userRepo;
+
+    public ReviewService(
+        ReviewRepository reviewRepo,
+        ReviewDimensionScoreRepository dimRepo,
+        ReviewRiskService riskService,
+        TrialBookingRepository trialRepo,
+        AppUserRepository userRepo
+    ) {
+        this.reviewRepo = reviewRepo;
+        this.dimRepo = dimRepo;
+        this.riskService = riskService;
+        this.trialRepo = trialRepo;
+        this.userRepo = userRepo;
+    }
+
+    @Transactional
+    public ReviewDto create(Long userId, CreateReviewRequest req) {
+        AppUser author = userRepo.findById(userId)
+            .orElseThrow(() -> new BizException("USER_NOT_FOUND", "用户不存在"));
+
+        // 维度分数代码不重复
+        Set<String> codes = new HashSet<>();
+        for (DimensionScoreDto d : req.dimensions()) {
+            if (!codes.add(d.code())) {
+                throw new BizException("INVALID_ARGUMENT",
+                    "维度代码重复: " + d.code());
+            }
+        }
+
+        boolean verified = verifySource(userId, req);
+
+        ReviewRiskService.Verdict verdict = riskService.assess(
+            author, verified, req.targetType(), req.targetId()
+        );
+
+        Review r = new Review();
+        r.setUserId(userId);
+        r.setTargetType(req.targetType());
+        r.setTargetId(req.targetId());
+        r.setOverallScore(req.overallScore());
+        r.setContentText(req.contentText());
+        if (verified) {
+            r.setVerifiedSourceType(req.sourceType());
+            r.setVerifiedSourceRefId(req.sourceRefId());
+            r.setIsVerified(true);
+        }
+        r.setWeightFactor(verdict.weightFactor());
+        r.setReviewStatus(verdict.status());
+        r.setRiskLevel(verdict.riskLevel());
+        r.setPublishedAt(OffsetDateTime.now());
+        Review saved = reviewRepo.save(r);
+
+        List<ReviewDimensionScore> dims = new ArrayList<>();
+        for (DimensionScoreDto d : req.dimensions()) {
+            ReviewDimensionScore s = new ReviewDimensionScore();
+            s.setReviewId(saved.getId());
+            s.setDimensionCode(d.code());
+            s.setDimensionName(d.name());
+            s.setScore(d.score());
+            dims.add(s);
+        }
+        dimRepo.saveAll(dims);
+
+        return toDto(saved, dims);
+    }
+
+    @Transactional
+    public void delete(Long userId, Long reviewId) {
+        Review r = reviewRepo.findById(reviewId)
+            .orElseThrow(() -> new BizException("REVIEW_NOT_FOUND", "评价不存在"));
+        if (!r.getUserId().equals(userId)) {
+            throw new BizException("FORBIDDEN", "无权删除他人评价");
+        }
+        reviewRepo.delete(r);
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewListResponse list(
+        String targetType, Long targetId, String sort, int page, int pageSize
+    ) {
+        validateTargetType(targetType);
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 100);
+        PageRequest pr = PageRequest.of(safePage - 1, safeSize);
+        Page<Review> p = switch (sort == null ? "latest" : sort) {
+            case "helpful" -> reviewRepo
+                .findByTargetTypeAndTargetIdAndReviewStatusOrderByHelpfulCountDescPublishedAtDesc(
+                    targetType, targetId, "published", pr);
+            case "verified" -> reviewRepo
+                .findByTargetTypeAndTargetIdAndReviewStatusAndIsVerifiedOrderByPublishedAtDesc(
+                    targetType, targetId, "published", true, pr);
+            default -> reviewRepo
+                .findByTargetTypeAndTargetIdAndReviewStatusOrderByPublishedAtDesc(
+                    targetType, targetId, "published", pr);
+        };
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewSummary summary(String targetType, Long targetId) {
+        validateTargetType(targetType);
+        List<Review> reviews = reviewRepo.findPublishedFor(targetType, targetId);
+        if (reviews.isEmpty()) {
+            return new ReviewSummary(targetType, targetId, 0L, 0L, BigDecimal.ZERO, Map.of());
+        }
+
+        BigDecimal weightSum = BigDecimal.ZERO;
+        BigDecimal weightedTotal = BigDecimal.ZERO;
+        long verified = 0;
+        for (Review r : reviews) {
+            BigDecimal w = r.getWeightFactor();
+            weightSum = weightSum.add(w);
+            weightedTotal = weightedTotal.add(r.getOverallScore().multiply(w));
+            if (Boolean.TRUE.equals(r.getIsVerified())) verified++;
+        }
+        BigDecimal avg = weightSum.signum() == 0
+            ? BigDecimal.ZERO
+            : weightedTotal.divide(weightSum, 2, RoundingMode.HALF_UP);
+
+        List<ReviewDimensionScore> dims = dimRepo.findPublishedDimensionsFor(targetType, targetId);
+        Map<String, long[]> agg = new HashMap<>();
+        for (ReviewDimensionScore d : dims) {
+            agg.computeIfAbsent(d.getDimensionCode(), k -> new long[]{0L, 0L});
+            long[] pair = agg.get(d.getDimensionCode());
+            pair[0] += d.getScore();
+            pair[1] += 1L;
+        }
+        Map<String, BigDecimal> dimAvg = new HashMap<>();
+        agg.forEach((k, pair) -> dimAvg.put(
+            k,
+            BigDecimal.valueOf(pair[0]).divide(BigDecimal.valueOf(pair[1]), 2, RoundingMode.HALF_UP)
+        ));
+
+        return new ReviewSummary(targetType, targetId, reviews.size(), verified, avg, dimAvg);
+    }
+
+    private boolean verifySource(Long userId, CreateReviewRequest req) {
+        if (req.sourceType() == null || req.sourceRefId() == null) return false;
+        if ("trial".equals(req.sourceType())) {
+            return trialRepo.findById(req.sourceRefId())
+                .map(b -> b.getUserId().equals(userId)
+                    && isVerifiableTrial(b)
+                    && matchesTrialTarget(b, req.targetType(), req.targetId()))
+                .orElse(false);
+        }
+        // order / checkin 待 Workshop 模块上线后补
+        return false;
+    }
+
+    private boolean isVerifiableTrial(TrialBooking b) {
+        String s = b.getBookingStatus();
+        return "attended".equals(s) || "confirmed".equals(s) || "no_show".equals(s);
+    }
+
+    private boolean matchesTrialTarget(TrialBooking b, String targetType, Long targetId) {
+        return switch (targetType) {
+            case "course" -> b.getCourseId().equals(targetId);
+            case "studio" -> b.getStudioId().equals(targetId);
+            default -> false; // 试听不直接证明 coach 评价（留待 BE-013 互评接入）
+        };
+    }
+
+    private void validateTargetType(String targetType) {
+        if (!Set.of("studio", "course", "coach").contains(targetType)) {
+            throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach");
+        }
+    }
+
+    private ReviewDto toDto(Review r, List<ReviewDimensionScore> dims) {
+        List<DimensionScoreDto> dimDtos = dims.stream()
+            .map(d -> new DimensionScoreDto(d.getDimensionCode(), d.getDimensionName(), d.getScore()))
+            .toList();
+        return new ReviewDto(
+            r.getId(), r.getUserId(), r.getTargetType(), r.getTargetId(),
+            r.getOverallScore(), r.getContentText(),
+            r.getIsVerified(), r.getVerifiedSourceType(),
+            r.getWeightFactor(), r.getReviewStatus(), r.getRiskLevel(),
+            r.getHelpfulCount(), r.getIsPinned(),
+            r.getPublishedAt(), dimDtos
+        );
+    }
+}
