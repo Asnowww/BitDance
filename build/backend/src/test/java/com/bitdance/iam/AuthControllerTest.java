@@ -1,20 +1,23 @@
 package com.bitdance.iam;
 
+import com.bitdance.iam.controller.AuthController;
 import com.bitdance.iam.dto.LoginRequest;
+import com.bitdance.iam.dto.LoginResponse;
 import com.bitdance.iam.dto.SendSmsRequest;
+import com.bitdance.iam.dto.UserSummary;
+import com.bitdance.iam.jwt.JwtService;
 import com.bitdance.iam.service.AuthService;
-import com.bitdance.iam.service.SmsCodeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.ArgumentMatchers.any;
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
@@ -22,15 +25,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
+@WebMvcTest(controllers = AuthController.class, excludeAutoConfiguration = SecurityAutoConfiguration.class)
 class AuthControllerTest {
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper om;
-    @MockBean SmsCodeService smsCodeService;
     @MockBean AuthService authService;
+    @MockBean JwtService jwtService;
 
     @Test
     void sendSms_invalidPhone_returns400() throws Exception {
@@ -63,9 +64,9 @@ class AuthControllerTest {
     @Test
     void login_ok_returnsToken() throws Exception {
         when(authService.loginWithSms(eq("13800000000"), eq("123456")))
-            .thenReturn(new com.bitdance.iam.dto.LoginResponse(
+            .thenReturn(new LoginResponse(
                 "mock-token",
-                new com.bitdance.iam.dto.UserSummary(1L, "13800000000", "舞者0000", null, java.util.List.of("USER"))
+                new UserSummary(1L, "13800000000", "舞者0000", null, List.of("USER"))
             ));
         mvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
