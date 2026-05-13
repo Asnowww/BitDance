@@ -44,11 +44,17 @@ public class WorkshopSession {
 
     public Long getId() { return id; }
     public Long getWorkshopId() { return workshopId; }
+    public void setWorkshopId(Long v) { this.workshopId = v; }
     public String getSessionName() { return sessionName; }
+    public void setSessionName(String v) { this.sessionName = v; }
     public OffsetDateTime getStartAt() { return startAt; }
+    public void setStartAt(OffsetDateTime v) { this.startAt = v; }
     public OffsetDateTime getEndAt() { return endAt; }
+    public void setEndAt(OffsetDateTime v) { this.endAt = v; }
     public Integer getCapacity() { return capacity; }
+    public void setCapacity(Integer v) { this.capacity = v; }
     public Integer getSoldCount() { return soldCount; }
     public Integer getCheckinCount() { return checkinCount; }
     public String getSessionStatus() { return sessionStatus; }
+    public void setSessionStatus(String v) { this.sessionStatus = v; }
 }

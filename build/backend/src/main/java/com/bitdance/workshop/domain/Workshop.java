@@ -80,22 +80,41 @@ public class Workshop {
 
     public Long getId() { return id; }
     public Long getCreatorUserId() { return creatorUserId; }
+    public void setCreatorUserId(Long v) { this.creatorUserId = v; }
     public Long getStudioId() { return studioId; }
+    public void setStudioId(Long v) { this.studioId = v; }
     public Long getCoachId() { return coachId; }
+    public void setCoachId(Long v) { this.coachId = v; }
     public Long getCityId() { return cityId; }
+    public void setCityId(Long v) { this.cityId = v; }
     public Long getDanceStyleId() { return danceStyleId; }
+    public void setDanceStyleId(Long v) { this.danceStyleId = v; }
     public String getWorkshopName() { return workshopName; }
+    public void setWorkshopName(String v) { this.workshopName = v; }
     public Long getCoverAssetId() { return coverAssetId; }
+    public void setCoverAssetId(Long v) { this.coverAssetId = v; }
     public String getIntro() { return intro; }
+    public void setIntro(String v) { this.intro = v; }
     public String getAddress() { return address; }
+    public void setAddress(String v) { this.address = v; }
     public String getLocationName() { return locationName; }
+    public void setLocationName(String v) { this.locationName = v; }
     public BigDecimal getLongitude() { return longitude; }
+    public void setLongitude(BigDecimal v) { this.longitude = v; }
     public BigDecimal getLatitude() { return latitude; }
+    public void setLatitude(BigDecimal v) { this.latitude = v; }
     public BigDecimal getPriceAmount() { return priceAmount; }
+    public void setPriceAmount(BigDecimal v) { this.priceAmount = v; }
     public Integer getMinPeople() { return minPeople; }
+    public void setMinPeople(Integer v) { this.minPeople = v; }
     public Integer getMaxPeople() { return maxPeople; }
+    public void setMaxPeople(Integer v) { this.maxPeople = v; }
     public OffsetDateTime getSignupDeadline() { return signupDeadline; }
+    public void setSignupDeadline(OffsetDateTime v) { this.signupDeadline = v; }
     public String getSourceType() { return sourceType; }
+    public void setSourceType(String v) { this.sourceType = v; }
     public String getAuditStatus() { return auditStatus; }
+    public void setAuditStatus(String v) { this.auditStatus = v; }
     public String getPublishStatus() { return publishStatus; }
+    public void setPublishStatus(String v) { this.publishStatus = v; }
 }
