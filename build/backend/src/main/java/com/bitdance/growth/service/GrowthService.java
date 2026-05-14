@@ -1,5 +1,6 @@
 package com.bitdance.growth.service;
 
+import com.bitdance.badge.service.BadgeRuleEngine;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.growth.domain.GrowthBadge;
 import com.bitdance.growth.domain.GrowthCheckin;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -37,17 +39,20 @@ public class GrowthService {
     private final GrowthGoalRepository goalRepo;
     private final GrowthWorkRepository workRepo;
     private final GrowthBadgeRepository badgeRepo;
+    private final BadgeRuleEngine badgeRuleEngine;
 
     public GrowthService(
         GrowthCheckinRepository checkinRepo,
         GrowthGoalRepository goalRepo,
         GrowthWorkRepository workRepo,
-        GrowthBadgeRepository badgeRepo
+        GrowthBadgeRepository badgeRepo,
+        BadgeRuleEngine badgeRuleEngine
     ) {
         this.checkinRepo = checkinRepo;
         this.goalRepo = goalRepo;
         this.workRepo = workRepo;
         this.badgeRepo = badgeRepo;
+        this.badgeRuleEngine = badgeRuleEngine;
     }
 
     // ============ Checkin ============
@@ -85,6 +90,16 @@ public class GrowthService {
                 }
                 goalRepo.save(g);
             });
+
+        // 触发徽章引擎：传入当前用户连续打卡天数与累计天数
+        Set<LocalDate> days = new HashSet<>();
+        for (GrowthCheckin x : checkinRepo.findByUserIdOrderByCheckinAtDesc(userId)) {
+            days.add(x.getCheckinAt().toLocalDate());
+        }
+        int streak = computeStreak(days);
+        badgeRuleEngine.evaluate(userId, "checkin",
+            Map.of("streak", streak, "totalCount", days.size()),
+            "checkin", saved.getId());
 
         return toCheckinDto(saved);
     }
@@ -220,7 +235,14 @@ public class GrowthService {
         w.setWorkDescription(req.workDescription());
         w.setCoverAssetId(req.coverAssetId());
         w.setIsPublic(req.isPublic() == null ? Boolean.TRUE : req.isPublic());
-        return toWorkDto(workRepo.save(w));
+        GrowthWork saved = workRepo.save(w);
+
+        long totalWorks = workRepo.findByUserIdOrderByIdDesc(userId).size();
+        badgeRuleEngine.evaluate(userId, "work_published",
+            Map.of("totalCount", totalWorks),
+            "work", saved.getId());
+
+        return toWorkDto(saved);
     }
 
     @Transactional(readOnly = true)

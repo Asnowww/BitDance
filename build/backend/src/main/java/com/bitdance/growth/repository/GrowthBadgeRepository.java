@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface GrowthBadgeRepository extends JpaRepository<GrowthBadge, Long> {
     List<GrowthBadge> findByUserIdOrderByAwardedAtDesc(Long userId);
+    boolean existsByUserIdAndBadgeId(Long userId, Long badgeId);
 }

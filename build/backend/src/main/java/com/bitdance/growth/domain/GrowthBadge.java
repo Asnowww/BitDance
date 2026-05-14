@@ -34,8 +34,13 @@ public class GrowthBadge {
 
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
+    public void setUserId(Long v) { this.userId = v; }
     public Long getBadgeId() { return badgeId; }
+    public void setBadgeId(Long v) { this.badgeId = v; }
     public String getSourceType() { return sourceType; }
+    public void setSourceType(String v) { this.sourceType = v; }
     public Long getSourceRefId() { return sourceRefId; }
+    public void setSourceRefId(Long v) { this.sourceRefId = v; }
     public OffsetDateTime getAwardedAt() { return awardedAt; }
+    public void setAwardedAt(OffsetDateTime v) { this.awardedAt = v; }
 }
