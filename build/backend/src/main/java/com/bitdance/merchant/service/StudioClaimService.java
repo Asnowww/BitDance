@@ -1,5 +1,6 @@
 package com.bitdance.merchant.service;
 
+import com.bitdance.audit.aspect.AuditAction;
 import com.bitdance.catalog.repository.StudioRepository;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.iam.domain.UserRoleBinding;
@@ -70,6 +71,7 @@ public class StudioClaimService {
     }
 
     @Transactional
+    @AuditAction(value = "studio.claim.approve", targetType = "studio_claim")
     public StudioClaimDto approve(Long adminId, Long claimId, HandleClaimRequest req) {
         StudioClaim c = loadPending(claimId);
         c.setClaimStatus("approved");
@@ -90,6 +92,7 @@ public class StudioClaimService {
     }
 
     @Transactional
+    @AuditAction(value = "studio.claim.reject", targetType = "studio_claim")
     public StudioClaimDto reject(Long adminId, Long claimId, HandleClaimRequest req) {
         StudioClaim c = loadPending(claimId);
         c.setClaimStatus("rejected");

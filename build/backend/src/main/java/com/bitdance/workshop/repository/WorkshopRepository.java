@@ -21,4 +21,6 @@ public interface WorkshopRepository extends JpaRepository<Workshop, Long> {
         @Param("danceStyleId") Long danceStyleId,
         Pageable pageable
     );
+
+    Page<Workshop> findByAuditStatusOrderByIdAsc(String auditStatus, Pageable pageable);
 }
