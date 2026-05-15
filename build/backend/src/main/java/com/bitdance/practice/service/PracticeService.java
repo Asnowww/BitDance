@@ -10,6 +10,8 @@ import com.bitdance.practice.dto.PracticeListResponse;
 import com.bitdance.practice.dto.PracticePostDto;
 import com.bitdance.practice.repository.PracticeJoinRequestRepository;
 import com.bitdance.practice.repository.PracticePostRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -49,6 +51,7 @@ public class PracticeService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "practice:square", allEntries = true)
     public PracticePostDto create(Long userId, CreatePracticeRequest req) {
         validatePeople(req.expectedPeopleMin(), req.expectedPeopleMax());
         validateTimes(req.startAt(), req.endAt());
@@ -75,6 +78,8 @@ public class PracticeService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "practice:square",
+        key = "(#cityId == null ? 0 : #cityId) + ':' + (#danceStyleId == null ? 0 : #danceStyleId) + ':' + (#skillLevel == null ? '' : #skillLevel) + ':' + #page + ':' + #pageSize")
     public PracticeListResponse square(
         Long cityId, Long danceStyleId, String skillLevel, int page, int pageSize
     ) {
@@ -96,6 +101,7 @@ public class PracticeService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "practice:square", allEntries = true)
     public PracticePostDto cancel(Long userId, Long postId) {
         PracticePost p = loadPost(postId);
         if (!p.getCreatorUserId().equals(userId)) {

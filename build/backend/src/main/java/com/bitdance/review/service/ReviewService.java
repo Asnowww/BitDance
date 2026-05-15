@@ -1,5 +1,6 @@
 package com.bitdance.review.service;
 
+import com.bitdance.badge.service.BadgeRuleEngine;
 import com.bitdance.booking.domain.TrialBooking;
 import com.bitdance.booking.repository.TrialBookingRepository;
 import com.bitdance.common.exception.BizException;
@@ -14,6 +15,8 @@ import com.bitdance.review.dto.ReviewListResponse;
 import com.bitdance.review.dto.ReviewSummary;
 import com.bitdance.review.repository.ReviewDimensionScoreRepository;
 import com.bitdance.review.repository.ReviewRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -38,22 +41,27 @@ public class ReviewService {
     private final ReviewRiskService riskService;
     private final TrialBookingRepository trialRepo;
     private final AppUserRepository userRepo;
+    private final BadgeRuleEngine badgeRuleEngine;
 
     public ReviewService(
         ReviewRepository reviewRepo,
         ReviewDimensionScoreRepository dimRepo,
         ReviewRiskService riskService,
         TrialBookingRepository trialRepo,
-        AppUserRepository userRepo
+        AppUserRepository userRepo,
+        BadgeRuleEngine badgeRuleEngine
     ) {
         this.reviewRepo = reviewRepo;
         this.dimRepo = dimRepo;
         this.riskService = riskService;
         this.trialRepo = trialRepo;
         this.userRepo = userRepo;
+        this.badgeRuleEngine = badgeRuleEngine;
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "review:summary",
+        key = "#req.targetType() + ':' + #req.targetId()")
     public ReviewDto create(Long userId, CreateReviewRequest req) {
         AppUser author = userRepo.findById(userId)
             .orElseThrow(() -> new BizException("USER_NOT_FOUND", "用户不存在"));
@@ -100,6 +108,12 @@ public class ReviewService {
             dims.add(s);
         }
         dimRepo.saveAll(dims);
+
+        // 徽章引擎：用户当前评价总数
+        long totalReviews = reviewRepo.count(); // 简化：BE-016 改 countByUserId 后再细化
+        badgeRuleEngine.evaluate(userId, "review",
+            java.util.Map.of("totalCount", totalReviews),
+            "review", saved.getId());
 
         return toDto(saved, dims);
     }
@@ -148,6 +162,7 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "review:summary", key = "#targetType + ':' + #targetId")
     public ReviewSummary summary(String targetType, Long targetId) {
         validateTargetType(targetType);
         List<Review> reviews = reviewRepo.findPublishedFor(targetType, targetId);

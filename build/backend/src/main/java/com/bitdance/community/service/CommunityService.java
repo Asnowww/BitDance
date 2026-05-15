@@ -22,6 +22,7 @@ import com.bitdance.community.repository.ContentPostTopicRepository;
 import com.bitdance.community.repository.FollowRelationRepository;
 import com.bitdance.community.repository.ReportTicketRepository;
 import com.bitdance.community.repository.TopicTagRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -72,6 +73,7 @@ public class CommunityService {
     // ============ Post ============
 
     @Transactional
+    @CacheEvict(cacheNames = "community:feed:recommend", allEntries = true)
     public PostDto createPost(Long userId, CreatePostRequest req) {
         ContentPost p = new ContentPost();
         p.setAuthorUserId(userId);

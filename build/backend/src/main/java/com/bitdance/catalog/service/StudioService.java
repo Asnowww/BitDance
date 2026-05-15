@@ -12,6 +12,7 @@ import com.bitdance.catalog.repository.StudioSearchRepository.SearchParams;
 import com.bitdance.catalog.repository.StudioSearchRepository.StudioNearbyRow;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.favorite.repository.FavoriteRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,6 +68,8 @@ public class StudioService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "studio:detail",
+        key = "#id + ':' + (#currentUserId == null ? 0 : #currentUserId)")
     public StudioDetail detail(Long id, Long currentUserId) {
         Studio s = studioRepo.findById(id)
             .orElseThrow(() -> new BizException("STUDIO_NOT_FOUND", "舞室不存在"));
