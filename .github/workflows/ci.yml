@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    name: Backend mvn test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: build/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Maven test
+        run: mvn -B -ntp test
+
+  frontend:
+    name: Frontend npm build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: build/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: build/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build

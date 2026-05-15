@@ -1,0 +1,45 @@
+# BitDance 一键起服务（开发/演示用）
+# 真实生产推荐换托管 PG + 托管 Redis + 单容器 backend + 静态 CDN。
+# 必需 env：BITDANCE_JWT_SECRET、SPRING_DATASOURCE_PASSWORD（密码不入库）
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./build/backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://98.142.241.155:5432/bitdance?currentSchema=bitdance}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-BitDance}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      BITDANCE_JWT_SECRET: ${BITDANCE_JWT_SECRET}
+      BITDANCE_CACHE_TYPE: redis
+      BITDANCE_SMS_MOCK: ${BITDANCE_SMS_MOCK:-false}
+      BITDANCE_PAYMENT_PROVIDER: ${BITDANCE_PAYMENT_PROVIDER:-mock}
+
+  frontend:
+    build:
+      context: ./build/frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+    ports:
+      - "8081:80"

@@ -1,0 +1,41 @@
+# 生产环境配置（与 application.yml 叠加，敏感字段全部走 env）
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST}
+      port: ${SPRING_REDIS_PORT:6379}
+  cache:
+    type: ${BITDANCE_CACHE_TYPE:redis}
+
+bitdance:
+  jwt:
+    secret: ${BITDANCE_JWT_SECRET}
+  sms:
+    mock: ${BITDANCE_SMS_MOCK:false}
+  payment:
+    provider: ${BITDANCE_PAYMENT_PROVIDER:mock}
+  cors:
+    allowed-origins:
+      - ${FRONTEND_ORIGIN:https://bitdance.example.com}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.bitdance: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN

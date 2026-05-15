@@ -1,5 +1,6 @@
 package com.bitdance.buddy.service;
 
+import com.bitdance.badge.service.BadgeRuleEngine;
 import com.bitdance.buddy.domain.BuddyRelation;
 import com.bitdance.buddy.domain.PracticeRating;
 import com.bitdance.buddy.dto.BuddyDto;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -29,17 +31,20 @@ public class BuddyService {
     private final BuddyRelationRepository buddyRepo;
     private final PracticePostRepository postRepo;
     private final PracticeJoinRequestRepository joinRepo;
+    private final BadgeRuleEngine badgeRuleEngine;
 
     public BuddyService(
         PracticeRatingRepository ratingRepo,
         BuddyRelationRepository buddyRepo,
         PracticePostRepository postRepo,
-        PracticeJoinRequestRepository joinRepo
+        PracticeJoinRequestRepository joinRepo,
+        BadgeRuleEngine badgeRuleEngine
     ) {
         this.ratingRepo = ratingRepo;
         this.buddyRepo = buddyRepo;
         this.postRepo = postRepo;
         this.joinRepo = joinRepo;
+        this.badgeRuleEngine = badgeRuleEngine;
     }
 
     // ============ Rating ============
@@ -89,6 +94,13 @@ public class BuddyService {
                 && !"completed".equals(post.getPostStatus())) {
                 post.setPostStatus("completed");
                 postRepo.save(post);
+                // 全员互评完成 → 触发徽章引擎（仅本帖一次，不区分参与者各自的累计数量；
+                // first_practice_completed 规则按 totalCount=1 触发即首次完成约练）
+                for (Long uid : participants) {
+                    badgeRuleEngine.evaluate(uid, "practice_completed",
+                        Map.of("totalCount", 1L),
+                        "practice", practicePostId);
+                }
             }
         }
         return toRatingDto(saved);

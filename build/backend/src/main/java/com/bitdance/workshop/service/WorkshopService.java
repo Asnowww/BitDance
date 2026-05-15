@@ -1,5 +1,6 @@
 package com.bitdance.workshop.service;
 
+import com.bitdance.badge.service.BadgeRuleEngine;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.favorite.repository.FavoriteRepository;
 import com.bitdance.workshop.domain.Workshop;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -40,6 +42,7 @@ public class WorkshopService {
     private final WorkshopCheckinRepository checkinRepo;
     private final FavoriteRepository favoriteRepo;
     private final PaymentGateway paymentGateway;
+    private final BadgeRuleEngine badgeRuleEngine;
 
     public WorkshopService(
         WorkshopRepository workshopRepo,
@@ -47,7 +50,8 @@ public class WorkshopService {
         WorkshopOrderRepository orderRepo,
         WorkshopCheckinRepository checkinRepo,
         FavoriteRepository favoriteRepo,
-        PaymentGateway paymentGateway
+        PaymentGateway paymentGateway,
+        BadgeRuleEngine badgeRuleEngine
     ) {
         this.workshopRepo = workshopRepo;
         this.sessionRepo = sessionRepo;
@@ -55,6 +59,7 @@ public class WorkshopService {
         this.checkinRepo = checkinRepo;
         this.favoriteRepo = favoriteRepo;
         this.paymentGateway = paymentGateway;
+        this.badgeRuleEngine = badgeRuleEngine;
     }
 
     // ============ Browse ============
@@ -254,6 +259,15 @@ public class WorkshopService {
         c.setCheckinStatus("checked_in");
         checkinRepo.save(c);
         sessionRepo.incrementCheckin(session.getId());
+
+        // 触发徽章引擎（用户自助签到）
+        long total = orderRepo.findByUserIdOrderByIdDesc(userId).stream()
+            .filter(x -> "paid".equals(x.getOrderStatus()))
+            .count();
+        badgeRuleEngine.evaluate(userId, "workshop_attended",
+            Map.of("totalCount", total),
+            "workshop_order", o.getId());
+
         return toOrderDto(o, c);
     }
 
