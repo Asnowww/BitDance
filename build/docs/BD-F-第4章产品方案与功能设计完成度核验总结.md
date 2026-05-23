@@ -65,17 +65,16 @@
 
 ## 3. 模块完成度矩阵
 
-<!-- 总览表定量补充：当前完成度按全量 PDF 功能点复杂度权重校准，MVP 主链路完成情况在说明中单独保留。 -->
 | 模块 | PDF 级别 | 定量完成度 | 当前完成度 | 主要证据 | 主要缺口 |
 | --- | --- | --- | --- | --- | --- |
-| M1 舞室与课程 | P0/P1/P2/P3 | 70% | 部分完成（MVP 主链路基本完成） | `catalog`、`favorite`、`booking` 后端包；首页、搜索、舞室/课程/教练详情、课表、试听、收藏页面；studio/course/schedule/trial/favorite 表 | 地图真实视图、舞室对比、智能推荐偏弱；商家独立 Web 维护端未发现 |
-| M2 评价系统 | P0/P1/P2 | 70% | 部分完成（P0 评价主链路基本完成） | `review` 后端包；写评价、评价列表、评价摘要、回复、申诉页面/API；review/review_dimension_score/review_reply/review_appeal 表 | 图文/视频附件真实上传与复杂相似文案风控仍偏弱 |
+| M1 舞室与课程 | P0/P1/P2/P3 | 70% | 部分完成（MVP 主链路基本完成） | `catalog`、`favorite`、`booking` 后端包；首页、搜索、舞室/课程/教练详情、课表、试听、收藏页面；studio/course/schedule/trial/favorite 表 | 地图真实视图、舞室对比、智能推荐未完成；商家独立 Web 维护端未发现 |
+| M2 评价系统 | P0/P1/P2 | 70% | 部分完成（P0 评价主链路基本完成） | `review` 后端包；写评价、评价列表、评价摘要、回复、申诉页面/API；review/review_dimension_score/review_reply/review_appeal 表 | 图文/视频附件真实上传与复杂相似文案风控仍未完成 |
 | M3 用户账号与角色 | P0/P1/P2 | 55% | 部分完成 | `iam`、`profile`、`message`、`coachops`；登录、资料、隐私、消息、教练申请/主页页面；user/profile/role/privacy/notification 表 | 微信第三方登录、登录设备异常提醒、社交账号展示在当前 H5 中未完整闭环 |
 | M4 约练社交 | P1/P2/P3 | 60% | 部分完成 | `practice`、`buddy`；约练广场、发布、详情、我的约练、推荐与搭子、约练评价页面；practice/buddy/rating 表 | 拼课发起与推荐算法是弱实现或预留，取消惩罚策略未完整产品化 |
 | M5 成长档案 | P1/P2/P3 | 60% | 部分完成 | `growth`、`badge`、`favorite`；成长首页、打卡、目标、作品、收藏页面；growth/badge/favorite 表 | 月/季成长报告未发现完整实现；隐私联动和作品媒体上传仍是 MVP，未完成验证 |
 | M6 社区与活动 | P1/P2 | 70% | 部分完成（消费侧主链路基本完成） | `community`、`workshop`；社区 feed、发布、详情、话题、关注、搜索、Workshop 列表/详情/订单/签到/日历页面；content/workshop/order/checkin 表 | 转发、真实支付、退款/签到二维码、活动后评价联动仍偏 mock 或抽象 |
 | M7 商家与教练管理 | P0/P1/P2 | 50% | 部分完成 | `merchant`、`coachops`、`admin`、`workshop`；教练运营 H5 页面；商家/平台后端接口；claim/relation/certification/audit/settlement 表 | 当前目录未发现独立舞室/平台 Web 管理后台；结算提现、经营看板、管理端完整 UI 不足 |
-| 4.10 工程复杂性 | - | 基本完成 | 模块化后端包、统一 API 前缀、OpenAPI 分组、Docker/CI 文档、PostgreSQL schema、Redis 缓存配置 | 当前接口文档注解不完善；Java 25 测试环境失败需 Java 21 复核 |
+| 4.10 工程复杂性 | - | 基本完成 | 模块化后端包、统一 API 前缀、OpenAPI 分组、Docker/CI 文档、PostgreSQL schema、Redis 缓存配置 | 当前接口文档注解不完善；Java 25 测试环境失败需 Java 21 复核 ||
 
 ## 4. M1：舞室与课程模块
 
@@ -760,7 +759,7 @@ M7 的后端领域能力和教练 H5 侧能力覆盖较多：舞室认领、教�
 | 中 | 真实媒体上传未完整闭环 | M2/M5/M6 | 评价图文/视频、成长作品、社区动态都依赖媒体能力 |
 | 中 | 教练端收入和金融操作未完整闭环 | M7 | 教练看板展示 `monthIncome`，但后端当前固定返回 0；订单页仅展示金额，不支持收益明细、结算账单、提现等操作 |
 | 中 | 真实支付与结算未完整闭环 | M6/M7 | 当前有 PaymentGateway 抽象和结算表结构，但真实微信支付、分账、提现仍属生产化增强 |
-| 中 | 推荐、拼课、成长报告等高级功能偏弱 | M1/M4/M5 | 这些多为 P2/P3 或后续增强，不阻塞 MVP，但影响“完整完成”判断 |
+| 中 | 推荐、拼课、成长报告等高级功能未完成 | M1/M4/M5 | 这些多为 P2/P3 或后续增强，不阻塞 MVP，但影响“完整完成”判断 |
 | 低 | 地图视图、雷达图、扫码签到等 UI 体验需实测 | M1/M2/M6 | 当前代码证据存在相关数据能力，但视觉和交互是否达到 PDF 描述需要截图或浏览器验收 |
 
 ### 12.2 文档与验收风险
