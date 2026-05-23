@@ -37,7 +37,8 @@ export interface StudioListQuery {
 }
 
 export const fetchNearbyStudios = (params: StudioListQuery) =>
-  request.get<unknown, StudioListResp>('/studios/nearby', { params });
+  // Backend exposes studio discovery under /public; using the public path keeps real-server fallback from hitting auth-only routes.
+  request.get<unknown, StudioListResp>('/public/studios/nearby', { params });
 
 export interface StudioDetail extends StudioCard {
   intro: string;
