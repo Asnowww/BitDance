@@ -35,6 +35,7 @@
 - 项目进度记录：`开发历史记录.md`
 - 后端说明：`backend/README.md`
 - 前端说明：`frontend/README.md`
+- **API 接口文档**：`docs/API.md`
 
 ### 2.3 核验方法
 
@@ -67,14 +68,14 @@
 
 | 模块 | PDF 级别 | 定量完成度 | 当前完成度 | 主要证据 | 主要缺口 |
 | --- | --- | --- | --- | --- | --- |
-| M1 舞室与课程 | P0/P1/P2/P3 | 70% | 部分完成（MVP 主链路基本完成） | `catalog`、`favorite`、`booking` 后端包；首页、搜索、舞室/课程/教练详情、课表、试听、收藏页面；studio/course/schedule/trial/favorite 表 | 地图真实视图、舞室对比、智能推荐未完成；商家独立 Web 维护端未发现 |
-| M2 评价系统 | P0/P1/P2 | 70% | 部分完成（P0 评价主链路基本完成） | `review` 后端包；写评价、评价列表、评价摘要、回复、申诉页面/API；review/review_dimension_score/review_reply/review_appeal 表 | 图文/视频附件真实上传与复杂相似文案风控仍未完成 |
-| M3 用户账号与角色 | P0/P1/P2 | 55% | 部分完成 | `iam`、`profile`、`message`、`coachops`；登录、资料、隐私、消息、教练申请/主页页面；user/profile/role/privacy/notification 表 | 微信第三方登录、登录设备异常提醒、社交账号展示在当前 H5 中未完整闭环 |
-| M4 约练社交 | P1/P2/P3 | 60% | 部分完成 | `practice`、`buddy`；约练广场、发布、详情、我的约练、推荐与搭子、约练评价页面；practice/buddy/rating 表 | 拼课发起与推荐算法是弱实现或预留，取消惩罚策略未完整产品化 |
-| M5 成长档案 | P1/P2/P3 | 60% | 部分完成 | `growth`、`badge`、`favorite`；成长首页、打卡、目标、作品、收藏页面；growth/badge/favorite 表 | 月/季成长报告未发现完整实现；隐私联动和作品媒体上传仍是 MVP，未完成验证 |
-| M6 社区与活动 | P1/P2 | 70% | 部分完成（消费侧主链路基本完成） | `community`、`workshop`；社区 feed、发布、详情、话题、关注、搜索、Workshop 列表/详情/订单/签到/日历页面；content/workshop/order/checkin 表 | 转发、真实支付、退款/签到二维码、活动后评价联动仍偏 mock 或抽象 |
-| M7 商家与教练管理 | P0/P1/P2 | 50% | 部分完成 | `merchant`、`coachops`、`admin`、`workshop`；教练运营 H5 页面；商家/平台后端接口；claim/relation/certification/audit/settlement 表 | 当前目录未发现独立舞室/平台 Web 管理后台；结算提现、经营看板、管理端完整 UI 不足 |
-| 4.10 工程复杂性 | - | 基本完成 | 模块化后端包、统一 API 前缀、OpenAPI 分组、Docker/CI 文档、PostgreSQL schema、Redis 缓存配置 | 当前接口文档注解不完善；Java 25 测试环境失败需 Java 21 复核 ||
+| M1 舞室与课程 | P0/P1/P2/P3 | 70% | 部分完成（MVP 主链路基本完成） | `catalog`、`favorite`、`booking` 后端包（9 API）；首页、搜索、舞室/课程/教练详情、课表、试听、收藏页面；studio/course/schedule/trial/favorite 表 | 地图真实视图、舞室对比、智能推荐未完成；商家独立 Web 维护端未发现 |
+| M2 评价系统 | P0/P1/P2 | 70% | 部分完成（P0 评价主链路基本完成） | `review` 后端包（13 API）；写评价、评价列表、评价摘要、回复、申诉页面/API；review/review_dimension_score/review_reply/review_appeal 表 | 图文/视频附件真实上传与复杂相似文案风控仍未完成 |
+| M3 用户账号与角色 | P0/P1/P2 | 55% | 部分完成 | `iam`、`profile`、`message`、`coachops`（9 API）；登录、资料、隐私、消息、教练申请/主页页面；user/profile/role/privacy/notification 表 | 微信第三方登录、登录设备异常提醒、社交账号展示在当前 H5 中未完整闭环 |
+| M4 约练社交 | P1/P2/P3 | 60% | 部分完成 | `practice`、`buddy`（16 API）；约练广场、发布、详情、我的约练、推荐与搭子、约练评价页面；practice/buddy/rating 表 | 拼课发起与推荐算法是弱实现或预留，取消惩罚策略未完整产品化 |
+| M5 成长档案 | P1/P2/P3 | 60% | 部分完成 | `growth`、`badge`、`favorite`（15 API）；成长首页、打卡、目标、作品、收藏页面；growth/badge/favorite 表 | 月/季成长报告未发现完整实现；隐私联动和作品媒体上传仍是 MVP，未完成验证 |
+| M6 社区与活动 | P1/P2 | 70% | 部分完成（消费侧主链路基本完成） | `community`、`workshop`（31 API）；社区 feed、发布、详情、话题、关注、搜索、Workshop 列表/详情/订单/签到/日历页面；content/workshop/order/checkin 表 | 转发、真实支付、退款/签到二维码、活动后评价联动仍偏 mock 或抽象 |
+| M7 商家与教练管理 | P0/P1/P2 | 50% | 部分完成 | `merchant`、`coachops`、`admin`、`workshop`（26 API）；教练运营 H5 页面；商家/平台后端接口；claim/relation/certification/audit/settlement 表 | 当前目录未发现独立舞室/平台 Web 管理后台；结算提现、经营看板、管理端完整 UI 不足 |
+| 4.10 工程复杂性 | - | 基本完成 | 模块化后端包、统一 API 前缀、OpenAPI 分组、Docker/CI 文档、PostgreSQL schema、Redis 缓存配置、119 接口全量文档（`docs/API.md`） | 接口文档注解不完善（1785 字段全推断，无 @Schema）；Java 25 测试失败需 Java 21 复核 ||
 
 ## 4. M1：舞室与课程模块
 
@@ -717,6 +718,7 @@ M7 的后端领域能力和教练 H5 侧能力覆盖较多：舞室认领、教�
 - 后端按业务域划分包：`catalog`、`review`、`iam`、`profile`、`practice`、`buddy`、`growth`、`community`、`workshop`、`merchant`、`coachops`、`admin`、`audit`、`badge`。
 - API 前缀分层：`/public/**`、`/auth/**`、`/h5/**`、`/merchant/**`、`/admin/**`。
 - OpenAPI 分组：`public / auth / h5 / merchant / admin`。
+- **API 全量文档**：`docs/API.md`（源码扫描生成，307KB，119 个接口覆盖，1785 个字段记录，49 个业务错误码，curl 示例与请求/响应 schema 完整）。
 - 前端按页面域划分：`home`、`studio`、`practice`、`growth`、`community`、`workshop`、`coach`、`user`。
 - 数据库 schema 覆盖核心业务表、索引、函数、视图和多态附件/收藏/举报结构。
 
