@@ -1,223 +1,298 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchGrowthStats, fetchGrowthTimeline, type GrowthStats, type TimelineItem } from '@/api/growth';
+import NikeIcon from '@/components/NikeIcon.vue';
 
 const router = useRouter();
-const stats = ref<GrowthStats | null>(null);
-const timeline = ref<TimelineItem[]>([]);
-const loading = ref(true);
 
-const reload = async () => {
-  loading.value = true;
-  try {
-    const [s, tl] = await Promise.all([fetchGrowthStats(), fetchGrowthTimeline()]);
-    stats.value = s;
-    timeline.value = tl;
-  } finally {
-    loading.value = false;
-  }
-};
+const weeklyStats = [
+  { value: '126', label: '学舞天' },
+  { value: '43h', label: '训练' },
+  { value: '18', label: '课程' }
+];
 
-onMounted(reload);
-
-const TYPE_ICON: Record<string, string> = {
-  checkin: '🔥',
-  trial: '🎟',
-  practice: '🤝',
-  review: '✍️'
-};
+const heatmap = [
+  3, 0, 0, 1, 3, 0, 1, 0, 3, 1, 0, 0,
+  0, 0, 1, 3, 0, 1, 0, 3, 1, 0, 0, 3,
+  0, 1, 3, 0, 1, 0, 3, 1, 0, 0, 3, 0,
+  1, 3, 0, 1, 0, 3, 1, 0, 0, 3, 0, 0
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="head">
-      <div class="head__title">成长档案</div>
-      <div class="head__sub">把每一次进步都记下来</div>
+  <div class="growth-page">
+    <header class="growth-topbar">
+      <div class="growth-topbar__copy">
+        <h1>成长</h1>
+        <p>持续练习沉淀为档案</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="消息提醒" @click="router.push('/messages')">
+        <NikeIcon name="bell" :size="20" />
+      </button>
     </header>
 
-    <section v-if="stats" class="stats">
-      <div class="card">
-        <div class="card__num">{{ stats.totalDays }}</div>
-        <div class="card__label">学舞天数</div>
-      </div>
-      <div class="card">
-        <div class="card__num">{{ Math.round(stats.totalMinutes / 60) }}h</div>
-        <div class="card__label">累计时长</div>
-      </div>
-      <div class="card">
-        <div class="card__num">{{ stats.totalSessions }}</div>
-        <div class="card__label">训练次数</div>
-      </div>
-      <div class="card">
-        <div class="card__num">{{ stats.styleCount }}</div>
-        <div class="card__label">舞种数</div>
-      </div>
-      <div class="card card--wide">
-        <div class="card__num">🔥 {{ stats.streakDays }} 天</div>
-        <div class="card__label">连续打卡</div>
-      </div>
-      <div class="card card--wide">
-        <div class="card__num">{{ stats.goalProgress }}%</div>
-        <div class="card__label">月度目标进度</div>
-        <div class="bar"><div class="bar__fill" :style="{ width: `${stats.goalProgress}%` }" /></div>
-      </div>
-    </section>
-
-    <section class="actions">
-      <button class="action" @click="router.push('/publish/checkin')">
-        <span class="action__icon">🔥</span>
-        <span>立即打卡</span>
-      </button>
-      <button class="action" @click="router.push('/me/works')">
-        <span class="action__icon">🎬</span>
-        <span>阶段作品</span>
-      </button>
-      <button class="action" @click="router.push('/me/goal')">
-        <span class="action__icon">🎯</span>
-        <span>训练目标</span>
-      </button>
-      <button class="action" @click="router.push('/favorites')">
-        <span class="action__icon">⭐</span>
-        <span>我的收藏</span>
-      </button>
-    </section>
-
-    <section class="timeline">
-      <h3>成长时间线</h3>
-      <div v-if="!timeline.length" class="empty">暂无记录，去打个卡试试</div>
-      <article v-for="t in timeline" :key="t.id" class="tl">
-        <div class="tl__icon">{{ TYPE_ICON[t.type] }}</div>
-        <div class="tl__body">
-          <div class="tl__title">{{ t.title }}</div>
-          <div v-if="t.subtitle" class="tl__sub">{{ t.subtitle }}</div>
-          <div class="tl__time">{{ new Date(t.ts).toLocaleString() }}</div>
+    <main class="growth-content">
+      <section class="week-card" aria-label="本周成长统计">
+        <h2>THIS WEEK</h2>
+        <div class="week-card__stats">
+          <div v-for="stat in weeklyStats" :key="stat.label" class="week-card__stat">
+            <strong>{{ stat.value }}</strong>
+            <span>{{ stat.label }}</span>
+          </div>
         </div>
-      </article>
-    </section>
+      </section>
+
+      <section class="goal-card" aria-label="周目标">
+        <div class="section-head">
+          <h2>周目标</h2>
+          <span>3/5 次</span>
+        </div>
+        <div class="goal-card__bar" />
+      </section>
+
+      <section class="heatmap-section" aria-labelledby="heatmap-title">
+        <h2 id="heatmap-title">日历热力图</h2>
+        <div class="heatmap" aria-hidden="true">
+          <span
+            v-for="(level, index) in heatmap"
+            :key="index"
+            class="heatmap__cell"
+            :class="`heatmap__cell--${level}`"
+          />
+        </div>
+      </section>
+
+      <section class="growth-actions" aria-label="成长快捷操作">
+        <button class="growth-actions__primary" type="button" @click="router.push('/publish/checkin')">
+          今日打卡
+        </button>
+        <button class="growth-actions__secondary" type="button" @click="router.push('/me/works')">
+          上传作品
+        </button>
+      </section>
+    </main>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 16px;
+.growth-page {
+  --nike-ink: #111111;
+  --nike-canvas: #ffffff;
+  --nike-soft-cloud: #f5f5f5;
+  --nike-mute: #707072;
+  --nike-hairline-soft: #e5e5e5;
+  --nike-success: #00894d;
+  --nike-success-soft: #acd9be;
+
+  min-height: calc(100vh - 72px - env(safe-area-inset-bottom));
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
 }
-.head {
-  padding: 16px;
-  &__title {
-    font-size: 22px;
-    font-weight: 700;
-  }
-  &__sub {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-}
-.stats {
-  padding: 0 12px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-.card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px;
-  &--wide {
-    grid-column: span 2;
-  }
-  &__num {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--bd-primary);
-  }
-  &__label {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-}
-.bar {
-  margin-top: 10px;
-  height: 6px;
-  background: #f3f3f3;
-  border-radius: 3px;
-  overflow: hidden;
-  &__fill {
-    height: 100%;
-    background: linear-gradient(90deg, #ff7799, #ff2442);
-  }
-}
-.actions {
-  margin: 12px 12px 8px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-.action {
-  background: #fff;
-  border: none;
-  border-radius: 12px;
-  padding: 12px;
+
+.growth-topbar {
+  height: 68px;
+  padding: 14px 18px;
+  background: var(--nike-canvas);
+  border-bottom: 1px solid var(--nike-hairline-soft);
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  cursor: pointer;
-  &__icon {
-    font-size: 18px;
-  }
-}
-.timeline {
-  padding: 12px;
-  h3 {
-    margin: 0 0 8px;
-    padding: 0 4px;
-    font-size: 15px;
-  }
-}
-.empty {
-  text-align: center;
-  padding: 40px;
-  color: var(--bd-text-secondary);
-  font-size: 13px;
-}
-.tl {
-  display: flex;
-  gap: 10px;
-  padding: 12px;
-  background: #fff;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  &__icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: rgba(255, 36, 66, 0.08);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
-  }
-  &__body {
-    flex: 1;
+  gap: 12px;
+
+  &__copy {
     min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
-  &__title {
-    font-size: 13px;
-    font-weight: 600;
+
+  h1,
+  p {
+    margin: 0;
   }
-  &__sub {
-    margin-top: 4px;
+
+  h1 {
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  p {
+    color: var(--nike-mute);
     font-size: 12px;
-    color: var(--bd-text-secondary);
+    line-height: 1.25;
+    font-weight: 500;
+    letter-spacing: 0;
   }
-  &__time {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--nike-soft-cloud);
+  color: var(--nike-ink);
+  display: grid;
+  place-items: center;
+  flex: none;
+  cursor: pointer;
+}
+
+.growth-content {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.week-card {
+  height: 137px;
+  padding: 18px;
+  background: var(--nike-ink);
+  color: var(--nike-canvas);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  h2 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  &__stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  &__stat {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    strong,
+    span {
+      display: block;
+    }
+
+    strong {
+      font-size: 26px;
+      line-height: 1.25;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    span {
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+  }
+}
+
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &__bar {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--nike-soft-cloud);
+  }
+}
+
+.section-head {
+  height: 25px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  h2 {
+    margin: 0;
+    min-width: 0;
+    flex: 1;
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  span {
+    color: var(--nike-mute);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+}
+
+.heatmap-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(12, 24px);
+  grid-auto-rows: 24px;
+  gap: 8px 6px;
+
+  &__cell {
+    width: 24px;
+    height: 24px;
+    display: block;
+    background: var(--nike-soft-cloud);
+
+    &--1 {
+      background: var(--nike-success-soft);
+    }
+
+    &--3 {
+      background: var(--nike-success);
+    }
+  }
+}
+
+.growth-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  button {
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    font-size: 15px;
+    line-height: 1.25;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  &__primary {
+    background: var(--nike-ink);
+    color: var(--nike-canvas);
+  }
+
+  &__secondary {
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
   }
 }
 </style>

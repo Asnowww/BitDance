@@ -1,40 +1,28 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import NikeIcon from '@/components/NikeIcon.vue';
+
+type NikeIconName = 'activity' | 'bell' | 'search' | 'sparkles' | 'user' | 'users';
+
+interface TabItem {
+  key: string;
+  label: string;
+  icon: NikeIconName;
+  to: string;
+}
 
 const route = useRoute();
 const router = useRouter();
 const activeTab = computed(() => (route.meta?.tab as string) ?? '');
 
-const tabs = [
-  { key: 'home', label: '首页', icon: '🏠', to: '/home' },
-  { key: 'practice', label: '约练', icon: '💃', to: '/practice' },
-  { key: 'growth', label: '成长', icon: '📈', to: '/growth' },
-  { key: 'me', label: '我的', icon: '👤', to: '/me' }
+const tabs: TabItem[] = [
+  { key: 'home', label: '发现', icon: 'search', to: '/home' },
+  { key: 'practice', label: '约练', icon: 'users', to: '/practice' },
+  { key: 'activity', label: '活动', icon: 'sparkles', to: '/workshops' },
+  { key: 'growth', label: '成长', icon: 'activity', to: '/growth' },
+  { key: 'me', label: '我的', icon: 'user', to: '/me' }
 ];
-
-interface PublishAction {
-  name: string;
-  subname: string;
-  to: string;
-}
-
-const sheetVisible = ref(false);
-const publishActions: PublishAction[] = [
-  { name: '训练打卡', subname: '记录今天练了多久', to: '/publish/checkin' },
-  { name: '发起约练', subname: '找个搭子一起练', to: '/publish/practice' },
-  { name: '写评价', subname: '聊聊舞室、老师或课程', to: '/publish/review' },
-  { name: '发动态', subname: '图文 / 视频 / 话题', to: '/community/publish' }
-];
-
-const onPublishClick = () => {
-  sheetVisible.value = true;
-};
-
-const onPickPublish = (a: PublishAction) => {
-  sheetVisible.value = false;
-  router.push(a.to);
-};
 
 const goTab = (to: string) => {
   if (route.path === to) return;
@@ -43,106 +31,62 @@ const goTab = (to: string) => {
 </script>
 
 <template>
-  <nav class="tabbar">
+  <nav class="tabbar" aria-label="底部导航">
     <button
-      v-for="tab in tabs.slice(0, 2)"
+      v-for="tab in tabs"
       :key="tab.key"
       class="tabbar__item"
       :class="{ active: activeTab === tab.key }"
+      type="button"
       @click="goTab(tab.to)"
     >
-      <span class="tabbar__icon">{{ tab.icon }}</span>
-      <span class="tabbar__label">{{ tab.label }}</span>
-    </button>
-    <button class="tabbar__publish" aria-label="发布" @click="onPublishClick">
-      <span class="tabbar__publish-inner">+</span>
-    </button>
-    <button
-      v-for="tab in tabs.slice(2, 4)"
-      :key="tab.key"
-      class="tabbar__item"
-      :class="{ active: activeTab === tab.key }"
-      @click="goTab(tab.to)"
-    >
-      <span class="tabbar__icon">{{ tab.icon }}</span>
+      <NikeIcon :name="tab.icon" :size="19" />
       <span class="tabbar__label">{{ tab.label }}</span>
     </button>
   </nav>
-  <van-action-sheet
-    v-model:show="sheetVisible"
-    title="发布"
-    description="选择想发布的内容"
-    :actions="publishActions"
-    cancel-text="取消"
-    close-on-click-action
-    @select="onPickPublish"
-    @cancel="sheetVisible = false"
-  />
 </template>
 
 <style lang="scss" scoped>
 .tabbar {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
   bottom: 0;
+  z-index: 100;
   width: 100%;
   max-width: 480px;
-  height: calc(56px + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--bd-surface);
-  border-top: 1px solid var(--bd-border);
+  height: calc(72px + env(safe-area-inset-bottom));
+  padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid #e5e5e5;
+  background: #ffffff;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  align-items: center;
-  z-index: 100;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  transform: translateX(-50%);
+}
 
-  &__item {
-    background: none;
-    border: none;
-    padding: 6px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    color: var(--bd-text-secondary);
-    font-size: 11px;
-    line-height: 1;
-    cursor: pointer;
-    transition: color 0.18s;
-    &.active {
-      color: var(--bd-primary);
-    }
+.tabbar__item {
+  height: 56px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #707072;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+
+  &.active {
+    background: #111111;
+    color: #ffffff;
   }
-  &__icon {
-    font-size: 22px;
-    line-height: 1;
-  }
-  &__label {
-    font-size: 11px;
-  }
-  &__publish {
-    width: 52px;
-    height: 52px;
-    border: none;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--bd-primary), var(--bd-primary-dark));
-    color: #fff;
-    font-size: 28px;
-    line-height: 1;
-    margin: 0 auto;
-    transform: translateY(-14px);
-    box-shadow: 0 6px 16px rgba(255, 36, 66, 0.35);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    &-inner {
-      transform: translateY(-1px);
-    }
-    &:active {
-      transform: translateY(-12px) scale(0.96);
-    }
-  }
+}
+
+.tabbar__label {
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 </style>

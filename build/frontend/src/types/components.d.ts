@@ -11,6 +11,7 @@ declare module 'vue' {
     AppTabBar: typeof import('./../components/AppTabBar.vue')['default']
     EmptyState: typeof import('./../components/EmptyState.vue')['default']
     ErrorState: typeof import('./../components/ErrorState.vue')['default']
+    NikeIcon: typeof import('./../components/NikeIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SkeletonCard: typeof import('./../components/SkeletonCard.vue')['default']
