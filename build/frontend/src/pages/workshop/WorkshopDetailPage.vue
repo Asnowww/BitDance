@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast, showFailToast } from 'vant';
-import {
-  fetchWorkshopDetail,
-  createWorkshopOrder,
-  payWorkshopOrder,
-  type WorkshopDetail
-} from '@/api/workshop';
+import { showSuccessToast, showToast } from 'vant';
+import { Music } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenActionBar from '@/components/pen/PenActionBar.vue';
+import PenSettingRow from '@/components/pen/PenSettingRow.vue';
+import { createWorkshopOrder, payWorkshopOrder } from '@/api/workshop';
 import { useFavoriteStore } from '@/stores/favorite';
 import { useUserStore } from '@/stores/user';
 
@@ -16,316 +15,222 @@ const router = useRouter();
 const fav = useFavoriteStore();
 const user = useUserStore();
 
-const detail = ref<WorkshopDetail | null>(null);
-const selectedSessionId = ref<number | null>(null);
+const selectedSession = ref('5/30 14:00');
 const submitting = ref(false);
+const sessions = ['5/30 14:00', '5/31 19:30'];
+const rules = ['活动前 24 小时可退', '到场扫码签到', '活动后评价老师和课程'];
+const workshopId = Number(route.params.id) || 1;
 
-const id = computed(() => Number(route.params.id));
-
-const reload = async () => {
-  detail.value = await fetchWorkshopDetail(id.value);
-  if (detail.value && detail.value.sessions.length) {
-    selectedSessionId.value = detail.value.sessions[0].id;
-  }
+const onFav = () => {
+  fav.toggle({
+    targetType: 'workshop',
+    targetId: workshopId,
+    title: 'Locking 大师课',
+    subtitle: '周日 14:00 · ¥199'
+  });
+  showToast(fav.isFav('workshop', workshopId) ? '已收藏' : '已取消收藏');
 };
 
 const onPay = async () => {
-  if (!detail.value || !selectedSessionId.value) return;
   if (!user.isLogin) {
-    router.push(`/login?redirect=/workshop/${id.value}`);
+    router.push(`/login?redirect=/workshop/${workshopId}`);
     return;
   }
+  if (submitting.value) return;
   submitting.value = true;
   try {
     const order = await createWorkshopOrder({
-      workshopId: detail.value.id,
-      sessionId: selectedSessionId.value,
-      idempotencyToken: `ws-${detail.value.id}-${selectedSessionId.value}-${Date.now()}`
+      workshopId,
+      sessionId: selectedSession.value === '5/30 14:00' ? 1 : 2,
+      idempotencyToken: `ws-${workshopId}-${Date.now()}`
     });
-    if (!order) {
-      showFailToast('该场次名额已满');
-      return;
+    if (order) {
+      await payWorkshopOrder(order.id);
     }
-    // mock 直接调用 pay 模拟微信支付完成
-    await payWorkshopOrder(order.id);
-    showSuccessToast('支付成功');
+    showSuccessToast('报名成功');
     router.push('/me/workshop-orders');
   } finally {
     submitting.value = false;
   }
 };
-
-const onFav = () => {
-  if (!detail.value) return;
-  fav.toggle({
-    targetType: 'workshop',
-    targetId: detail.value.id,
-    title: detail.value.title,
-    subtitle: `${detail.value.startDate} · ¥${detail.value.priceMin}`
-  });
-};
-
-onMounted(reload);
 </script>
 
 <template>
-  <div v-if="!detail" class="empty">加载中…</div>
-  <div v-else class="page">
-    <div class="hero">
-      <button class="back" @click="router.back()">←</button>
-      <button class="fav" @click="onFav">{{ fav.isFav('workshop', detail.id) ? '♥' : '♡' }}</button>
-      <span class="hero__title">{{ detail.title }}</span>
-    </div>
-    <section class="info">
-      <div class="info__title">{{ detail.title }}</div>
-      <div class="info__meta">
-        <span>{{ detail.area }}</span>
-        <span>·</span>
-        <span>{{ detail.startDate }} ~ {{ detail.endDate }}</span>
-      </div>
-      <div class="info__tags">
-        <span v-for="s in detail.styles" :key="s" class="tag">{{ s }}</span>
-      </div>
-    </section>
-    <section class="block">
-      <h3>活动介绍</h3>
-      <p>{{ detail.intro }}</p>
-    </section>
-    <section class="block">
-      <h3>师资 / 场地</h3>
-      <div class="row" @click="router.push(`/coach/${detail.coachId}`)">
-        <span>🎤 教练：{{ detail.coachName }}</span>
-        <span class="row__action">查看</span>
-      </div>
-      <div class="row" @click="router.push(`/studio/${detail.studioId}`)">
-        <span>🏠 舞室：{{ detail.studioName }}</span>
-        <span class="row__action">查看</span>
-      </div>
-    </section>
-    <section class="block">
-      <h3>选择场次</h3>
-      <div class="sessions">
-        <button
-          v-for="s in detail.sessions"
-          :key="s.id"
-          class="session"
-          :class="{ active: selectedSessionId === s.id, full: s.taken >= s.capacity }"
-          :disabled="s.taken >= s.capacity"
-          @click="selectedSessionId = s.id"
-        >
-          <div class="session__date">{{ s.date }}</div>
-          <div class="session__time">{{ s.startTime }}-{{ s.endTime }}</div>
-          <div class="session__price">¥{{ s.price }}</div>
-          <div class="session__cap">{{ s.taken }}/{{ s.capacity }}</div>
-        </button>
-      </div>
-    </section>
-    <section class="block">
-      <h3>往期评价</h3>
-      <article v-for="r in detail.pastReviews" :key="r.id" class="rev">
-        <div class="rev__head">
-          <span>{{ r.author }}</span>
-          <span class="rev__star">{{ '★'.repeat(r.rating) }}</span>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="Workshop 详情" @share="showToast('Workshop 链接已复制')" />
+
+    <section class="pen-scroll">
+      <section class="hero">
+        <div class="hero__bars" aria-hidden="true">
+          <span v-for="i in 6" :key="i" />
         </div>
-        <p>{{ r.text }}</p>
-      </article>
+        <Music class="hero__icon" :size="42" :stroke-width="2" />
+        <strong class="hero__title">LOCKING<br />MASTER</strong>
+        <p class="hero__sub">周日 14:00 · 剩余 8 位</p>
+      </section>
+
+      <section class="detail">
+        <h2 class="pen-h2">Locking 大师课</h2>
+        <p class="detail__sub">Pop 老师 · 中级 · ¥199 · 朝阳 Joy Studio</p>
+
+        <div class="detail__block">
+          <h3 class="detail__section">场次选择</h3>
+          <div class="sessions">
+            <button
+              v-for="session in sessions"
+              :key="session"
+              type="button"
+              class="session-pill"
+              :class="selectedSession === session ? 'session-pill--active' : 'session-pill--inactive'"
+              @click="selectedSession = session"
+            >
+              {{ session }}
+            </button>
+          </div>
+        </div>
+
+        <div class="detail__block">
+          <h3 class="detail__section">报名须知与退款规则</h3>
+          <PenSettingRow
+            v-for="rule in rules"
+            :key="rule"
+            :label="rule"
+            trailing="查看"
+            @click="showToast(rule)"
+          />
+        </div>
+      </section>
     </section>
-    <footer class="footer">
-      <button class="btn btn--ghost" @click="onFav">
-        {{ fav.isFav('workshop', detail.id) ? '♥ 已收藏' : '♡ 收藏' }}
-      </button>
-      <button class="btn btn--primary" :disabled="!selectedSessionId || submitting" @click="onPay">
-        {{ submitting ? '支付中…' : '立即报名 / 支付' }}
-      </button>
-    </footer>
-  </div>
+
+    <PenActionBar
+      :soft-label="fav.isFav('workshop', workshopId) ? '已收藏' : '收藏'"
+      :dark-label="submitting ? '报名中…' : '立即报名'"
+      :dark-disabled="submitting"
+      @soft="onFav"
+      @dark="onPay"
+    />
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+
+  &--with-bar {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
 }
-.empty {
-  padding: 80px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.hero {
-  position: relative;
-  height: 200px;
-  background: linear-gradient(135deg, #ff7799, #ff2442);
+
+.pen-scroll {
   display: flex;
-  align-items: flex-end;
-  padding: 24px;
-  color: #fff;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 280px;
+  padding: 18px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+  box-sizing: border-box;
+
+  &__bars {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    height: 30px;
+    margin-bottom: auto;
+
+    span {
+      height: 100%;
+      background: $pen-charcoal;
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    color: $pen-on-primary;
+  }
+
   &__title {
-    font-size: 22px;
-    font-weight: 700;
+    margin: 0;
+    font-size: 32px;
+    font-weight: 900;
+    line-height: $pen-lh;
+    letter-spacing: 0;
   }
-}
-.back,
-.fav {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
-  background: rgba(0, 0, 0, 0.35);
-  color: #fff;
-  border: none;
-  height: 32px;
-  border-radius: 16px;
-  padding: 0 12px;
-  font-size: 14px;
-  cursor: pointer;
-}
-.back {
-  left: 12px;
-  width: 32px;
-  padding: 0;
-}
-.fav {
-  right: 12px;
-  font-size: 18px;
-}
-.info {
-  background: #fff;
-  padding: 16px;
-  &__title {
-    font-size: 18px;
-    font-weight: 700;
-  }
-  &__meta {
-    margin-top: 6px;
-    display: flex;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__tags {
-    margin-top: 8px;
-    display: flex;
-    gap: 6px;
-  }
-}
-.tag {
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 8px;
-  background: rgba(255, 36, 66, 0.08);
-  color: var(--bd-primary);
-}
-.block {
-  margin-top: 8px;
-  padding: 16px;
-  background: #fff;
-  h3 {
-    margin: 0 0 8px;
-    font-size: 14px;
-  }
-  p {
+
+  &__sub {
     margin: 0;
     font-size: 13px;
-    line-height: 1.6;
+    font-weight: 700;
+    line-height: $pen-lh;
+    letter-spacing: 0;
   }
 }
-.row {
+
+.detail {
   display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  font-size: 13px;
-  cursor: pointer;
-  &__action {
-    color: var(--bd-primary);
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 18px 20px;
+
+  &__sub {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: $pen-lh;
+    letter-spacing: 0;
+  }
+
+  &__block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__section {
+    @include pen-h3-section;
   }
 }
+
+.pen-h2 {
+  @include pen-h2;
+}
+
 .sessions {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
-.session {
-  border: 1px solid var(--bd-border);
-  border-radius: 10px;
-  background: #fff;
-  padding: 10px;
-  text-align: left;
-  cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-  }
-  &.full {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  &__date {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  &__time {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__price {
-    margin-top: 6px;
-    color: var(--bd-primary);
-    font-weight: 700;
-  }
-  &__cap {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-}
-.rev {
-  padding: 10px 0;
-  border-bottom: 1px dashed var(--bd-border);
-  &:last-child {
-    border-bottom: none;
-  }
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__star {
-    color: #ffaa33;
-  }
-  p {
-    margin: 6px 0 0;
-  }
-}
-.footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-  display: flex;
-  gap: 10px;
-}
-.btn {
-  flex: 1;
-  height: 46px;
-  border: none;
+
+.session-pill {
+  height: 40px;
+  padding: 8px 14px;
   border-radius: 999px;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+  letter-spacing: 0;
   cursor: pointer;
-  &--primary {
-    background: var(--bd-primary);
-    color: #fff;
+
+  &--inactive {
+    border: 1px solid $pen-hairline;
+    background: $pen-canvas;
+    color: $pen-ink;
   }
-  &--ghost {
-    background: rgba(255, 36, 66, 0.08);
-    color: var(--bd-primary);
-  }
-  &:disabled {
-    opacity: 0.5;
+
+  &--active {
+    border: none;
+    background: $pen-ink;
+    color: $pen-on-primary;
   }
 }
 </style>

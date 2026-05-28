@@ -1,261 +1,194 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import StarRating from '@/components/StarRating.vue';
-import { fetchReviews, REVIEW_DIMENSIONS, type ReviewItem, type ReviewTargetType } from '@/api/review';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { showToast } from 'vant';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenSettingRow from '@/components/pen/PenSettingRow.vue';
 
-const route = useRoute();
 const router = useRouter();
-const targetType = (route.query.targetType as ReviewTargetType) || 'studio';
-const targetId = Number(route.params.id);
+const activeFilter = ref('已验证');
 
-const list = ref<ReviewItem[]>([]);
-const summary = ref<{ ratingAvg: number; reviewCount: number; dimensionAvg: Record<string, number> }>({
-  ratingAvg: 0,
-  reviewCount: 0,
-  dimensionAvg: {}
-});
-const loading = ref(true);
-const sort = ref<'latest' | 'helpful' | 'verified'>('latest');
-
-const dims = computed(() => REVIEW_DIMENSIONS[targetType] ?? []);
-
-const reload = async () => {
-  loading.value = true;
-  try {
-    const data = await fetchReviews({ targetType, targetId, sort: sort.value, page: 1, pageSize: 50 });
-    list.value = data.list;
-    summary.value = data.summary;
-  } finally {
-    loading.value = false;
+const filters = ['全部', '已验证', '带图', '零基础', '差评'];
+const reviews = [
+  {
+    author: '已验证 · 小林',
+    text: '老师会拆动作，节奏适合第一次学韩舞的人。',
+    meta: '零基础友好 5 · 纠错质量 5 · 氛围 4'
+  },
+  {
+    author: '已验证 · Kiki',
+    text: '场地干净，晚课多，地铁出来很好找。',
+    meta: '零基础友好 5 · 纠错质量 5 · 氛围 4'
   }
-};
+];
+const formRows = ['评价对象：舞室 / 老师 / 课程', '结构化评分维度', '图文/视频上传', '匿名开关'];
 
-onMounted(reload);
+const onShare = () => showToast('已复制评价页链接');
+const onPublish = () => {
+  showToast('评价发布流程已准备');
+  router.push('/publish/review');
+};
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">评价 ({{ summary.reviewCount }})</span>
-      <button class="write" @click="router.push(`/publish/review?targetType=${targetType}&targetId=${targetId}`)">
-        写评价
-      </button>
-    </header>
-    <section class="summary">
-      <div class="summary__avg">
-        <div class="summary__num">{{ summary.ratingAvg }}</div>
-        <StarRating :model-value="Math.round(summary.ratingAvg)" readonly :size="16" />
-        <div class="summary__count">{{ summary.reviewCount }} 条评价</div>
-      </div>
-      <div class="summary__dims">
-        <div v-for="d in dims" :key="d.key" class="dim">
-          <span class="dim__label">{{ d.label }}</span>
-          <div class="dim__bar">
-            <div class="dim__bar-fill" :style="{ width: `${(summary.dimensionAvg[d.key] ?? 0) * 20}%` }" />
-          </div>
-          <span class="dim__num">{{ summary.dimensionAvg[d.key] ?? '-' }}</span>
+  <main class="pen-page">
+    <PenTopBar title="评价系统" @share="onShare" />
+
+    <section class="pen-body">
+      <section class="score-card">
+        <strong class="score-card__num">4.8</strong>
+        <div class="score-card__meta">
+          <h2>综合评分</h2>
+          <p>环境 4.7 · 纠错 4.9 · 零基础友好 4.8</p>
         </div>
-      </div>
-    </section>
-    <nav class="sort">
-      <button class="sort__item" :class="{ active: sort === 'latest' }" @click="sort = 'latest'; reload()">最新</button>
-      <button class="sort__item" :class="{ active: sort === 'helpful' }" @click="sort = 'helpful'; reload()">最有帮助</button>
-      <button class="sort__item" :class="{ active: sort === 'verified' }" @click="sort = 'verified'; reload()">已验证优先</button>
-    </nav>
-    <section class="list">
-      <div v-if="loading" class="empty">加载中…</div>
-      <div v-else-if="!list.length" class="empty">暂无评价</div>
-      <article v-for="r in list" :key="r.id" class="item">
-        <div class="item__head">
-          <div class="avatar">{{ r.authorName.charAt(0) }}</div>
-          <div class="item__author">
-            <div class="item__name">
-              {{ r.authorName }}
-              <span v-if="r.isVerified" class="verified">✓ {{ r.verifiedSourceType }}</span>
-            </div>
-            <div class="item__date">{{ new Date(r.createdAt).toLocaleDateString() }}</div>
-          </div>
-          <StarRating :model-value="Math.round(r.ratingAvg)" readonly :size="14" />
-        </div>
-        <p class="item__text">{{ r.text }}</p>
-        <div class="item__foot">
-          <span class="helpful">👍 {{ r.helpfulCount }}</span>
-        </div>
+      </section>
+
+      <nav class="chips" aria-label="评价筛选">
+        <button
+          v-for="filter in filters"
+          :key="filter"
+          type="button"
+          class="chip"
+          :class="activeFilter === filter ? 'chip--active' : 'chip--inactive'"
+          @click="activeFilter = filter"
+        >
+          {{ filter }}
+        </button>
+      </nav>
+
+      <article v-for="review in reviews" :key="review.author" class="review-card">
+        <h3>{{ review.author }}</h3>
+        <p>{{ review.text }}</p>
+        <span>{{ review.meta }}</span>
       </article>
+
+      <section class="form-block">
+        <h2 class="form-block__title">写评价表单</h2>
+        <PenSettingRow
+          v-for="row in formRows"
+          :key="row"
+          :label="row"
+          trailing="设置"
+          @click="showToast(row)"
+        />
+        <button type="button" class="pen-primary-btn" @click="onPublish">发布评价</button>
+      </section>
     </section>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
 }
-.bar {
+
+.pen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 24px;
+}
+
+.score-card {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    flex: 1;
-    font-size: 16px;
-    font-weight: 600;
-  }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.write {
-  border: none;
-  background: var(--bd-primary);
-  color: #fff;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.summary {
-  background: #fff;
-  padding: 16px;
-  display: flex;
-  gap: 20px;
-  &__avg {
-    text-align: center;
-    width: 96px;
-  }
+  gap: 16px;
+  padding: 18px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+
   &__num {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--bd-primary);
+    font-size: 48px;
+    font-weight: 900;
+    line-height: $pen-lh;
+    letter-spacing: 0;
   }
-  &__count {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-  &__dims {
+
+  &__meta {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-}
-.dim {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  &__label {
-    width: 72px;
-    color: var(--bd-text-secondary);
-  }
-  &__bar {
-    flex: 1;
-    height: 6px;
-    background: #f3f3f3;
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  &__bar-fill {
-    height: 100%;
-    background: var(--bd-primary);
-  }
-  &__num {
-    width: 32px;
-    text-align: right;
-    color: var(--bd-text);
-    font-weight: 600;
-  }
-}
-.sort {
-  display: flex;
-  gap: 8px;
-  padding: 12px 16px 4px;
-  &__item {
-    padding: 5px 12px;
-    border: 1px solid var(--bd-border);
-    background: #fff;
-    border-radius: 999px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-    cursor: pointer;
-    &.active {
-      border-color: var(--bd-primary);
-      background: rgba(255, 36, 66, 0.06);
-      color: var(--bd-primary);
+
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 900;
+      line-height: $pen-lh;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: $pen-subtle-text;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: $pen-lh;
+      letter-spacing: 0;
     }
   }
 }
-.list {
-  padding: 8px 12px;
-}
-.empty {
-  text-align: center;
-  padding: 60px 24px;
-  color: var(--bd-text-secondary);
-}
-.item {
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 8px;
-  &__head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  &__author {
-    flex: 1;
-  }
-  &__name {
-    font-size: 13px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  &__date {
-    margin-top: 2px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-  &__text {
-    margin: 8px 0 4px;
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  &__foot {
-    margin-top: 6px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-}
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ffd2da, #ff7799);
-  color: #fff;
+
+.chips {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
 }
-.verified {
-  font-size: 10px;
-  color: #00a854;
-  background: rgba(0, 168, 84, 0.1);
-  padding: 2px 6px;
-  border-radius: 6px;
+
+.chip {
+  @include pen-chip;
 }
-.helpful {
-  font-size: 11px;
-  color: var(--bd-text-secondary);
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: $pen-soft;
+
+  h3,
+  p,
+  span {
+    margin: 0;
+    letter-spacing: 0;
+  }
+
+  h3 {
+    font-size: 14px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  p {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: $pen-lh;
+  }
+
+  span {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.form-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__title {
+    @include pen-h3-section;
+  }
+}
+
+.pen-primary-btn {
+  @include pen-primary-btn;
+  width: 100%;
+  margin-top: 6px;
 }
 </style>
