@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { showFailToast } from 'vant';
+import { setupMock } from '@/mock';
 
 export interface ApiResp<T = unknown> {
   code: number | string;
@@ -19,6 +20,8 @@ const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
   timeout: 15000
 });
+
+setupMock(request);
 
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getToken();

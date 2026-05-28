@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AxiosInstance } from 'axios';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
@@ -12,7 +13,9 @@ export function mock(method: string, pattern: RegExp, handler: Handler) {
   handlers.push({ method: method.toLowerCase(), pattern, handler });
 }
 
-if (USE_MOCK) {
+export function setupMock(client: AxiosInstance = axios) {
+  if (!USE_MOCK) return;
+
   void import('./modules/auth');
   void import('./modules/studio');
   void import('./modules/course');
@@ -27,7 +30,7 @@ if (USE_MOCK) {
   void import('./modules/buddy');
   void import('./modules/coachOps');
 
-  axios.interceptors.request.use(async (config) => {
+  client.interceptors.request.use(async (config) => {
     const method = (config.method ?? 'get').toLowerCase();
     const url = (config.url ?? '').replace(config.baseURL ?? '', '');
     const matched = handlers.find((h) => h.method === method && h.pattern.test(url));
@@ -46,6 +49,8 @@ if (USE_MOCK) {
     return config;
   });
 }
+
+setupMock();
 
 function safeJson(s: string) {
   try {
