@@ -15,6 +15,7 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
       hibernate:
         default_schema: bitdance
