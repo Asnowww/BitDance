@@ -1,223 +1,315 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchGrowthStats, fetchGrowthTimeline, type GrowthStats, type TimelineItem } from '@/api/growth';
+import { fetchGrowthStats, type GrowthStats } from '@/api/growth';
 
 const router = useRouter();
 const stats = ref<GrowthStats | null>(null);
-const timeline = ref<TimelineItem[]>([]);
 const loading = ref(true);
 
-const reload = async () => {
+const trend = [
+  { day: '周一', value: 32 },
+  { day: '周二', value: 10 },
+  { day: '周三', value: 32 },
+  { day: '周四', value: 15 },
+  { day: '周五', value: 32 }
+];
+
+const favorites = [
+  {
+    type: '舞室',
+    title: 'Urban Flow 舞室',
+    meta: '收藏于 5/24 · 可预约',
+    action: '预约试听',
+    path: '/studio/1'
+  },
+  {
+    type: '课程',
+    title: 'Mia Jazz 基础课',
+    meta: '周三晚 · 可报名',
+    action: '立即报名',
+    path: '/course/1'
+  }
+];
+
+const displayStats = computed(() => {
+  const source = stats.value;
+  return {
+    days: source?.totalDays ?? 126,
+    hours: source ? `${Math.round(source.totalMinutes / 60)}h` : '43h',
+    styles: source?.styleCount ?? 5
+  };
+});
+
+onMounted(async () => {
   loading.value = true;
   try {
-    const [s, tl] = await Promise.all([fetchGrowthStats(), fetchGrowthTimeline()]);
-    stats.value = s;
-    timeline.value = tl;
+    stats.value = await fetchGrowthStats();
   } finally {
     loading.value = false;
   }
-};
-
-onMounted(reload);
-
-const TYPE_ICON: Record<string, string> = {
-  checkin: '🔥',
-  trial: '🎟',
-  practice: '🤝',
-  review: '✍️'
-};
+});
 </script>
 
 <template>
-  <div class="page">
-    <header class="head">
-      <div class="head__title">成长档案</div>
-      <div class="head__sub">把每一次进步都记下来</div>
+  <main class="growth-page">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">BITDANCE DATA</p>
+        <h1>学习数据</h1>
+      </div>
+      <button class="pill-btn" @click="router.push('/publish/checkin')">打卡</button>
     </header>
 
-    <section v-if="stats" class="stats">
-      <div class="card">
-        <div class="card__num">{{ stats.totalDays }}</div>
-        <div class="card__label">学舞天数</div>
+    <section class="stats-card" :class="{ loading }">
+      <div class="stat">
+        <strong>{{ displayStats.days }}</strong>
+        <span>累计天数</span>
       </div>
-      <div class="card">
-        <div class="card__num">{{ Math.round(stats.totalMinutes / 60) }}h</div>
-        <div class="card__label">累计时长</div>
+      <div class="stat">
+        <strong>{{ displayStats.hours }}</strong>
+        <span>训练时长</span>
       </div>
-      <div class="card">
-        <div class="card__num">{{ stats.totalSessions }}</div>
-        <div class="card__label">训练次数</div>
-      </div>
-      <div class="card">
-        <div class="card__num">{{ stats.styleCount }}</div>
-        <div class="card__label">舞种数</div>
-      </div>
-      <div class="card card--wide">
-        <div class="card__num">🔥 {{ stats.streakDays }} 天</div>
-        <div class="card__label">连续打卡</div>
-      </div>
-      <div class="card card--wide">
-        <div class="card__num">{{ stats.goalProgress }}%</div>
-        <div class="card__label">月度目标进度</div>
-        <div class="bar"><div class="bar__fill" :style="{ width: `${stats.goalProgress}%` }" /></div>
+      <div class="stat">
+        <strong>{{ displayStats.styles }}</strong>
+        <span>尝试舞种</span>
       </div>
     </section>
 
-    <section class="actions">
-      <button class="action" @click="router.push('/publish/checkin')">
-        <span class="action__icon">🔥</span>
-        <span>立即打卡</span>
-      </button>
-      <button class="action" @click="router.push('/me/works')">
-        <span class="action__icon">🎬</span>
-        <span>阶段作品</span>
-      </button>
-      <button class="action" @click="router.push('/me/goal')">
-        <span class="action__icon">🎯</span>
-        <span>训练目标</span>
-      </button>
-      <button class="action" @click="router.push('/favorites')">
-        <span class="action__icon">⭐</span>
-        <span>我的收藏</span>
-      </button>
+    <section class="trend-card">
+      <div class="section-head">
+        <h2>训练趋势</h2>
+        <span>THIS WEEK</span>
+      </div>
+      <div class="bars">
+        <div v-for="item in trend" :key="item.day" class="bar-item">
+          <div class="bar-track">
+            <div class="bar-fill" :style="{ height: `${item.value * 2}px` }" />
+          </div>
+          <span>{{ item.day }}</span>
+        </div>
+      </div>
     </section>
 
-    <section class="timeline">
-      <h3>成长时间线</h3>
-      <div v-if="!timeline.length" class="empty">暂无记录，去打个卡试试</div>
-      <article v-for="t in timeline" :key="t.id" class="tl">
-        <div class="tl__icon">{{ TYPE_ICON[t.type] }}</div>
-        <div class="tl__body">
-          <div class="tl__title">{{ t.title }}</div>
-          <div v-if="t.subtitle" class="tl__sub">{{ t.subtitle }}</div>
-          <div class="tl__time">{{ new Date(t.ts).toLocaleString() }}</div>
+    <section class="favorites">
+      <div class="section-head">
+        <div>
+          <h2>收藏管理</h2>
+          <p>舞室 / 课程 / 老师</p>
+        </div>
+        <button class="text-btn" @click="router.push('/favorites')">全部</button>
+      </div>
+
+      <article v-for="item in favorites" :key="item.title" class="favorite-card">
+        <div class="favorite-card__image">
+          <span>{{ item.type }}</span>
+        </div>
+        <div class="favorite-card__body">
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.meta }}</p>
+          <button @click="router.push(item.path)">{{ item.action }}</button>
         </div>
       </article>
     </section>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 16px;
-}
-.head {
-  padding: 16px;
-  &__title {
-    font-size: 22px;
-    font-weight: 700;
-  }
-  &__sub {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-}
-.stats {
-  padding: 0 12px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-.card {
+.growth-page {
+  min-height: 100vh;
+  padding: 20px 18px 28px;
   background: #fff;
-  border-radius: 12px;
-  padding: 14px;
-  &--wide {
-    grid-column: span 2;
-  }
-  &__num {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--bd-primary);
-  }
-  &__label {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
+  color: #111;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  h1 {
+    margin: 0;
+    font-size: 34px;
+    line-height: 0.95;
+    font-weight: 900;
   }
 }
-.bar {
-  margin-top: 10px;
-  height: 6px;
-  background: #f3f3f3;
-  border-radius: 3px;
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #707072;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pill-btn,
+.text-btn,
+.favorite-card button {
+  border: 0;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.pill-btn {
+  height: 40px;
+  padding: 0 18px;
+  background: #111;
+  color: #fff;
+}
+
+.stats-card {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
   overflow: hidden;
-  &__fill {
-    height: 100%;
-    background: linear-gradient(90deg, #ff7799, #ff2442);
+  margin-top: 24px;
+  border-radius: 30px;
+  background: #111;
+  &.loading {
+    opacity: 0.75;
   }
 }
-.actions {
-  margin: 12px 12px 8px;
+
+.stat {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px 12px;
+  background: #111;
+  color: #fff;
+  strong {
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 900;
+  }
+  span {
+    margin-top: 8px;
+    color: #cacacb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+}
+
+.trend-card,
+.favorites {
+  margin-top: 24px;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 900;
+  }
+  p,
+  span {
+    margin: 4px 0 0;
+    color: #707072;
+    font-size: 12px;
+    font-weight: 800;
+  }
+}
+
+.bars {
+  height: 136px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: end;
+  gap: 12px;
+  padding: 18px 16px 12px;
+  border-radius: 28px;
+  background: #f5f5f5;
 }
-.action {
-  background: #fff;
-  border: none;
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
+
+.bar-item {
+  display: grid;
+  justify-items: center;
   gap: 8px;
-  font-size: 13px;
-  cursor: pointer;
-  &__icon {
-    font-size: 18px;
+  span {
+    color: #707072;
+    font-size: 11px;
+    font-weight: 800;
   }
 }
-.timeline {
-  padding: 12px;
-  h3 {
-    margin: 0 0 8px;
-    padding: 0 4px;
-    font-size: 15px;
-  }
-}
-.empty {
-  text-align: center;
-  padding: 40px;
-  color: var(--bd-text-secondary);
-  font-size: 13px;
-}
-.tl {
+
+.bar-track {
+  width: 100%;
+  height: 72px;
   display: flex;
-  gap: 10px;
-  padding: 12px;
-  background: #fff;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  &__icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: rgba(255, 36, 66, 0.08);
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar-fill {
+  width: 100%;
+  max-width: 34px;
+  min-height: 10px;
+  border-radius: 999px 999px 0 0;
+  background: #111;
+}
+
+.text-btn {
+  height: 34px;
+  padding: 0 14px;
+  background: #f5f5f5;
+  color: #111;
+}
+
+.favorite-card {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 12px;
+  min-height: 124px;
+  margin-bottom: 12px;
+  padding: 8px;
+  border-radius: 30px;
+  background: #f5f5f5;
+  &__image {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
+    align-items: flex-end;
+    padding: 12px;
+    border-radius: 24px;
+    background:
+      linear-gradient(135deg, rgba(17, 17, 17, 0.08), rgba(17, 17, 17, 0.7)),
+      linear-gradient(135deg, #e5e5e5, #9e9ea0);
+    span {
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #fff;
+      color: #111;
+      font-size: 11px;
+      font-weight: 900;
+    }
   }
   &__body {
-    flex: 1;
     min-width: 0;
-  }
-  &__title {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  &__sub {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__time {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 900;
+    }
+    p {
+      margin: 8px 0 14px;
+      color: #707072;
+      font-size: 12px;
+    }
+    button {
+      width: fit-content;
+      height: 36px;
+      padding: 0 16px;
+      background: #111;
+      color: #fff;
+    }
   }
 }
 </style>
