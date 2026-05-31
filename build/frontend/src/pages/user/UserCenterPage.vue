@@ -1,192 +1,304 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import { showConfirmDialog } from 'vant';
-import { useUserStore } from '@/stores/user';
+import NikeIcon from '@/components/NikeIcon.vue';
 
-const router = useRouter();
-const user = useUserStore();
+type UserTileIcon = 'bag' | 'calendar-check' | 'star' | 'bell' | 'heart' | 'shield';
 
-interface MenuItem {
-  icon: string;
+interface UserTile {
   label: string;
-  to?: string;
-  action?: () => void;
+  icon: UserTileIcon;
+  to: string;
 }
 
-const sections: Array<{ title: string; items: MenuItem[] }> = [
-  {
-    title: '舞蹈',
-    items: [
-      { icon: '🎟', label: '我的试听', to: '/me/trials' },
-      { icon: '✍️', label: '我的评价', to: '/me/reviews' },
-      { icon: '⭐', label: '我的收藏', to: '/favorites' },
-      { icon: '🤝', label: '我的约练', to: '/me/practices' }
-    ]
-  },
-  {
-    title: '账号',
-    items: [
-      { icon: '👤', label: '资料与偏好', to: '/me/profile' },
-      { icon: '🔒', label: '隐私设置', to: '/me/privacy' },
-      { icon: '💬', label: '消息中心', to: '/messages' }
-    ]
-  }
+interface WorkbenchRow {
+  label: string;
+  status: string;
+  to: string;
+}
+
+const router = useRouter();
+
+const tiles: UserTile[] = [
+  { label: '订单', icon: 'bag', to: '/me/workshop-orders' },
+  { label: '预约', icon: 'calendar-check', to: '/me/trials' },
+  { label: '评价', icon: 'star', to: '/me/reviews' },
+  { label: '消息', icon: 'bell', to: '/messages' },
+  { label: '收藏', icon: 'heart', to: '/favorites' },
+  { label: '隐私', icon: 'shield', to: '/me/privacy' }
 ];
 
-const onLogout = async () => {
-  await showConfirmDialog({ title: '退出登录？' }).catch(() => {
-    throw new Error('cancel');
-  });
-  user.logout();
-  router.replace('/home');
-};
-
-const onSwitchRole = () => {
-  user.switchRole(user.activeRole === 'user' ? 'coach' : 'user');
-};
+const workbenchRows: WorkbenchRow[] = [
+  { label: '申请成为教练', status: '待认证', to: '/coach/appeal' },
+  { label: '申请舞室管理员', status: '待认证', to: '/me/profile' },
+  { label: '平台管理员入口', status: '待认证', to: '/coach/dashboard' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="head">
-      <div class="avatar">{{ (user.profile?.nickname ?? '?').charAt(0) }}</div>
-      <div class="info">
-        <div class="info__name">{{ user.profile?.nickname ?? '未登录' }}</div>
-        <div class="info__sub">{{ user.profile?.phone ?? '' }}</div>
-        <div class="info__roles">
-          <span class="role" :class="{ active: user.activeRole === 'user' }" @click="user.switchRole('user')">
-            普通用户
-          </span>
-          <span class="role" :class="{ active: user.activeRole === 'coach' }" @click="onSwitchRole">
-            教练 {{ user.isCoach ? '' : '（开通）' }}
-          </span>
-        </div>
+  <div class="me-page">
+    <header class="me-topbar">
+      <div class="me-topbar__copy">
+        <h1>我的</h1>
+        <p>账号、消息、角色工作台</p>
       </div>
+      <button class="icon-button" type="button" aria-label="消息提醒" @click="router.push('/messages')">
+        <NikeIcon name="bell" :size="20" />
+      </button>
     </header>
 
-    <section v-for="sec in sections" :key="sec.title" class="block">
-      <div class="block__title">{{ sec.title }}</div>
-      <button
-        v-for="m in sec.items"
-        :key="m.label"
-        class="row"
-        @click="m.to ? router.push(m.to) : m.action?.()"
-      >
-        <span class="row__icon">{{ m.icon }}</span>
-        <span class="row__label">{{ m.label }}</span>
-        <span class="row__more">›</span>
-      </button>
-    </section>
+    <main class="me-content">
+      <section class="profile-card" aria-label="个人资料">
+        <div class="profile-card__avatar" />
+        <div class="profile-card__copy">
+          <h2>顾同学</h2>
+          <p>普通用户 · Jazz 初级 · 连续<br />打卡 12 天</p>
+        </div>
+        <button type="button" @click="router.push('/me/profile')">切换角色</button>
+      </section>
 
-    <section v-if="user.activeRole === 'coach'" class="block">
-      <div class="block__title">教练</div>
-      <button class="row" @click="router.push('/me/coach-home')">
-        <span class="row__icon">🎤</span>
-        <span class="row__label">教练主页</span>
-        <span class="row__more">›</span>
-      </button>
-    </section>
+      <section class="tile-grid" aria-label="常用功能">
+        <button v-for="tile in tiles" :key="tile.label" type="button" @click="router.push(tile.to)">
+          <NikeIcon :name="tile.icon" :size="22" :stroke-width="2.4" />
+          <span>{{ tile.label }}</span>
+        </button>
+      </section>
 
-    <button v-if="user.isLogin" class="logout" @click="onLogout">退出登录</button>
+      <section class="workbench" aria-labelledby="workbench-title">
+        <div class="workbench__head">
+          <h2 id="workbench-title">角色工作台</h2>
+          <span>已隐藏</span>
+        </div>
+
+        <button
+          v-for="row in workbenchRows"
+          :key="row.label"
+          class="workbench-row"
+          type="button"
+          @click="router.push(row.to)"
+        >
+          <span class="workbench-row__label">{{ row.label }}</span>
+          <span class="workbench-row__status">{{ row.status }}</span>
+          <NikeIcon name="chevron-right" :size="18" />
+        </button>
+      </section>
+    </main>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding: 0 0 24px;
+.me-page {
+  --nike-ink: #111111;
+  --nike-canvas: #ffffff;
+  --nike-soft-cloud: #f5f5f5;
+  --nike-mute: #707072;
+  --nike-hairline-soft: #e5e5e5;
+
+  min-height: calc(100vh - 72px - env(safe-area-inset-bottom));
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
 }
-.head {
-  background: linear-gradient(180deg, #ffe2e8, #fff);
-  padding: 28px 16px 20px;
+
+.me-topbar {
+  height: 68px;
+  padding: 14px 18px;
+  background: var(--nike-canvas);
+  border-bottom: 1px solid var(--nike-hairline-soft);
   display: flex;
-  gap: 14px;
   align-items: center;
-}
-.avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.info {
-  flex: 1;
-  &__name {
-    font-size: 18px;
-    font-weight: 700;
-  }
-  &__sub {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__roles {
-    margin-top: 8px;
+  gap: 12px;
+
+  &__copy {
+    min-width: 0;
+    flex: 1;
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    gap: 2px;
   }
-}
-.role {
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 11px;
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--bd-text-secondary);
-  cursor: pointer;
-  &.active {
-    background: var(--bd-primary);
-    color: #fff;
+
+  h1,
+  p {
+    margin: 0;
   }
-}
-.block {
-  margin-top: 8px;
-  background: #fff;
-  &__title {
-    padding: 12px 16px 4px;
+
+  h1 {
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  p {
+    color: var(--nike-mute);
     font-size: 12px;
-    color: var(--bd-text-secondary);
+    line-height: 1.25;
+    font-weight: 500;
+    letter-spacing: 0;
   }
 }
-.row {
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 12px 16px;
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--nike-soft-cloud);
+  color: var(--nike-ink);
+  display: grid;
+  place-items: center;
+  flex: none;
+  cursor: pointer;
+}
+
+.me-content {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.profile-card {
+  height: 97px;
+  padding: 18px;
+  background: var(--nike-soft-cloud);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+
+  &__avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: 999px;
+    background: var(--nike-ink);
+    flex: none;
+  }
+
+  &__copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  h2,
+  p {
+    margin: 0;
+  }
+
+  h2 {
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  p {
+    margin-top: 4px;
+    color: var(--nike-mute);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  button {
+    width: 81px;
+    height: 40px;
+    border: 1px solid var(--nike-hairline-soft);
+    border-radius: 999px;
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 800;
+    cursor: pointer;
+    flex: none;
+  }
+}
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  button {
+    height: 86px;
+    border: 0;
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+
+    span {
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+  }
+}
+
+.workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  &__head {
+    height: 25px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    h2 {
+      margin: 0;
+      min-width: 0;
+      flex: 1;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    span {
+      color: var(--nike-mute);
+      font-size: 13px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+  }
+}
+
+.workbench-row {
+  width: 100%;
+  height: 51px;
+  border: 0;
+  border-bottom: 1px solid var(--nike-hairline-soft);
+  padding: 0;
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
-  border-bottom: 1px solid var(--bd-border);
-  &:last-child {
-    border-bottom: none;
-  }
-  &__icon {
-    width: 24px;
-    text-align: center;
-  }
+
   &__label {
+    min-width: 0;
     flex: 1;
     text-align: left;
+    font-size: 15px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  &__status {
+    color: var(--nike-mute);
     font-size: 14px;
+    line-height: 1.25;
+    font-weight: 700;
   }
-  &__more {
-    color: var(--bd-text-secondary);
-  }
-}
-.logout {
-  margin: 24px 16px 0;
-  width: calc(100% - 32px);
-  height: 44px;
-  border: 1px solid var(--bd-border);
-  background: #fff;
-  color: var(--bd-text-secondary);
-  border-radius: 999px;
-  font-size: 14px;
-  cursor: pointer;
 }
 </style>

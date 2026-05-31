@@ -28,7 +28,7 @@ const showTabBar = computed(() => Boolean(route.meta?.tab));
   &__main {
     flex: 1;
     &.has-tabbar {
-      padding-bottom: calc(64px + env(safe-area-inset-bottom));
+      padding-bottom: calc(72px + env(safe-area-inset-bottom));
     }
   }
 }
