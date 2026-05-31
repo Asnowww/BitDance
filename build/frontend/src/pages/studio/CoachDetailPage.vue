@@ -1,259 +1,277 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchCoachDetail, type CoachDetail } from '@/api/course';
-import { useFavoriteStore } from '@/stores/favorite';
+import { showToast } from 'vant';
+import { Music } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenActionBar from '@/components/pen/PenActionBar.vue';
 
 const route = useRoute();
 const router = useRouter();
-const fav = useFavoriteStore();
-const detail = ref<CoachDetail | null>(null);
-const loading = ref(true);
-const coachId = computed(() => Number(route.params.id));
+const coachId = String(route.params.id || 'mia');
 
-onMounted(async () => {
-  try {
-    detail.value = await fetchCoachDetail(coachId.value);
-  } finally {
-    loading.value = false;
-  }
-});
+const stats = [
+  { value: '4.9', label: '耐心' },
+  { value: '4.8', label: '纠错' },
+  { value: '4.9', label: '讲解' }
+];
 
-const onFav = () => {
-  if (!detail.value) return;
-  fav.toggle({
-    targetType: 'coach',
-    targetId: detail.value.id,
-    title: detail.value.name,
-    subtitle: `${detail.value.style} · ★${detail.value.ratingAvg}`
-  });
+const course = {
+  id: 'jazz-basic',
+  title: 'Jazz 基础律动',
+  meta: '明天 20:00 · Urban Flow',
+  tag: '初级',
+  price: '¥99 / 节'
 };
+
+const onBook = () => router.push(`/course/${course.id}`);
 </script>
 
 <template>
-  <div v-if="loading" class="loading">加载中…</div>
-  <div v-else-if="detail" class="page">
-    <header class="head">
-      <button class="back" @click="router.back()">←</button>
-      <div class="avatar">{{ detail.name.charAt(0) }}</div>
-      <div class="name">{{ detail.name }}</div>
-      <div class="meta">
-        <span>{{ detail.style }}</span>
-        <span>·</span>
-        <span>★ {{ detail.ratingAvg }} ({{ detail.reviewCount }})</span>
-      </div>
-      <div class="studio" @click="router.push(`/studio/${detail.studioId}`)">
-        所属：{{ detail.studioName }} →
-      </div>
-    </header>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="老师详情" @share="showToast('老师主页链接已复制')" />
 
-    <section class="block">
-      <h3>教学风格</h3>
-      <p>{{ detail.teachStyle }}</p>
-    </section>
-
-    <section class="block">
-      <h3>个人介绍</h3>
-      <p>{{ detail.intro }}</p>
-    </section>
-
-    <section class="block">
-      <h3>代表作品</h3>
-      <div class="works">
-        <div v-for="w in detail.works" :key="w.id" class="works__item">
-          <span class="works__type">{{ w.type === 'video' ? '▶' : '🖼' }}</span>
-          <span class="works__title">{{ w.title }}</span>
+    <section class="pen-scroll">
+      <section class="hero">
+        <div class="hero__bars" aria-hidden="true">
+          <span v-for="i in 6" :key="i" />
         </div>
-      </div>
-    </section>
+        <Music class="hero__icon" :size="42" :stroke-width="2" />
+        <strong class="hero__title">MIA</strong>
+        <p class="hero__meta">韩舞 / Jazz / 零基础友好</p>
+      </section>
 
-    <section class="block">
-      <h3>可上课程</h3>
-      <div class="course-list">
-        <div
-          v-for="c in detail.courses"
-          :key="c.id"
-          class="course"
-          @click="router.push(`/course/${c.id}`)"
-        >
-          <span>{{ c.name }}</span>
-          <span class="course__diff">{{ c.difficulty }}</span>
+      <section class="body">
+        <h2 class="body__title">Mia 老师</h2>
+        <p class="body__sub">教学 7 年 · 认证教练 · 纠错细致</p>
+
+        <div class="stats">
+          <div v-for="stat in stats" :key="stat.label" class="stat">
+            <strong class="stat__value">{{ stat.value }}</strong>
+            <span class="stat__label">{{ stat.label }}</span>
+          </div>
         </div>
-      </div>
+
+        <header class="section-head">
+          <h3>可预约课程</h3>
+          <button type="button" class="section-head__more" @click="showToast('查看全部课程')">全部</button>
+        </header>
+
+        <article class="course" @click="router.push(`/course/${course.id}`)">
+          <div class="course__cover" aria-hidden="true">
+            <Music :size="28" :stroke-width="2" />
+          </div>
+          <div class="course__body">
+            <strong class="course__title">{{ course.title }}</strong>
+            <p class="course__meta">{{ course.meta }}</p>
+            <span class="tag">{{ course.tag }}</span>
+            <span class="course__price">{{ course.price }}</span>
+          </div>
+        </article>
+      </section>
     </section>
 
-    <section class="block">
-      <h3>可约时段</h3>
-      <div class="slots">
-        <span v-for="s in detail.availableSlots" :key="`${s.day}-${s.time}`" class="slot">
-          {{ s.day }} {{ s.time }}
-        </span>
-      </div>
-    </section>
-
-    <footer class="footer">
-      <button class="btn btn--ghost" @click="onFav">
-        {{ fav.isFav('coach', detail.id) ? '♥ 已收藏' : '♡ 收藏' }}
-      </button>
-      <button class="btn btn--primary" @click="router.push(`/studio/${detail.studioId}/trial?coachId=${detail.id}`)">
-        预约 TA 的课
-      </button>
-    </footer>
-  </div>
+    <PenActionBar
+      soft-label="收藏"
+      dark-label="预约课程"
+      @soft="showToast('已收藏')"
+      @dark="onBook"
+    />
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
-}
-.loading {
-  padding: 80px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.head {
-  background: linear-gradient(180deg, #ffe2e8, #fff);
-  padding: 80px 24px 24px;
-  text-align: center;
-  position: relative;
-}
-.back {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
-  left: 12px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.1);
-  font-size: 18px;
-  cursor: pointer;
-}
-.avatar {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 30px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.name {
-  margin-top: 12px;
-  font-size: 22px;
-  font-weight: 700;
-}
-.meta {
-  margin-top: 6px;
-  display: inline-flex;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--bd-text-secondary);
-}
-.studio {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--bd-primary);
-  cursor: pointer;
-}
-.block {
-  margin-top: 8px;
-  padding: 16px;
-  background: #fff;
-  h3 {
-    margin: 0 0 8px;
-    font-size: 15px;
-  }
-  p {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.6;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+
+  &--with-bar {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
 }
-.works {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  &__item {
-    aspect-ratio: 1;
-    background: linear-gradient(135deg, #ffd2da, #ff7799);
-    border-radius: 10px;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-  }
-  &__type {
-    font-size: 22px;
-  }
-  &__title {
-    font-size: 12px;
-  }
-}
-.course-list {
+
+.pen-scroll {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 216px;
+  padding: 18px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+  box-sizing: border-box;
+
+  &__bars {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    height: 30px;
+    margin-bottom: auto;
+
+    span {
+      height: 100%;
+      background: $pen-charcoal;
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    color: $pen-on-primary;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__meta {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 18px 20px;
+
+  &__title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__sub {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  height: 92px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 16px;
+  background: $pen-soft;
+
+  &__value {
+    font-size: 22px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__label {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  h3 {
+    @include pen-h3-section;
+    flex: 1;
+  }
+
+  &__more {
+    border: 0;
+    background: transparent;
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+}
+
 .course {
   display: flex;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: #fafafa;
-  border-radius: 10px;
+  align-items: center;
+  gap: 12px;
+  min-height: 124px;
+  cursor: pointer;
+
+  &__cover {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 112px;
+    align-self: stretch;
+    border-radius: 14px;
+    background: $pen-soft;
+    color: $pen-ink;
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
+  }
+
+  &__title {
+    font-size: 16px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__meta {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: $pen-lh;
+  }
+
+  &__price {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+}
+
+.tag {
+  align-self: flex-start;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid $pen-hairline;
+  border-radius: 999px;
+  background: $pen-canvas;
+  color: $pen-ink;
   font-size: 13px;
-  cursor: pointer;
-  &__diff {
-    color: var(--bd-text-secondary);
-    font-size: 11px;
-  }
-}
-.slots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.slot {
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(54, 165, 255, 0.1);
-  color: #36a5ff;
-  font-size: 12px;
-}
-.footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  display: flex;
-  gap: 10px;
-  z-index: 50;
-}
-.btn {
-  flex: 1;
-  height: 44px;
-  border: none;
-  border-radius: 999px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  &--primary {
-    background: var(--bd-primary);
-    color: #fff;
-  }
-  &--ghost {
-    background: rgba(255, 36, 66, 0.08);
-    color: var(--bd-primary);
-  }
+  font-weight: 700;
+  line-height: $pen-lh;
 }
 </style>

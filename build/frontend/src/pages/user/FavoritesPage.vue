@@ -1,169 +1,277 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useFavoriteStore, type FavoriteTargetType } from '@/stores/favorite';
+import { showToast } from 'vant';
+import { Music } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const router = useRouter();
-const fav = useFavoriteStore();
 
-const TYPES: Array<{ key: FavoriteTargetType; label: string }> = [
-  { key: 'studio', label: '舞室' },
-  { key: 'course', label: '课程' },
-  { key: 'coach', label: '教练' },
-  { key: 'workshop', label: 'Workshop' }
+const stats = [
+  { value: '126', label: '累计天数' },
+  { value: '43h', label: '训练时长' },
+  { value: '5', label: '尝试舞种' }
 ];
 
-const activeType = ref<FavoriteTargetType>('studio');
+const trend = [
+  { day: '周一', ratio: 0.6 },
+  { day: '周二', ratio: 0.85 },
+  { day: '周三', ratio: 0.5 },
+  { day: '周四', ratio: 1 },
+  { day: '周五', ratio: 0.7 }
+];
 
-const onItemClick = (type: FavoriteTargetType, id: number) => {
-  if (type === 'workshop') router.push(`/workshop/${id}`);
-  else router.push(`/${type}/${id}`);
-};
+interface FavoriteCard {
+  id: string;
+  title: string;
+  meta: string;
+  tag: string;
+  action: string;
+  to: string;
+}
+
+const favorites: FavoriteCard[] = [
+  {
+    id: 'urban-flow',
+    title: 'Urban Flow 舞室',
+    meta: '收藏于 5/24 · 可预约',
+    tag: '舞室',
+    action: '预约试听',
+    to: '/studio/urban-flow'
+  },
+  {
+    id: 'mia-jazz',
+    title: 'Mia Jazz 基础课',
+    meta: '周三晚 · 可报名',
+    tag: '课程',
+    action: '立即报名',
+    to: '/course/mia-jazz'
+  }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">我的收藏</span>
-    </header>
-    <nav class="tabs">
-      <button
-        v-for="t in TYPES"
-        :key="t.key"
-        class="tab"
-        :class="{ active: activeType === t.key }"
-        @click="activeType = t.key"
-      >
-        {{ t.label }} ({{ fav.groupedByType[t.key].length }})
-      </button>
-    </nav>
-    <section class="list">
-      <div v-if="fav.groupedByType[activeType].length === 0" class="empty">
-        还没有收藏的{{ TYPES.find((x) => x.key === activeType)?.label }}
-      </div>
-      <article
-        v-for="item in fav.groupedByType[activeType]"
-        :key="`${item.targetType}-${item.targetId}`"
-        class="item"
-        @click="onItemClick(item.targetType, item.targetId)"
-      >
-        <div class="item__cover">{{ item.title.charAt(0) }}</div>
-        <div class="item__body">
-          <div class="item__title">{{ item.title }}</div>
-          <div class="item__sub">{{ item.subtitle }}</div>
+  <main class="pen-page">
+    <PenTopBar title="学习数据" @share="showToast('学习数据链接已复制')" />
+
+    <section class="pen-scroll">
+      <div class="stats">
+        <div v-for="stat in stats" :key="stat.label" class="stat">
+          <strong class="stat__value">{{ stat.value }}</strong>
+          <span class="stat__label">{{ stat.label }}</span>
         </div>
-        <button
-          class="item__remove"
-          @click.stop="
-            fav.toggle({
-              targetType: item.targetType,
-              targetId: item.targetId,
-              title: item.title,
-              subtitle: item.subtitle
-            })
-          "
+      </div>
+
+      <section class="trend">
+        <h3 class="trend__title">训练趋势</h3>
+        <div class="trend__rows">
+          <div v-for="item in trend" :key="item.day" class="trend-row">
+            <span class="trend-row__day">{{ item.day }}</span>
+            <span class="trend-row__bar" :style="{ width: `${item.ratio * 100}%` }" />
+          </div>
+        </div>
+      </section>
+
+      <section class="favorites">
+        <header class="favorites__head">
+          <h3>收藏管理</h3>
+          <span class="favorites__sub">舞室 / 课程 / 老师</span>
+        </header>
+
+        <article
+          v-for="item in favorites"
+          :key="item.id"
+          class="fav"
+          @click="router.push(item.to)"
         >
-          取消
-        </button>
-      </article>
+          <div class="fav__cover" aria-hidden="true">
+            <Music :size="28" :stroke-width="2" />
+          </div>
+          <div class="fav__body">
+            <strong class="fav__title">{{ item.title }}</strong>
+            <p class="fav__meta">{{ item.meta }}</p>
+            <span class="tag">{{ item.tag }}</span>
+            <button class="fav__action" type="button" @click.stop="router.push(item.to)">
+              {{ item.action }}
+            </button>
+          </div>
+        </article>
+      </section>
     </section>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
 }
-.bar {
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  height: 112px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: $pen-soft;
+
+  &__value {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__label {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.trend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__title {
+    @include pen-h3-section;
+  }
+
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.trend-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  height: 32px;
+
+  &__day {
+    flex: none;
+    width: 36px;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+
+  &__bar {
+    height: 10px;
+    border-radius: 999px;
+    background: $pen-ink;
   }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.tabs {
+
+.favorites {
   display: flex;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  overflow-x: auto;
-}
-.tab {
-  flex: 1;
-  border: none;
-  background: none;
-  padding: 12px 8px;
-  font-size: 13px;
-  color: var(--bd-text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  &.active {
-    color: var(--bd-primary);
-    font-weight: 600;
-    border-bottom: 2px solid var(--bd-primary);
-  }
-}
-.list {
-  padding: 8px 12px;
-}
-.empty {
-  text-align: center;
-  padding: 60px 24px;
-  color: var(--bd-text-secondary);
-  font-size: 13px;
-}
-.item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  margin-bottom: 8px;
-  background: #fff;
-  border-radius: 12px;
-  cursor: pointer;
-  &__cover {
-    width: 48px;
-    height: 48px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #ffd2da, #ff2442);
-    color: #fff;
+  flex-direction: column;
+  gap: 16px;
+
+  &__head {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-weight: 600;
+    gap: 8px;
   }
+
+  &__head h3 {
+    @include pen-h3-section;
+    flex: 1;
+  }
+
+  &__sub {
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.fav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 124px;
+  cursor: pointer;
+
+  &__cover {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 112px;
+    align-self: stretch;
+    border-radius: 14px;
+    background: $pen-soft;
+    color: $pen-ink;
+  }
+
   &__body {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
   }
+
   &__title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: $pen-lh;
   }
-  &__sub {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-  &__remove {
-    border: 1px solid var(--bd-border);
-    background: #fff;
-    border-radius: 999px;
-    padding: 4px 12px;
+
+  &__meta {
+    margin: 0;
+    color: $pen-mute;
     font-size: 12px;
-    color: var(--bd-text-secondary);
+    font-weight: 600;
+    line-height: $pen-lh;
+  }
+
+  &__action {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $pen-success;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
     cursor: pointer;
   }
+}
+
+.tag {
+  align-self: flex-start;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid $pen-hairline;
+  border-radius: 999px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
 }
 </style>

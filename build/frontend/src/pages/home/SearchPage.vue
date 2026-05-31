@@ -1,455 +1,323 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAppStore } from '@/stores/app';
-import { fetchNearbyStudios, type StudioCard } from '@/api/studio';
+import { showToast } from 'vant';
+import { Music, Search } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenActionBar from '@/components/pen/PenActionBar.vue';
 
 const router = useRouter();
-const appStore = useAppStore();
 
-const HOT_KEYWORDS = ['Hiphop', 'Jazz', 'Breaking', '零基础', '海淀区', '朝阳区'];
-const HISTORY_KEY = 'bitdance_search_history';
+const filters = ['舞种', '距离', '价格', '时段', '舞室'];
+const activeFilter = ref('距离');
+const viewMode = ref<'list' | 'map'>('list');
 
-const keyword = ref('');
-const list = ref<StudioCard[]>([]);
-const loading = ref(false);
-const filterVisible = ref(false);
-const history = ref<string[]>(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'));
+interface SearchResult {
+  id: string;
+  title: string;
+  meta: string;
+  tags: string[];
+  price: string;
+  priceTone: 'ink' | 'success';
+  to: string;
+}
 
-const filter = ref({
-  styles: [] as string[],
-  priceMin: undefined as number | undefined,
-  priceMax: undefined as number | undefined,
-  distanceKm: undefined as number | undefined,
-  difficulty: '' as string,
-  audience: '' as string,
-  beginnerFriendly: false
-});
-
-const STYLE_OPTIONS = ['Hiphop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waacking', '中国舞', 'Urban'];
-const DISTANCE_OPTIONS = [
-  { label: '1km', value: 1 },
-  { label: '3km', value: 3 },
-  { label: '5km', value: 5 },
-  { label: '10km', value: 10 },
-  { label: '不限', value: undefined }
-];
-const DIFFICULTY_OPTIONS = ['不限', '入门', '初级', '进阶', '高阶'];
-const AUDIENCE_OPTIONS = ['不限', '青少年', '成人', '零基础', '考级'];
-const PRICE_RANGES = [
-  { label: '不限', min: undefined, max: undefined },
-  { label: '<100', min: 0, max: 100 },
-  { label: '100-200', min: 100, max: 200 },
-  { label: '200-400', min: 200, max: 400 },
-  { label: '>400', min: 400, max: undefined }
-];
-
-const activeFilterCount = computed(() => {
-  const f = filter.value;
-  let n = 0;
-  if (f.styles.length) n += 1;
-  if (f.priceMin !== undefined || f.priceMax !== undefined) n += 1;
-  if (f.distanceKm !== undefined) n += 1;
-  if (f.difficulty) n += 1;
-  if (f.audience) n += 1;
-  if (f.beginnerFriendly) n += 1;
-  return n;
-});
-
-const toggleStyle = (s: string) => {
-  const idx = filter.value.styles.indexOf(s);
-  if (idx >= 0) filter.value.styles.splice(idx, 1);
-  else filter.value.styles.push(s);
-};
-
-const onSearch = async () => {
-  const k = keyword.value.trim();
-  if (k && !history.value.includes(k)) {
-    history.value.unshift(k);
-    history.value = history.value.slice(0, 10);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value));
+const results: SearchResult[] = [
+  {
+    id: 'urban-flow',
+    title: 'Urban Flow 舞室',
+    meta: '1.2km · 4.8 · 韩舞/Urban',
+    tags: ['零基础', '晚课班'],
+    price: '¥79-128 / 节',
+    priceTone: 'ink',
+    to: '/studio/urban-flow'
+  },
+  {
+    id: 'beats-lab',
+    title: 'Beats Lab',
+    meta: '2.8km · 4.7 · Jazz/Hiphop',
+    tags: ['地铁直达', '试听'],
+    price: '¥88 起',
+    priceTone: 'ink',
+    to: '/studio/beats-lab'
+  },
+  {
+    id: 'k-star',
+    title: 'K-Star Studio',
+    meta: '4.6km · 4.6 · 韩舞成品舞',
+    tags: ['热门成品舞'],
+    price: '可约试听',
+    priceTone: 'success',
+    to: '/studio/k-star'
   }
-  loading.value = true;
-  try {
-    const data = await fetchNearbyStudios({
-      city: appStore.city,
-      keyword: k || undefined,
-      styles: filter.value.styles.length ? filter.value.styles : undefined,
-      priceMin: filter.value.priceMin,
-      priceMax: filter.value.priceMax,
-      distanceKm: filter.value.distanceKm,
-      difficulty: filter.value.difficulty || undefined,
-      audience: filter.value.audience || undefined,
-      beginnerFriendly: filter.value.beginnerFriendly || undefined,
-      page: 1,
-      pageSize: 30
-    });
-    list.value = data.list;
-  } finally {
-    loading.value = false;
+];
+
+const selected = ref<Record<string, boolean>>({});
+const toggleSelect = (id: string) => {
+  selected.value[id] = !selected.value[id];
+};
+const compareCount = () => Object.values(selected.value).filter(Boolean).length;
+
+const onCompare = () => {
+  if (compareCount() < 2) {
+    showToast('请至少选择 2 个舞室进行对比');
+    return;
   }
-};
-
-const onClearHistory = () => {
-  history.value = [];
-  localStorage.removeItem(HISTORY_KEY);
-};
-
-const onPickHistory = (k: string) => {
-  keyword.value = k;
-  void onSearch();
-};
-
-const onResetFilter = () => {
-  filter.value = {
-    styles: [],
-    priceMin: undefined,
-    priceMax: undefined,
-    distanceKm: undefined,
-    difficulty: '',
-    audience: '',
-    beginnerFriendly: false
-  };
-};
-
-const onApplyFilter = () => {
-  filterVisible.value = false;
-  void onSearch();
-};
-
-const setPriceRange = (r: { min?: number; max?: number }) => {
-  filter.value.priceMin = r.min;
-  filter.value.priceMax = r.max;
+  router.push('/studio/compare');
 };
 </script>
 
 <template>
-  <div class="search-page">
-    <header class="search-bar">
-      <button class="search-bar__back" @click="router.back()">←</button>
-      <input
-        v-model="keyword"
-        class="search-bar__input"
-        placeholder="搜索舞室、舞种或老师"
-        @keyup.enter="onSearch"
-      />
-      <button class="search-bar__btn" @click="onSearch">搜索</button>
-    </header>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="搜索结果" @share="showToast('搜索结果链接已复制')" />
 
-    <section class="filter-row">
-      <button class="chip" :class="{ active: activeFilterCount > 0 }" @click="filterVisible = true">
-        筛选 {{ activeFilterCount > 0 ? `· ${activeFilterCount}` : '' }}
+    <section class="pen-scroll">
+      <button class="search-field" type="button" @click="router.back()">
+        <Search class="search-field__icon" :size="18" :stroke-width="2" />
+        <span class="search-field__text">韩舞 零基础 5km 内</span>
       </button>
-    </section>
 
-    <template v-if="!list.length">
-      <section v-if="history.length" class="block">
-        <div class="block__head">
-          <span>历史搜索</span>
-          <button class="block__action" @click="onClearHistory">清空</button>
-        </div>
-        <div class="chips">
-          <span v-for="h in history" :key="h" class="chip" @click="onPickHistory(h)">{{ h }}</span>
-        </div>
-      </section>
-      <section class="block">
-        <div class="block__head"><span>热门搜索</span></div>
-        <div class="chips">
-          <span v-for="h in HOT_KEYWORDS" :key="h" class="chip" @click="onPickHistory(h)">{{ h }}</span>
-        </div>
-      </section>
-    </template>
-
-    <section v-else class="result">
-      <article
-        v-for="s in list"
-        :key="s.id"
-        class="result__item"
-        @click="router.push(`/studio/${s.id}`)"
-      >
-        <div class="result__cover" />
-        <div class="result__body">
-          <div class="result__title">{{ s.name }}</div>
-          <div class="result__meta">{{ s.area }} · {{ s.distanceKm }}km · ★{{ s.ratingAvg }}</div>
-          <div class="result__tags">
-            <span v-for="t in s.topStyles" :key="t" class="tag">{{ t }}</span>
-          </div>
-        </div>
-      </article>
-      <div v-if="loading" class="loading">加载中…</div>
-      <div v-if="!loading && !list.length" class="empty">没有匹配的舞室，换个关键词试试</div>
-    </section>
-
-    <van-popup
-      v-model:show="filterVisible"
-      position="right"
-      :style="{ width: '85%', height: '100%' }"
-    >
-      <div class="filter-panel">
-        <header class="filter-panel__head">
-          <span>筛选</span>
-          <button class="filter-panel__reset" @click="onResetFilter">重置</button>
-        </header>
-        <div class="filter-panel__body">
-          <div class="group">
-            <div class="group__title">舞种（多选）</div>
-            <div class="chips">
-              <span
-                v-for="s in STYLE_OPTIONS"
-                :key="s"
-                class="chip"
-                :class="{ active: filter.styles.includes(s) }"
-                @click="toggleStyle(s)"
-                >{{ s }}</span
-              >
-            </div>
-          </div>
-          <div class="group">
-            <div class="group__title">价格</div>
-            <div class="chips">
-              <span
-                v-for="r in PRICE_RANGES"
-                :key="r.label"
-                class="chip"
-                :class="{ active: filter.priceMin === r.min && filter.priceMax === r.max }"
-                @click="setPriceRange(r)"
-                >{{ r.label }}</span
-              >
-            </div>
-          </div>
-          <div class="group">
-            <div class="group__title">距离</div>
-            <div class="chips">
-              <span
-                v-for="d in DISTANCE_OPTIONS"
-                :key="d.label"
-                class="chip"
-                :class="{ active: filter.distanceKm === d.value }"
-                @click="filter.distanceKm = d.value"
-                >{{ d.label }}</span
-              >
-            </div>
-          </div>
-          <div class="group">
-            <div class="group__title">难度</div>
-            <div class="chips">
-              <span
-                v-for="d in DIFFICULTY_OPTIONS"
-                :key="d"
-                class="chip"
-                :class="{ active: filter.difficulty === (d === '不限' ? '' : d) }"
-                @click="filter.difficulty = d === '不限' ? '' : d"
-                >{{ d }}</span
-              >
-            </div>
-          </div>
-          <div class="group">
-            <div class="group__title">适合人群</div>
-            <div class="chips">
-              <span
-                v-for="d in AUDIENCE_OPTIONS"
-                :key="d"
-                class="chip"
-                :class="{ active: filter.audience === (d === '不限' ? '' : d) }"
-                @click="filter.audience = d === '不限' ? '' : d"
-                >{{ d }}</span
-              >
-            </div>
-          </div>
-          <div class="group">
-            <div class="group__title">其他</div>
-            <label class="toggle">
-              <input v-model="filter.beginnerFriendly" type="checkbox" />
-              <span>仅看零基础友好</span>
-            </label>
-          </div>
-        </div>
-        <footer class="filter-panel__foot">
-          <button class="apply" @click="onApplyFilter">应用筛选</button>
-        </footer>
+      <div class="chip-row" aria-label="筛选条件">
+        <button
+          v-for="filter in filters"
+          :key="filter"
+          type="button"
+          class="chip"
+          :class="activeFilter === filter ? 'chip--active' : 'chip--inactive'"
+          @click="activeFilter = filter"
+        >
+          {{ filter }}
+        </button>
       </div>
-    </van-popup>
-  </div>
+
+      <div class="toggle">
+        <button
+          type="button"
+          class="toggle__btn"
+          :class="{ 'toggle__btn--active': viewMode === 'list' }"
+          @click="viewMode = 'list'"
+        >
+          列表
+        </button>
+        <button
+          type="button"
+          class="toggle__btn"
+          :class="{ 'toggle__btn--active': viewMode === 'map' }"
+          @click="viewMode = 'map'"
+        >
+          地图
+        </button>
+      </div>
+
+      <ul class="result-list">
+        <li v-for="item in results" :key="item.id" class="result" @click="router.push(item.to)">
+          <div class="result__cover" aria-hidden="true">
+            <Music :size="28" :stroke-width="2" />
+          </div>
+          <div class="result__body">
+            <strong class="result__title">{{ item.title }}</strong>
+            <p class="result__meta">{{ item.meta }}</p>
+            <div class="result__tags">
+              <span v-for="tag in item.tags" :key="tag" class="tag">{{ tag }}</span>
+            </div>
+            <span class="result__price" :class="`result__price--${item.priceTone}`">
+              {{ item.price }}
+            </span>
+          </div>
+          <button
+            type="button"
+            class="radio"
+            :class="{ 'radio--on': selected[item.id] }"
+            :aria-label="`选择 ${item.title}`"
+            @click.stop="toggleSelect(item.id)"
+          />
+        </li>
+      </ul>
+    </section>
+
+    <PenActionBar
+      soft-label="收藏"
+      dark-label="加入对比"
+      @soft="showToast('已加入收藏')"
+      @dark="onCompare"
+    />
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.search-page {
-  padding: 8px 0 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+
+  &--with-bar {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
 }
-.search-bar {
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.search-field {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px 8px;
-  &__back {
-    background: none;
-    border: none;
-    font-size: 22px;
-    width: 28px;
-    cursor: pointer;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 24px;
+  background: $pen-soft;
+  cursor: pointer;
+  text-align: left;
+
+  &__icon {
+    flex: none;
+    color: $pen-mute;
   }
-  &__input {
+
+  &__text {
     flex: 1;
-    height: 36px;
-    padding: 0 14px;
-    border: none;
-    border-radius: 999px;
-    background: var(--bd-surface);
-    font-size: 13px;
-    outline: none;
-  }
-  &__btn {
-    border: none;
-    background: none;
-    color: var(--bd-primary);
+    color: $pen-ink;
     font-size: 14px;
-    cursor: pointer;
-  }
-}
-.filter-row {
-  padding: 4px 12px 12px;
-}
-.block {
-  padding: 12px 12px 4px;
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 13px;
     font-weight: 600;
-    margin-bottom: 8px;
-  }
-  &__action {
-    border: none;
-    background: none;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-    cursor: pointer;
+    line-height: $pen-lh;
   }
 }
-.chips {
+
+.chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .chip {
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--bd-surface);
-  border: 1px solid var(--bd-border);
-  font-size: 12px;
-  color: var(--bd-text);
-  cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-    color: var(--bd-primary);
+  @include pen-chip;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+
+  &__btn {
+    flex: 1;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+
+    &--active {
+      background: $pen-ink;
+      color: $pen-on-primary;
+    }
   }
 }
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .result {
-  padding: 0 12px;
-  &__item {
-    display: flex;
-    gap: 10px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--bd-border);
-    cursor: pointer;
-  }
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 124px;
+  cursor: pointer;
+
   &__cover {
-    width: 80px;
-    height: 80px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #ffd2da, #ff2442);
-    flex-shrink: 0;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 112px;
+    align-self: stretch;
+    border-radius: 14px;
+    background: $pen-soft;
+    color: $pen-ink;
   }
+
   &__body {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
   }
+
   &__title {
-    font-size: 14px;
-    font-weight: 600;
-  }
-  &__meta {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-  &__tags {
-    margin-top: 6px;
-    display: flex;
-    gap: 4px;
-  }
-}
-.tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 8px;
-  background: rgba(255, 36, 66, 0.08);
-  color: var(--bd-primary);
-}
-.loading,
-.empty {
-  text-align: center;
-  padding: 24px;
-  color: var(--bd-text-secondary);
-  font-size: 13px;
-}
-.filter-panel {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  &__head {
-    padding: 16px 16px 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     font-size: 16px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__meta {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 12px;
     font-weight: 600;
-    border-bottom: 1px solid var(--bd-border);
+    line-height: $pen-lh;
   }
-  &__reset {
-    border: none;
-    background: none;
-    color: var(--bd-text-secondary);
-    font-size: 13px;
-    cursor: pointer;
+
+  &__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
-  &__body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 16px 16px;
-  }
-  &__foot {
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--bd-border);
+
+  &__price {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+
+    &--ink {
+      color: $pen-ink;
+    }
+
+    &--success {
+      color: $pen-success;
+    }
   }
 }
-.group {
-  padding: 12px 0;
-  &__title {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 10px;
-  }
-}
-.toggle {
-  display: flex;
+
+.tag {
+  height: 40px;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.apply {
-  width: 100%;
-  height: 44px;
-  border: none;
+  padding: 8px 14px;
+  border: 1px solid $pen-hairline;
   border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  background: $pen-canvas;
+  color: $pen-ink;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+}
+
+.radio {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 2px solid $pen-ink;
+  border-radius: 999px;
+  background: $pen-canvas;
   cursor: pointer;
+
+  &--on {
+    background: $pen-ink;
+  }
 }
 </style>

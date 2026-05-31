@@ -1,214 +1,202 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchCourseDetail, type CourseDetail } from '@/api/course';
-import { useFavoriteStore } from '@/stores/favorite';
+import { showToast } from 'vant';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenActionBar from '@/components/pen/PenActionBar.vue';
+import PenFieldRow from '@/components/pen/PenFieldRow.vue';
 
 const route = useRoute();
 const router = useRouter();
-const fav = useFavoriteStore();
-const detail = ref<CourseDetail | null>(null);
-const loading = ref(true);
-const courseId = computed(() => Number(route.params.id));
+const courseId = String(route.params.id || 'kpop-intro');
 
-onMounted(async () => {
-  try {
-    detail.value = await fetchCourseDetail(courseId.value);
-  } finally {
-    loading.value = false;
-  }
-});
+const audiences = ['零基础', '想减脂', '喜欢成品舞'];
+const structuredReviews = [
+  { label: '上手难度', value: '低' },
+  { label: '节奏合理性', value: '4.8' },
+  { label: '练习强度', value: '中' },
+  { label: '实际收获', value: '4.9' }
+];
 
-const onFav = () => {
-  if (!detail.value) return;
-  fav.toggle({
-    targetType: 'course',
-    targetId: detail.value.id,
-    title: detail.value.name,
-    subtitle: `${detail.value.style} · ¥${detail.value.price}`
-  });
-};
+const onBook = () => router.push(`/studio/${courseId}/trial`);
 </script>
 
 <template>
-  <div v-if="loading" class="loading">加载中…</div>
-  <div v-else-if="detail" class="page">
-    <header class="hero">
-      <button class="back" @click="router.back()">←</button>
-      <div class="hero__title">{{ detail.name }}</div>
-      <div class="hero__sub">{{ detail.style }} · {{ detail.difficulty }}</div>
-    </header>
-    <section class="grid">
-      <div class="cell"><span>价格</span><strong>¥{{ detail.price }}</strong></div>
-      <div class="cell"><span>时长</span><strong>{{ detail.durationMin }}min</strong></div>
-      <div class="cell"><span>强度</span><strong>{{ '🔥'.repeat(detail.intensity) }}</strong></div>
-      <div class="cell"><span>频次</span><strong>{{ detail.frequency }}</strong></div>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="课程详情" @share="showToast('课程链接已复制')" />
+
+    <section class="pen-scroll">
+      <header class="head">
+        <h2 class="head__title">K-pop 零基础成品舞</h2>
+        <p class="head__sub">韩舞 · 零基础 · 中等强度 · ¥79 试听</p>
+      </header>
+
+      <article class="coach" @click="router.push('/coach/xiaolu')">
+        <span class="coach__avatar" aria-hidden="true" />
+        <div class="coach__copy">
+          <strong class="coach__name">小鹿老师</strong>
+          <p class="coach__meta">擅长韩舞 / Jazz · 6年教学</p>
+        </div>
+        <span class="tag">认证</span>
+      </article>
+
+      <section class="block">
+        <h3 class="block__title">适合人群</h3>
+        <div class="chip-row">
+          <span v-for="item in audiences" :key="item" class="tag">{{ item }}</span>
+        </div>
+      </section>
+
+      <section class="block">
+        <header class="block__head">
+          <h3 class="block__title">结构化评价</h3>
+          <span class="block__count">128 条</span>
+        </header>
+        <div class="rows">
+          <PenFieldRow
+            v-for="row in structuredReviews"
+            :key="row.label"
+            :label="row.label"
+            :value="row.value"
+            @click="showToast(`${row.label}：${row.value}`)"
+          />
+        </div>
+      </section>
     </section>
-    <section class="block">
-      <h3>课程介绍</h3>
-      <p>{{ detail.intro }}</p>
-    </section>
-    <section class="block">
-      <h3>授课老师</h3>
-      <div class="coach" @click="router.push(`/coach/${detail.coachId}`)">
-        <div class="coach__avatar">{{ detail.coachName.charAt(0) }}</div>
-        <div class="coach__name">{{ detail.coachName }}</div>
-        <span class="coach__more">查看 →</span>
-      </div>
-    </section>
-    <section class="block">
-      <h3>所属舞室</h3>
-      <div class="row" @click="router.push(`/studio/${detail.studioId}`)">
-        <span>🏠 {{ detail.studioName }}</span>
-        <span class="row__action">查看 →</span>
-      </div>
-    </section>
-    <footer class="footer">
-      <button class="btn btn--ghost" @click="onFav">
-        {{ fav.isFav('course', detail.id) ? '♥ 已收藏' : '♡ 收藏' }}
-      </button>
-      <button class="btn btn--primary" @click="router.push(`/studio/${detail.studioId}/trial?courseId=${detail.id}`)">
-        预约试听
-      </button>
-    </footer>
-  </div>
+
+    <PenActionBar
+      soft-label="收藏"
+      dark-label="预约 / 报名"
+      @soft="showToast('已收藏')"
+      @dark="onBook"
+    />
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
-}
-.loading {
-  padding: 80px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.hero {
-  position: relative;
-  padding: 60px 20px 24px;
-  background: linear-gradient(135deg, #ffd2da, #ff7799);
-  color: #fff;
-  &__title {
-    font-size: 22px;
-    font-weight: 700;
-  }
-  &__sub {
-    margin-top: 6px;
-    font-size: 13px;
-    opacity: 0.9;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+
+  &--with-bar {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
 }
-.back {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
-  left: 12px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.35);
-  color: #fff;
-  font-size: 18px;
-  cursor: pointer;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1px;
-  background: var(--bd-border);
-  margin-top: 8px;
-}
-.cell {
-  background: #fff;
-  padding: 14px;
+
+.pen-scroll {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  span {
-    color: var(--bd-text-secondary);
-    font-size: 11px;
-  }
-  strong {
-    color: var(--bd-primary);
-  }
+  gap: 16px;
+  padding: 16px 18px;
 }
-.block {
-  margin-top: 8px;
-  padding: 16px;
-  background: #fff;
-  h3 {
-    margin: 0 0 8px;
-    font-size: 15px;
-  }
-  p {
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__title {
     margin: 0;
+    font-size: 28px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__sub {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.coach {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: $pen-soft;
+  cursor: pointer;
+
+  &__avatar {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    background: $pen-ink;
+  }
+
+  &__copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__name {
+    font-size: 18px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__meta {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: $pen-lh;
+  }
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__title {
+    @include pen-h3-section;
+    flex: 1;
+  }
+
+  &__count {
+    color: $pen-mute;
     font-size: 13px;
-    line-height: 1.6;
+    font-weight: 700;
+    line-height: $pen-lh;
   }
 }
-.coach,
-.row {
+
+.chip-row {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.tag {
+  height: 40px;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: #fafafa;
-  border-radius: 10px;
-  cursor: pointer;
-}
-.coach__avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bd-primary);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-}
-.coach__name {
-  flex: 1;
-  font-size: 14px;
-}
-.coach__more,
-.row__action {
-  font-size: 12px;
-  color: var(--bd-primary);
-}
-.row {
-  justify-content: space-between;
-}
-.footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  display: flex;
-  gap: 10px;
-  z-index: 50;
-}
-.btn {
-  flex: 1;
-  height: 44px;
-  border: none;
+  padding: 8px 14px;
+  border: 1px solid $pen-hairline;
   border-radius: 999px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  &--primary {
-    background: var(--bd-primary);
-    color: #fff;
-  }
-  &--ghost {
-    background: rgba(255, 36, 66, 0.08);
-    color: var(--bd-primary);
-  }
+  background: $pen-canvas;
+  color: $pen-ink;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
 }
 </style>

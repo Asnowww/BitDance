@@ -1,316 +1,343 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { showToast } from 'vant';
-import { useAppStore, CITY_LIST } from '@/stores/app';
-import { fetchNearbyStudios, type StudioCard } from '@/api/studio';
+import { Bell, Search, MapPin, Sparkles, CalendarDays, Star, Ticket } from 'lucide-vue-next';
 
-const appStore = useAppStore();
 const router = useRouter();
 
-const list = ref<StudioCard[]>([]);
-const page = ref(1);
-const pageSize = 20;
-const loading = ref(false);
-const refreshing = ref(false);
-const finished = ref(false);
-const cityPickerVisible = ref(false);
-const keyword = ref('');
+const quickEntries = [
+  { icon: MapPin, label: '附近', to: '/search' },
+  { icon: Sparkles, label: '零基础', to: '/search' },
+  { icon: CalendarDays, label: '今日课', to: '/search' },
+  { icon: Star, label: '热门老师', to: '/search' },
+  { icon: Ticket, label: 'Workshop', to: '/workshops' }
+];
 
-const load = async (reset = false) => {
-  if (loading.value) return;
-  loading.value = true;
-  if (reset) {
-    page.value = 1;
-    finished.value = false;
-  }
-  try {
-    const data = await fetchNearbyStudios({
-      city: appStore.city,
-      page: page.value,
-      pageSize,
-      keyword: keyword.value || undefined
-    });
-    if (reset) list.value = data.list;
-    else list.value = list.value.concat(data.list);
-    if (list.value.length >= data.total || data.list.length === 0) finished.value = true;
-    else page.value += 1;
-  } finally {
-    loading.value = false;
-    refreshing.value = false;
-  }
-};
+interface RecommendCard {
+  id: string;
+  title: string;
+  meta: string;
+  action: string;
+  to: string;
+}
 
-const onRefresh = () => {
-  refreshing.value = true;
-  void load(true);
-};
+const recommends: RecommendCard[] = [
+  { id: 'urban-flow', title: 'Urban Flow 舞室', meta: '1.2km · 4.8 · 韩舞强', action: '试听', to: '/studio/urban-flow' },
+  { id: 'beatlab', title: 'BeatLab 新手课', meta: '今晚 19:30 · ¥79/节', action: '试听', to: '/course/beatlab-newbie' }
+];
 
-const onLoad = () => {
-  if (finished.value) return;
-  void load(false);
-};
-
-const onPickCity = (city: string) => {
-  appStore.setCity(city);
-  cityPickerVisible.value = false;
-  void load(true);
-};
-
-const onLocate = () => {
-  if (!navigator.geolocation) {
-    showToast('当前环境不支持定位');
-    return;
-  }
-  showToast('定位中…');
-  navigator.geolocation.getCurrentPosition(
-    () => showToast('已获取定位（mock 阶段不调用真实地理编码）'),
-    () => showToast('定位失败，请检查权限')
-  );
-};
-
-onMounted(() => void load(true));
+const heroImage =
+  'https://images.unsplash.com/photo-1667384447307-9ae9cd6ff1d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3Nzk3ODEzMzZ8&ixlib=rb-4.1.0&q=80&w=1080';
 </script>
 
 <template>
   <div class="home">
     <header class="home__header">
-      <div class="home__top">
-        <button class="city" @click="cityPickerVisible = true">
-          <span>📍 {{ appStore.city }}</span>
-          <span class="city__caret">▾</span>
-        </button>
-        <button class="locate" @click="onLocate">定位</button>
+      <div class="home__copy">
+        <h1>北京 · 海淀</h1>
+        <p>找舞室、课程、老师</p>
       </div>
-      <div class="search" @click="router.push('/search')">
-        <span class="search__icon">🔍</span>
-        <span class="search__placeholder">搜索舞室、舞种或老师</span>
-      </div>
+      <button class="icon-button" type="button" aria-label="消息提醒" @click="router.push('/messages')">
+        <Bell :size="20" :stroke-width="2" />
+      </button>
     </header>
 
-    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-list
-        v-model:loading="loading"
-        :finished="finished"
-        finished-text="到底啦"
-        @load="onLoad"
-      >
-        <section class="home__list">
-          <article
-            v-for="s in list"
-            :key="s.id"
-            class="card"
-            @click="router.push(`/studio/${s.id}`)"
-          >
-            <div class="card__cover">
-              <span class="card__cover-fallback">{{ s.topStyles[0] || '舞' }}</span>
-            </div>
-            <div class="card__body">
-              <div class="card__title">{{ s.name }}</div>
-              <div class="card__meta">
-                <span>{{ s.area }}</span>
-                <span>·</span>
-                <span>{{ s.distanceKm }}km</span>
-              </div>
-              <div class="card__rating">
-                <span class="rating__star">★</span>
-                <span class="rating__num">{{ s.ratingAvg }}</span>
-                <span class="rating__count">({{ s.reviewCount }})</span>
-              </div>
-              <div class="card__tags">
-                <span v-for="t in s.topStyles" :key="t" class="tag">{{ t }}</span>
-                <span v-if="s.beginnerFriendly" class="tag tag--accent">零基础友好</span>
-              </div>
-            </div>
-          </article>
-        </section>
-      </van-list>
-    </van-pull-refresh>
+    <main class="home__content">
+      <button class="search-pill" type="button" @click="router.push('/search')">
+        <Search :size="18" :stroke-width="2" />
+        <span>搜索舞室、课程、老师、舞种</span>
+      </button>
 
-    <van-popup
-      v-model:show="cityPickerVisible"
-      position="bottom"
-      round
-      :style="{ height: '52%' }"
-    >
-      <div class="city-picker">
-        <div class="city-picker__title">切换城市</div>
-        <div class="city-picker__grid">
-          <button
-            v-for="c in CITY_LIST"
-            :key="c"
-            class="city-picker__item"
-            :class="{ active: c === appStore.city }"
-            @click="onPickCity(c)"
-          >
-            {{ c }}
-          </button>
+      <section
+        class="hero"
+        :style="{ backgroundImage: `url(${heroImage})` }"
+        @click="router.push('/search')"
+      >
+        <div class="hero__overlay">
+          <strong class="hero__title">FIND<br />YOUR<br />STUDIO</strong>
+          <p class="hero__sub">附近零基础友好课程</p>
         </div>
-      </div>
-    </van-popup>
+      </section>
+
+      <section class="quick" aria-label="快捷入口">
+        <button
+          v-for="entry in quickEntries"
+          :key="entry.label"
+          class="quick__item"
+          type="button"
+          @click="router.push(entry.to)"
+        >
+          <component :is="entry.icon" :size="20" :stroke-width="2" />
+          <span>{{ entry.label }}</span>
+        </button>
+      </section>
+
+      <section class="recommend">
+        <header class="recommend__head">
+          <h2>为你推荐</h2>
+          <button class="recommend__more" type="button" @click="router.push('/search')">全部</button>
+        </header>
+        <div class="recommend__grid">
+          <article
+            v-for="card in recommends"
+            :key="card.id"
+            class="rec-card"
+            @click="router.push(card.to)"
+          >
+            <div class="rec-card__cover" aria-hidden="true" />
+            <div class="rec-card__row">
+              <span class="rec-card__title">{{ card.title }}</span>
+              <button class="rec-card__pill" type="button" @click.stop="router.push(card.to)">
+                {{ card.action }}
+              </button>
+            </div>
+            <p class="rec-card__meta">{{ card.meta }}</p>
+          </article>
+        </div>
+      </section>
+    </main>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .home {
-  padding: 0 0 16px;
-  &__header {
-    position: sticky;
-    top: 0;
-    background: var(--bd-bg);
-    padding: 12px 12px 8px;
-    z-index: 10;
-  }
-  &__top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  &__list {
-    column-count: 2;
-    column-gap: 8px;
-    padding: 0 12px;
-  }
+  --nike-ink: #111111;
+  --nike-canvas: #ffffff;
+  --nike-soft-cloud: #f5f5f5;
+  --nike-mute: #707072;
+  --nike-hairline-soft: #e5e5e5;
+
+  min-height: 100%;
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
 }
-.city {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--bd-surface);
-  border: 1px solid var(--bd-border);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 13px;
-  color: var(--bd-text);
-  cursor: pointer;
-  &__caret {
-    font-size: 10px;
-    color: var(--bd-text-secondary);
-  }
-}
-.locate {
-  border: none;
-  background: transparent;
-  font-size: 13px;
-  color: var(--bd-primary);
-  cursor: pointer;
-}
-.search {
-  height: 36px;
-  background: var(--bd-surface);
-  border-radius: 999px;
+
+.home__header {
+  height: 68px;
+  padding: 14px 18px;
+  background: var(--nike-canvas);
+  border-bottom: 1px solid var(--nike-hairline-soft);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  &__icon {
-    font-size: 14px;
-    color: var(--bd-text-secondary);
+  gap: 12px;
+}
+
+.home__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  h1,
+  p {
+    margin: 0;
   }
-  &__placeholder {
-    font-size: 13px;
-    color: var(--bd-text-secondary);
+
+  h1 {
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 800;
+  }
+
+  p {
+    color: var(--nike-mute);
+    font-size: 12px;
+    line-height: 1.25;
+    font-weight: 500;
   }
 }
-.card {
-  break-inside: avoid;
-  margin-bottom: 8px;
-  background: var(--bd-surface);
-  border-radius: var(--bd-radius-md);
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--nike-soft-cloud);
+  color: var(--nike-ink);
+  display: grid;
+  place-items: center;
+  flex: none;
+  cursor: pointer;
+}
+
+.home__content {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.search-pill {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 24px;
+  padding: 0 16px;
+  background: var(--nike-soft-cloud);
+  color: var(--nike-mute);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+
+  span {
+    min-width: 0;
+    flex: 1;
+    color: var(--nike-mute);
+    font-size: 14px;
+    line-height: 1.25;
+    font-weight: 500;
+  }
+}
+
+.hero {
+  height: 184px;
+  border-radius: 0;
+  background-color: var(--nike-ink);
+  background-size: cover;
+  background-position: center;
   overflow: hidden;
   cursor: pointer;
-  &__cover {
-    width: 100%;
-    aspect-ratio: 3 / 4;
-    background: linear-gradient(135deg, #ffd2da, #ff2442);
+
+  &__overlay {
+    height: 100%;
+    padding: 18px;
+    background: rgba(17, 17, 17, 0.2);
     display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 22px;
-    font-weight: 600;
-  }
-  &__body {
-    padding: 8px 10px 10px;
-  }
-  &__title {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.3;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  &__meta {
-    margin-top: 4px;
-    display: flex;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-  &__rating {
-    margin-top: 4px;
-    display: flex;
-    align-items: baseline;
-    gap: 2px;
-    font-size: 11px;
-  }
-  &__tags {
-    margin-top: 6px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-}
-.rating {
-  &__star {
-    color: #ffaa33;
-  }
-  &__num {
-    font-weight: 600;
-  }
-  &__count {
-    color: var(--bd-text-secondary);
-  }
-}
-.tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 8px;
-  background: rgba(255, 36, 66, 0.08);
-  color: var(--bd-primary);
-  &--accent {
-    background: rgba(54, 165, 255, 0.1);
-    color: #36a5ff;
-  }
-}
-.city-picker {
-  padding: 20px 16px 32px;
-  &__title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 16px;
-  }
-  &__grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    flex-direction: column;
+    justify-content: flex-end;
     gap: 10px;
   }
-  &__item {
-    height: 36px;
-    border: 1px solid var(--bd-border);
-    border-radius: 8px;
-    background: #fafafa;
-    color: var(--bd-text);
+
+  &__title {
+    color: #fff;
+    font-size: 34px;
+    font-weight: 900;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+
+  &__sub {
+    margin: 0;
+    color: #fff;
     font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+}
+
+.quick {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+
+  &__item {
+    flex: 1;
+    min-width: 0;
+    height: 82px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     cursor: pointer;
-    &.active {
-      border-color: var(--bd-primary);
-      background: rgba(255, 36, 66, 0.06);
-      color: var(--bd-primary);
+
+    span {
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.25;
     }
+  }
+}
+
+.recommend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__head h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  &__more {
+    border: 0;
+    background: transparent;
+    color: var(--nike-mute);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
+
+.rec-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+
+  &__cover {
+    height: 112px;
+    border-radius: 14px;
+    background: var(--nike-soft-cloud);
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  &__pill {
+    flex: none;
+    height: 40px;
+    padding: 8px 14px;
+    border: 1px solid var(--nike-hairline-soft);
+    border-radius: 999px;
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+    cursor: pointer;
+  }
+
+  &__meta {
+    margin: 0;
+    color: var(--nike-mute);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
   }
 }
 </style>

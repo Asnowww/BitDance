@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue';
+import { ref, computed, reactive, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { showFailToast, showSuccessToast } from 'vant';
+import { showFailToast, showSuccessToast, showToast } from 'vant';
+import { Smartphone, KeyRound } from 'lucide-vue-next';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
@@ -14,9 +15,15 @@ const cooldown = ref(0);
 const submitting = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
+const preferences = ['韩舞', '零基础', '塑形', '五道口'];
+const selectedPrefs = reactive<Record<string, boolean>>({ 韩舞: true, 零基础: true });
+
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
 const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0);
 const canSubmit = computed(() => isPhoneValid.value && code.value.length >= 4 && !submitting.value);
+
+const heroImage =
+  'https://images.unsplash.com/photo-1761882628233-1e23102da76d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3Nzk3ODEzMzV8&ixlib=rb-4.1.0&q=80&w=1080';
 
 const startCooldown = () => {
   cooldown.value = 60;
@@ -30,7 +37,10 @@ const startCooldown = () => {
 };
 
 const onSendCode = async () => {
-  if (!canSendCode.value) return;
+  if (!canSendCode.value) {
+    if (!isPhoneValid.value) showFailToast('请输入正确的手机号');
+    return;
+  }
   try {
     await userStore.sendSmsCode(phone.value);
     showSuccessToast('验证码已发送');
@@ -41,7 +51,10 @@ const onSendCode = async () => {
 };
 
 const onSubmit = async () => {
-  if (!canSubmit.value) return;
+  if (!canSubmit.value) {
+    showFailToast('请输入手机号与验证码');
+    return;
+  }
   submitting.value = true;
   try {
     await userStore.login(phone.value, code.value);
@@ -55,6 +68,11 @@ const onSubmit = async () => {
   }
 };
 
+const onWechat = () => showToast('请在微信客户端中授权登录');
+const togglePref = (pref: string) => {
+  selectedPrefs[pref] = !selectedPrefs[pref];
+};
+
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer);
 });
@@ -62,143 +80,232 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="login">
-    <header class="login__header">
-      <div class="login__brand">BitDance</div>
-      <div class="login__sub">用手机号登录，开始记录你的舞蹈学习之旅</div>
-    </header>
-    <section class="login__form">
+    <section class="hero" :style="{ backgroundImage: `url(${heroImage})` }">
+      <div class="hero__overlay">
+        <strong class="hero__title">MOVE<br />WITH<br />BITDANCE</strong>
+      </div>
+    </section>
+
+    <main class="login__form">
+      <h1 class="login__title">手机号验证码登录</h1>
+
       <div class="field">
-        <label class="field__label">手机号</label>
+        <Smartphone class="field__icon" :size="18" :stroke-width="2" />
         <input
           v-model="phone"
           class="field__input"
           type="tel"
           inputmode="numeric"
           maxlength="11"
-          placeholder="请输入手机号"
+          placeholder="输入手机号"
+        />
+        <button class="field__action" type="button" :disabled="!canSendCode" @click="onSendCode">
+          {{ cooldown > 0 ? `${cooldown}s` : '获取验证码' }}
+        </button>
+      </div>
+
+      <div class="field">
+        <KeyRound class="field__icon" :size="18" :stroke-width="2" />
+        <input
+          v-model="code"
+          class="field__input"
+          type="text"
+          inputmode="numeric"
+          maxlength="6"
+          placeholder="输入验证码"
         />
       </div>
-      <div class="field">
-        <label class="field__label">验证码</label>
-        <div class="field__row">
-          <input
-            v-model="code"
-            class="field__input"
-            type="text"
-            inputmode="numeric"
-            maxlength="6"
-            placeholder="请输入验证码"
-          />
-          <button class="code-btn" :disabled="!canSendCode" @click="onSendCode">
-            {{ cooldown > 0 ? `${cooldown}s 后重发` : '获取验证码' }}
+
+      <button class="btn btn--dark" type="button" :disabled="submitting" @click="onSubmit">
+        {{ submitting ? '登录中…' : '登录 / 注册' }}
+      </button>
+      <button class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
+
+      <section class="prefs">
+        <h2 class="prefs__title">新人偏好</h2>
+        <div class="prefs__chips">
+          <button
+            v-for="pref in preferences"
+            :key="pref"
+            class="chip"
+            :class="{ 'chip--active': selectedPrefs[pref] }"
+            type="button"
+            @click="togglePref(pref)"
+          >
+            {{ pref }}
           </button>
         </div>
-      </div>
-      <button class="submit" :disabled="!canSubmit" @click="onSubmit">
-        {{ submitting ? '登录中…' : '登录' }}
-      </button>
-      <p class="login__tip">
-        登录即代表同意《用户协议》与《隐私政策》。开发期默认使用 mock 接口，任意 6 位数字即可登录。
-      </p>
-    </section>
+      </section>
+    </main>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .login {
+  --nike-ink: #111111;
+  --nike-canvas: #ffffff;
+  --nike-soft-cloud: #f5f5f5;
+  --nike-mute: #707072;
+  --nike-hairline-soft: #e5e5e5;
+
   min-height: 100vh;
-  padding: 64px 28px 32px;
-  background: linear-gradient(180deg, #fff7f8 0%, var(--bd-bg) 60%);
-  &__header {
-    margin-bottom: 36px;
-  }
-  &__brand {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--bd-primary);
-  }
-  &__sub {
-    margin-top: 8px;
-    font-size: 13px;
-    color: var(--bd-text-secondary);
-  }
-  &__form {
-    background: var(--bd-surface);
-    border-radius: var(--bd-radius-lg);
-    padding: 20px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
-  }
-  &__tip {
-    margin-top: 16px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-    line-height: 1.6;
-  }
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
 }
-.field {
-  & + & {
-    margin-top: 16px;
-  }
-  &__label {
-    display: block;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-    margin-bottom: 6px;
-  }
-  &__input {
-    width: 100%;
-    height: 44px;
-    padding: 0 12px;
-    border: 1px solid var(--bd-border);
-    border-radius: 10px;
-    background: #fafafa;
-    font-size: 15px;
-    outline: none;
-    &:focus {
-      border-color: var(--bd-primary);
-      background: #fff;
-    }
-  }
-  &__row {
+
+.hero {
+  height: 300px;
+  background-color: var(--nike-ink);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+
+  &__overlay {
+    height: 100%;
+    padding: 18px;
+    background: rgba(17, 17, 17, 0.2);
     display: flex;
-    gap: 10px;
-    .field__input {
-      flex: 1;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  &__title {
+    color: #fff;
+    font-size: 34px;
+    font-weight: 900;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+}
+
+.login__form {
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 24px;
+  background: var(--nike-soft-cloud);
+  color: var(--nike-mute);
+
+  &__icon {
+    flex: none;
+    color: var(--nike-mute);
+  }
+
+  &__input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--nike-ink);
+    outline: none;
+
+    &::placeholder {
+      color: var(--nike-mute);
+      font-weight: 500;
+    }
+  }
+
+  &__action {
+    flex: none;
+    height: 36px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--nike-ink);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
   }
 }
-.code-btn {
-  height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--bd-primary);
-  background: rgba(255, 36, 66, 0.06);
-  color: var(--bd-primary);
-  border-radius: 10px;
-  font-size: 13px;
-  white-space: nowrap;
+
+.btn {
+  height: 48px;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
   cursor: pointer;
-  &:disabled {
-    border-color: var(--bd-border);
-    background: #f5f5f5;
-    color: var(--bd-text-secondary);
-    cursor: not-allowed;
+
+  &--dark {
+    background: var(--nike-ink);
+    color: #fff;
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+
+  &--soft {
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
   }
 }
-.submit {
-  margin-top: 24px;
-  width: 100%;
-  height: 46px;
-  border: none;
+
+.prefs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  &__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.chip {
+  height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--nike-hairline-soft);
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--bd-primary), var(--bd-primary-dark));
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
   cursor: pointer;
-  transition: opacity 0.18s;
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+
+  &--active {
+    border-color: var(--nike-ink);
+    background: var(--nike-ink);
+    color: #fff;
   }
 }
 </style>
