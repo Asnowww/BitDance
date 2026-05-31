@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '舞室详情' }
   },
   {
+    path: '/studio/compare',
+    name: 'studio-compare',
+    component: () => import('@/pages/studio/StudioComparePage.vue'),
+    meta: { title: '舞室对比' }
+  },
+  {
     path: '/course/:id',
     name: 'course-detail',
     component: () => import('@/pages/studio/CourseDetailPage.vue'),

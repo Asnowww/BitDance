@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { showFailToast } from 'vant';
-import { setupMock } from '@/mock';
+import { attachMockAdapter } from '@/mock';
 
 export interface ApiResp<T = unknown> {
   code: number | string;
@@ -21,7 +21,7 @@ const request: AxiosInstance = axios.create({
   timeout: 15000
 });
 
-setupMock(request);
+attachMockAdapter(request);
 
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getToken();

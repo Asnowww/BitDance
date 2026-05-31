@@ -1,0 +1,81 @@
+// Tokens extracted from design/bitdance.pen (pages 11–14)
+$pen-ink: #111111;
+$pen-canvas: #ffffff;
+$pen-soft: #f5f5f5;
+$pen-mute: #707072;
+$pen-charcoal: #39393b;
+$pen-hairline: #e5e5e5;
+$pen-hairline-strong: #cacacb;
+$pen-success: #007d48;
+$pen-on-primary: #ffffff;
+$pen-subtle-text: #e5e5e5;
+
+$pen-font: Inter, 'Helvetica Neue', Arial, 'PingFang SC', sans-serif;
+$pen-lh: 1.25;
+
+@mixin pen-page {
+  min-height: 100vh;
+  max-width: 480px;
+  margin: 0 auto;
+  background: $pen-canvas;
+  color: $pen-ink;
+  font-family: $pen-font;
+}
+
+@mixin pen-h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: $pen-lh;
+  letter-spacing: 0;
+}
+
+@mixin pen-h3-section {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: $pen-lh;
+  letter-spacing: 0;
+}
+
+@mixin pen-primary-btn {
+  height: 48px;
+  padding: 12px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: $pen-lh;
+  letter-spacing: 0;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.55;
+  }
+}
+
+@mixin pen-chip {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+  letter-spacing: 0;
+  cursor: pointer;
+
+  &--inactive {
+    border: 1px solid $pen-hairline;
+    background: $pen-canvas;
+    color: $pen-ink;
+  }
+
+  &--active {
+    border: none;
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+}
