@@ -1,14 +1,21 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import NikeIcon from '@/components/NikeIcon.vue';
+import { fetchGrowthStats, type GrowthStats } from '@/api/growth';
 
 const router = useRouter();
+const stats = ref<GrowthStats | null>(null);
+const loading = ref(true);
 
-const weeklyStats = [
-  { value: '126', label: '学舞天' },
-  { value: '43h', label: '训练' },
-  { value: '18', label: '课程' }
-];
+const weeklyStats = computed(() => {
+  const source = stats.value;
+  return [
+    { value: String(source?.totalDays ?? 126), label: '学舞天' },
+    { value: source ? `${Math.round(source.totalMinutes / 60)}h` : '43h', label: '训练' },
+    { value: String(source?.totalSessions ?? 18), label: '课程' }
+  ];
+});
 
 const heatmap = [
   3, 0, 0, 1, 3, 0, 1, 0, 3, 1, 0, 0,
@@ -16,6 +23,15 @@ const heatmap = [
   0, 1, 3, 0, 1, 0, 3, 1, 0, 0, 3, 0,
   1, 3, 0, 1, 0, 3, 1, 0, 0, 3, 0, 0
 ];
+
+onMounted(async () => {
+  loading.value = true;
+  try {
+    stats.value = await fetchGrowthStats();
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
@@ -31,7 +47,7 @@ const heatmap = [
     </header>
 
     <main class="growth-content">
-      <section class="week-card" aria-label="本周成长统计">
+      <section class="week-card" :class="{ loading }" aria-label="本周成长统计">
         <h2>THIS WEEK</h2>
         <div class="week-card__stats">
           <div v-for="stat in weeklyStats" :key="stat.label" class="week-card__stat">
@@ -156,6 +172,10 @@ const heatmap = [
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+
+  &.loading {
+    opacity: 0.75;
+  }
 
   h2 {
     margin: 0;

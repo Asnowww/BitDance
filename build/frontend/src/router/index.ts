@@ -164,6 +164,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Workshop' }
   },
   {
+    path: '/workshop/:id/pay',
+    name: 'workshop-payment',
+    component: () => import('@/pages/workshop/WorkshopPaymentPage.vue'),
+    meta: { title: 'Workshop 报名支付', requiresAuth: true }
+  },
+  {
     path: '/workshop-checkin/:id',
     name: 'workshop-checkin',
     component: () => import('@/pages/workshop/WorkshopCheckinPage.vue'),
