@@ -1,315 +1,298 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchGrowthStats, type GrowthStats } from '@/api/growth';
+import NikeIcon from '@/components/NikeIcon.vue';
 
 const router = useRouter();
-const stats = ref<GrowthStats | null>(null);
-const loading = ref(true);
 
-const trend = [
-  { day: '周一', value: 32 },
-  { day: '周二', value: 10 },
-  { day: '周三', value: 32 },
-  { day: '周四', value: 15 },
-  { day: '周五', value: 32 }
+const weeklyStats = [
+  { value: '126', label: '学舞天' },
+  { value: '43h', label: '训练' },
+  { value: '18', label: '课程' }
 ];
 
-const favorites = [
-  {
-    type: '舞室',
-    title: 'Urban Flow 舞室',
-    meta: '收藏于 5/24 · 可预约',
-    action: '预约试听',
-    path: '/studio/1'
-  },
-  {
-    type: '课程',
-    title: 'Mia Jazz 基础课',
-    meta: '周三晚 · 可报名',
-    action: '立即报名',
-    path: '/course/1'
-  }
+const heatmap = [
+  3, 0, 0, 1, 3, 0, 1, 0, 3, 1, 0, 0,
+  0, 0, 1, 3, 0, 1, 0, 3, 1, 0, 0, 3,
+  0, 1, 3, 0, 1, 0, 3, 1, 0, 0, 3, 0,
+  1, 3, 0, 1, 0, 3, 1, 0, 0, 3, 0, 0
 ];
-
-const displayStats = computed(() => {
-  const source = stats.value;
-  return {
-    days: source?.totalDays ?? 126,
-    hours: source ? `${Math.round(source.totalMinutes / 60)}h` : '43h',
-    styles: source?.styleCount ?? 5
-  };
-});
-
-onMounted(async () => {
-  loading.value = true;
-  try {
-    stats.value = await fetchGrowthStats();
-  } finally {
-    loading.value = false;
-  }
-});
 </script>
 
 <template>
-  <main class="growth-page">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">BITDANCE DATA</p>
-        <h1>学习数据</h1>
+  <div class="growth-page">
+    <header class="growth-topbar">
+      <div class="growth-topbar__copy">
+        <h1>成长</h1>
+        <p>持续练习沉淀为档案</p>
       </div>
-      <button class="pill-btn" @click="router.push('/publish/checkin')">打卡</button>
+      <button class="icon-button" type="button" aria-label="消息提醒" @click="router.push('/messages')">
+        <NikeIcon name="bell" :size="20" />
+      </button>
     </header>
 
-    <section class="stats-card" :class="{ loading }">
-      <div class="stat">
-        <strong>{{ displayStats.days }}</strong>
-        <span>累计天数</span>
-      </div>
-      <div class="stat">
-        <strong>{{ displayStats.hours }}</strong>
-        <span>训练时长</span>
-      </div>
-      <div class="stat">
-        <strong>{{ displayStats.styles }}</strong>
-        <span>尝试舞种</span>
-      </div>
-    </section>
-
-    <section class="trend-card">
-      <div class="section-head">
-        <h2>训练趋势</h2>
-        <span>THIS WEEK</span>
-      </div>
-      <div class="bars">
-        <div v-for="item in trend" :key="item.day" class="bar-item">
-          <div class="bar-track">
-            <div class="bar-fill" :style="{ height: `${item.value * 2}px` }" />
+    <main class="growth-content">
+      <section class="week-card" aria-label="本周成长统计">
+        <h2>THIS WEEK</h2>
+        <div class="week-card__stats">
+          <div v-for="stat in weeklyStats" :key="stat.label" class="week-card__stat">
+            <strong>{{ stat.value }}</strong>
+            <span>{{ stat.label }}</span>
           </div>
-          <span>{{ item.day }}</span>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="favorites">
-      <div class="section-head">
-        <div>
-          <h2>收藏管理</h2>
-          <p>舞室 / 课程 / 老师</p>
+      <section class="goal-card" aria-label="周目标">
+        <div class="section-head">
+          <h2>周目标</h2>
+          <span>3/5 次</span>
         </div>
-        <button class="text-btn" @click="router.push('/favorites')">全部</button>
-      </div>
+        <div class="goal-card__bar" />
+      </section>
 
-      <article v-for="item in favorites" :key="item.title" class="favorite-card">
-        <div class="favorite-card__image">
-          <span>{{ item.type }}</span>
+      <section class="heatmap-section" aria-labelledby="heatmap-title">
+        <h2 id="heatmap-title">日历热力图</h2>
+        <div class="heatmap" aria-hidden="true">
+          <span
+            v-for="(level, index) in heatmap"
+            :key="index"
+            class="heatmap__cell"
+            :class="`heatmap__cell--${level}`"
+          />
         </div>
-        <div class="favorite-card__body">
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.meta }}</p>
-          <button @click="router.push(item.path)">{{ item.action }}</button>
-        </div>
-      </article>
-    </section>
-  </main>
+      </section>
+
+      <section class="growth-actions" aria-label="成长快捷操作">
+        <button class="growth-actions__primary" type="button" @click="router.push('/publish/checkin')">
+          今日打卡
+        </button>
+        <button class="growth-actions__secondary" type="button" @click="router.push('/me/works')">
+          上传作品
+        </button>
+      </section>
+    </main>
+  </div>
 </template>
 
 <style lang="scss" scoped>
 .growth-page {
-  min-height: 100vh;
-  padding: 20px 18px 28px;
-  background: #fff;
-  color: #111;
+  --nike-ink: #111111;
+  --nike-canvas: #ffffff;
+  --nike-soft-cloud: #f5f5f5;
+  --nike-mute: #707072;
+  --nike-hairline-soft: #e5e5e5;
+  --nike-success: #00894d;
+  --nike-success-soft: #acd9be;
+
+  min-height: calc(100vh - 72px - env(safe-area-inset-bottom));
+  background: var(--nike-canvas);
+  color: var(--nike-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
 }
 
-.topbar {
+.growth-topbar {
+  height: 68px;
+  padding: 14px 18px;
+  background: var(--nike-canvas);
+  border-bottom: 1px solid var(--nike-hairline-soft);
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  h1 {
+  align-items: center;
+  gap: 12px;
+
+  &__copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  h1,
+  p {
     margin: 0;
-    font-size: 34px;
-    line-height: 0.95;
-    font-weight: 900;
+  }
+
+  h1 {
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  p {
+    color: var(--nike-mute);
+    font-size: 12px;
+    line-height: 1.25;
+    font-weight: 500;
+    letter-spacing: 0;
   }
 }
 
-.eyebrow {
-  margin: 0 0 6px;
-  color: #707072;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.pill-btn,
-.text-btn,
-.favorite-card button {
+.icon-button {
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 999px;
-  font-weight: 900;
-}
-
-.pill-btn {
-  height: 40px;
-  padding: 0 18px;
-  background: #111;
-  color: #fff;
-}
-
-.stats-card {
+  background: var(--nike-soft-cloud);
+  color: var(--nike-ink);
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  overflow: hidden;
-  margin-top: 24px;
-  border-radius: 30px;
-  background: #111;
-  &.loading {
-    opacity: 0.75;
-  }
+  place-items: center;
+  flex: none;
+  cursor: pointer;
 }
 
-.stat {
-  min-height: 112px;
+.growth-content {
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 16px 12px;
-  background: #111;
-  color: #fff;
-  strong {
-    font-size: 34px;
-    line-height: 1;
-    font-weight: 900;
-  }
-  span {
-    margin-top: 8px;
-    color: #cacacb;
-    font-size: 12px;
-    font-weight: 800;
-  }
+  gap: 18px;
 }
 
-.trend-card,
-.favorites {
-  margin-top: 24px;
-}
-
-.section-head {
+.week-card {
+  height: 137px;
+  padding: 18px;
+  background: var(--nike-ink);
+  color: var(--nike-canvas);
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+
   h2 {
     margin: 0;
-    font-size: 22px;
+    font-size: 28px;
+    line-height: 1.25;
     font-weight: 900;
+    letter-spacing: 0;
   }
-  p,
-  span {
-    margin: 4px 0 0;
-    color: #707072;
-    font-size: 12px;
-    font-weight: 800;
+
+  &__stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
-}
 
-.bars {
-  height: 136px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  align-items: end;
-  gap: 12px;
-  padding: 18px 16px 12px;
-  border-radius: 28px;
-  background: #f5f5f5;
-}
-
-.bar-item {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  span {
-    color: #707072;
-    font-size: 11px;
-    font-weight: 800;
-  }
-}
-
-.bar-track {
-  width: 100%;
-  height: 72px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.bar-fill {
-  width: 100%;
-  max-width: 34px;
-  min-height: 10px;
-  border-radius: 999px 999px 0 0;
-  background: #111;
-}
-
-.text-btn {
-  height: 34px;
-  padding: 0 14px;
-  background: #f5f5f5;
-  color: #111;
-}
-
-.favorite-card {
-  display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 12px;
-  min-height: 124px;
-  margin-bottom: 12px;
-  padding: 8px;
-  border-radius: 30px;
-  background: #f5f5f5;
-  &__image {
-    display: flex;
-    align-items: flex-end;
-    padding: 12px;
-    border-radius: 24px;
-    background:
-      linear-gradient(135deg, rgba(17, 17, 17, 0.08), rgba(17, 17, 17, 0.7)),
-      linear-gradient(135deg, #e5e5e5, #9e9ea0);
-    span {
-      padding: 5px 9px;
-      border-radius: 999px;
-      background: #fff;
-      color: #111;
-      font-size: 11px;
-      font-weight: 900;
-    }
-  }
-  &__body {
+  &__stat {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    h3 {
-      margin: 0;
-      font-size: 16px;
+    gap: 2px;
+
+    strong,
+    span {
+      display: block;
+    }
+
+    strong {
+      font-size: 26px;
       line-height: 1.25;
       font-weight: 900;
+      letter-spacing: 0;
     }
-    p {
-      margin: 8px 0 14px;
-      color: #707072;
+
+    span {
       font-size: 12px;
+      line-height: 1.25;
+      font-weight: 700;
     }
-    button {
-      width: fit-content;
-      height: 36px;
-      padding: 0 16px;
-      background: #111;
-      color: #fff;
+  }
+}
+
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &__bar {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--nike-soft-cloud);
+  }
+}
+
+.section-head {
+  height: 25px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  h2 {
+    margin: 0;
+    min-width: 0;
+    flex: 1;
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  span {
+    color: var(--nike-mute);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+}
+
+.heatmap-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(12, 24px);
+  grid-auto-rows: 24px;
+  gap: 8px 6px;
+
+  &__cell {
+    width: 24px;
+    height: 24px;
+    display: block;
+    background: var(--nike-soft-cloud);
+
+    &--1 {
+      background: var(--nike-success-soft);
     }
+
+    &--3 {
+      background: var(--nike-success);
+    }
+  }
+}
+
+.growth-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  button {
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    font-size: 15px;
+    line-height: 1.25;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  &__primary {
+    background: var(--nike-ink);
+    color: var(--nike-canvas);
+  }
+
+  &__secondary {
+    background: var(--nike-soft-cloud);
+    color: var(--nike-ink);
   }
 }
 </style>

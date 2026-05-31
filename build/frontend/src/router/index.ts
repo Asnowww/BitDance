@@ -155,7 +155,7 @@ const routes: RouteRecordRaw[] = [
     path: '/workshops',
     name: 'workshop-list',
     component: () => import('@/pages/workshop/WorkshopListPage.vue'),
-    meta: { title: 'Workshop' }
+    meta: { tab: 'activity', title: '活动' }
   },
   {
     path: '/workshop/:id',
