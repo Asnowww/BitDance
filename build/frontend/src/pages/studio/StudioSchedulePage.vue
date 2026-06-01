@@ -1,27 +1,47 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import { fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 
 const route = useRoute();
 const router = useRouter();
-const studioId = String(route.params.id || 'urban-flow');
+const studioId = Number(route.params.id) || 1;
 
 const view = ref<'day' | 'week'>('day');
 
-const days = [
-  { w: '一', d: '27' }, { w: '二', d: '28' }, { w: '三', d: '29' }, { w: '四', d: '30' },
-  { w: '五', d: '31' }, { w: '六', d: '1' }, { w: '日', d: '2' }
-];
-const activeDay = ref('1');
+const slots = ref<ScheduleSlot[]>([]);
+const today = new Date();
+const days = Array.from({ length: 7 }, (_, index) => {
+  const date = new Date(today);
+  date.setDate(today.getDate() + index);
+  return { w: '日一二三四五六'[date.getDay()], d: String(date.getDate()), date: date.toISOString().slice(0, 10) };
+});
+const activeDay = ref(days[0].date);
+const classes = computed(() =>
+  slots.value
+    .filter((slot) => view.value === 'week' || slot.startAt.slice(0, 10) === activeDay.value)
+    .map((slot) => {
+      const start = new Date(slot.startAt);
+      const end = new Date(slot.endAt);
+      const full = slot.bookedCount >= slot.capacity;
+      return {
+        time: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        dur: `${Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000))}min`,
+        title: `课程 #${slot.courseId}`,
+        teacher: `教练 #${slot.coachId} · ${slot.classroomName || '教室待定'}`,
+        level: slot.status,
+        price: full ? '已满员' : '可预约试听',
+        full
+      };
+    })
+);
 
-const classes = [
-  { time: '10:00', dur: '60min', title: '早间塑形基础', teacher: 'Mia 老师 · 1 号厅', level: '零基础友好', price: '¥69 试听', full: false },
-  { time: '14:00', dur: '90min', title: 'K-pop 入门成品舞', teacher: '小鹿老师 · 2 号厅', level: '初级', price: '¥79 试听', full: false },
-  { time: '19:30', dur: '90min', title: 'Hiphop 中级 Groove', teacher: 'Leo 老师 · 3 号厅', level: '中级', price: '已满员', full: true }
-];
+onMounted(async () => {
+  slots.value = await fetchStudioSchedule(studioId);
+});
 </script>
 
 <template>
@@ -39,18 +59,18 @@ const classes = [
       <div class="week">
         <button
           v-for="d in days"
-          :key="d.d"
+          :key="d.date"
           class="day"
-          :class="{ 'day--on': activeDay === d.d }"
+          :class="{ 'day--on': activeDay === d.date }"
           type="button"
-          @click="activeDay = d.d"
+          @click="activeDay = d.date"
         >
           <span class="day__w">{{ d.w }}</span>
           <span class="day__d">{{ d.d }}</span>
         </button>
       </div>
 
-      <h3 class="date-title">周六 · 5 月 31 日</h3>
+      <h3 class="date-title">{{ activeDay }}</h3>
 
       <article v-for="c in classes" :key="c.time" class="lesson">
         <div class="lesson__time">

@@ -33,7 +33,7 @@ const emit = defineEmits<{
 .pen-action-bar {
   position: fixed;
   right: 0;
-  bottom: 0;
+  bottom: var(--app-tabbar-offset, 0px);
   left: 0;
   z-index: 10;
   display: flex;

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import { fetchFavorites, toggleFavorite } from '@/api/favorite';
 
 export type FavoriteTargetType = 'studio' | 'course' | 'coach' | 'workshop';
 
@@ -30,12 +31,28 @@ export const useFavoriteStore = defineStore('favorite', () => {
   const isFav = (type: FavoriteTargetType, id: number) =>
     items.value.some((it) => it.targetType === type && it.targetId === id);
 
-  const toggle = (item: Omit<FavoriteItem, 'ts'>) => {
+  const toggle = async (item: Omit<FavoriteItem, 'ts'>) => {
+    const { favored } = await toggleFavorite(item.targetType, item.targetId);
     const idx = items.value.findIndex(
       (it) => it.targetType === item.targetType && it.targetId === item.targetId
     );
-    if (idx >= 0) items.value.splice(idx, 1);
-    else items.value.unshift({ ...item, ts: Date.now() });
+    if (favored && idx < 0) items.value.unshift({ ...item, ts: Date.now() });
+    if (!favored && idx >= 0) items.value.splice(idx, 1);
+    persist();
+  };
+
+  const sync = async () => {
+    const remote = await fetchFavorites();
+    const previous = new Map(items.value.map((item) => [`${item.targetType}-${item.targetId}`, item]));
+    items.value = remote.map((item) => {
+      const cached = previous.get(`${item.targetType}-${item.targetId}`);
+      return cached ?? {
+        targetType: item.targetType,
+        targetId: item.targetId,
+        title: `${item.targetType} #${item.targetId}`,
+        ts: Date.parse(item.createdAt)
+      };
+    });
     persist();
   };
 
@@ -50,5 +67,5 @@ export const useFavoriteStore = defineStore('favorite', () => {
     return g;
   });
 
-  return { items, isFav, toggle, groupedByType };
+  return { items, isFav, toggle, sync, groupedByType };
 });

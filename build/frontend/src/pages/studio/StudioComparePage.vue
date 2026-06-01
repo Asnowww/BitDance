@@ -1,20 +1,42 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
+import { toggleFavorite } from '@/api/favorite';
 
-const columns = ['维度', 'Urban', 'BeatLab', 'K-Star'];
-const rows: Array<{ label: string; values: string[] }> = [
-  { label: '距离', values: ['1.2km', '2.8km', '4.6km'] },
-  { label: '价格', values: ['¥79', '¥88', '¥69'] },
-  { label: '评分', values: ['4.8', '4.7', '4.6'] },
-  { label: '零基础', values: ['强', '中', '强'] },
-  { label: '晚课', values: ['多', '少', '中'] },
-  { label: '操作', values: ['预约', '收藏', '详情'] }
-];
+const router = useRouter();
+const studios = ref<StudioDetail[]>([]);
+const columns = computed(() => ['维度', ...studios.value.map((studio) => studio.name)]);
+const rows = computed<Array<{ label: string; values: string[] }>>(() => [
+  { label: '距离', values: studios.value.map((studio) => `${studio.distanceKm ?? '-'}km`) },
+  { label: '地址', values: studios.value.map((studio) => studio.address || '-') },
+  { label: '舞种', values: studios.value.map((studio) => studio.danceStyleIds.join('/') || '-') },
+  { label: '收藏', values: studios.value.map((studio) => studio.favored ? '已收藏' : '未收藏') },
+  { label: '交通', values: studios.value.map((studio) => studio.transportInfo || '-') },
+  { label: '操作', values: studios.value.map(() => '预约') }
+]);
 
 const onShare = () => showToast('已生成对比分享卡');
-const onBook = () => showToast('已选择 Urban 作为最优预约');
+const onBook = () => {
+  const studio = studios.value[0];
+  if (studio) router.push(`/studio/${studio.id}/trial`);
+};
+const favoriteFirst = async () => {
+  const studio = studios.value[0];
+  if (!studio) return;
+  const result = await toggleFavorite('studio', studio.id);
+  studio.favored = result.favored;
+  showToast(result.favored ? '已收藏对比首选' : '已取消收藏');
+};
+
+onMounted(async () => {
+  const stored = JSON.parse(sessionStorage.getItem('bitdance_compare_studio_ids') ?? '[]') as number[];
+  const ids = (stored.length >= 2 ? stored : [1, 2, 3]).slice(0, 3);
+  studios.value = await Promise.all(ids.map((id) => fetchStudioDetail(id)));
+});
 </script>
 
 <template>
@@ -22,7 +44,7 @@ const onBook = () => showToast('已选择 Urban 作为最优预约');
     <PenTopBar title="舞室对比" @share="onShare" />
 
     <section class="pen-body pen-body--compare">
-      <h2 class="pen-h2">3 家舞室对比</h2>
+      <h2 class="pen-h2">{{ studios.length }} 家舞室对比</h2>
 
       <div class="compare-grid" role="table" aria-label="舞室对比表">
         <div class="compare-grid__row compare-grid__row--head" role="row">
@@ -54,7 +76,7 @@ const onBook = () => showToast('已选择 Urban 作为最优预约');
     <PenActionBar
       soft-label="收藏"
       dark-label="预约最优"
-      @soft="showToast('已收藏对比')"
+      @soft="favoriteFirst"
       @dark="onBook"
     />
   </main>

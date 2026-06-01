@@ -1,13 +1,18 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import { fetchCoachDetail, type CoachDetail } from '@/api/course';
+import { toggleFavorite } from '@/api/favorite';
 
 const route = useRoute();
 const router = useRouter();
-const coachId = String(route.params.id || 'mia');
+const coachId = Number(route.params.id) || 1;
+const detail = ref<CoachDetail | null>(null);
+const favored = computed(() => detail.value?.favored ?? false);
 
 const stats = [
   { value: '4.9', label: '耐心' },
@@ -24,6 +29,15 @@ const course = {
 };
 
 const onBook = () => router.push(`/course/${course.id}`);
+const toggleCoachFavorite = async () => {
+  const result = await toggleFavorite('coach', coachId);
+  if (detail.value) detail.value.favored = result.favored;
+  showToast(result.favored ? '已收藏' : '已取消收藏');
+};
+
+onMounted(async () => {
+  detail.value = await fetchCoachDetail(coachId);
+});
 </script>
 
 <template>
@@ -37,12 +51,12 @@ const onBook = () => router.push(`/course/${course.id}`);
         </div>
         <Music class="hero__icon" :size="42" :stroke-width="2" />
         <strong class="hero__title">MIA</strong>
-        <p class="hero__meta">韩舞 / Jazz / 零基础友好</p>
+        <p class="hero__meta">{{ detail?.styles.map((item) => `#${item.danceStyleId}`).join(' / ') || '舞种待完善' }}</p>
       </section>
 
       <section class="body">
-        <h2 class="body__title">Mia 老师</h2>
-        <p class="body__sub">教学 7 年 · 认证教练 · 纠错细致</p>
+        <h2 class="body__title">{{ detail?.displayName || '老师详情' }}</h2>
+        <p class="body__sub">{{ detail?.certificationStatus || '待认证' }} · {{ detail?.teachingStyle || '教学风格待完善' }}</p>
 
         <div class="stats">
           <div v-for="stat in stats" :key="stat.label" class="stat">
@@ -71,9 +85,9 @@ const onBook = () => router.push(`/course/${course.id}`);
     </section>
 
     <PenActionBar
-      soft-label="收藏"
+      :soft-label="favored ? '已收藏' : '收藏'"
       dark-label="预约课程"
-      @soft="showToast('已收藏')"
+      @soft="toggleCoachFavorite"
       @dark="onBook"
     />
   </main>

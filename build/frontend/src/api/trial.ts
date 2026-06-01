@@ -4,53 +4,44 @@ export type TrialStatus = 'pending' | 'confirmed' | 'rejected' | 'arrived' | 'no
 
 export interface TrialBooking {
   id: number;
+  userId: number;
+  courseId: number;
+  courseScheduleId?: number;
   studioId: number;
-  studioName: string;
-  courseId?: number;
-  courseName?: string;
-  coachId?: number;
-  coachName?: string;
-  date: string;
-  time: string;
+  bookingStatus: TrialStatus;
   contactPhone: string;
-  remark?: string;
-  status: TrialStatus;
-  createdAt: number;
+  bookingNote?: string;
+  createdAt: string;
 }
 
 export interface TrialCreateBody {
-  studioId: number;
-  courseId?: number;
-  coachId?: number;
-  date: string;
-  time: string;
+  courseId: number;
+  courseScheduleId?: number;
   contactPhone: string;
-  remark?: string;
-  idempotencyToken: string;
+  bookingNote?: string;
 }
 
 export interface ScheduleSlot {
   id: number;
-  date: string;
-  weekday: string;
-  time: string;
   courseId: number;
-  courseName: string;
-  style: string;
-  difficulty: string;
-  coachName: string;
+  studioId: number;
+  coachId: number;
+  classroomName: string;
+  startAt: string;
+  endAt: string;
   capacity: number;
-  taken: number;
+  bookedCount: number;
+  status: string;
 }
 
 export const createTrialBooking = (body: TrialCreateBody) =>
-  request.post<unknown, TrialBooking>('/trial-bookings', body);
+  request.post<unknown, TrialBooking>('/h5/trial-bookings', body);
 
 export const fetchMyTrialBookings = () =>
-  request.get<unknown, TrialBooking[]>('/trial-bookings/mine');
+  request.get<unknown, TrialBooking[]>('/h5/trial-bookings');
 
 export const cancelTrialBooking = (id: number) =>
-  request.post<unknown, { canceled: boolean }>(`/trial-bookings/${id}/cancel`);
+  request.post<unknown, TrialBooking>(`/h5/trial-bookings/${id}/cancel`);
 
 export const fetchStudioSchedule = (studioId: number) =>
-  request.get<unknown, ScheduleSlot[]>(`/studios/${studioId}/schedule`);
+  request.get<unknown, ScheduleSlot[]>(`/public/studios/${studioId}/schedules`);

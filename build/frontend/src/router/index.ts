@@ -53,7 +53,7 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'login',
     component: () => import('@/pages/user/LoginPage.vue'),
-    meta: { title: '登录' }
+    meta: { title: '登录', hideTabBar: true }
   },
   {
     path: '/search',
@@ -292,7 +292,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
-    component: () => import('@/pages/common/NotFoundPage.vue')
+    component: () => import('@/pages/common/NotFoundPage.vue'),
+    meta: { hideTabBar: true }
   }
 ];
 

@@ -1,24 +1,37 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showSuccessToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import PenFieldRow from '@/components/pen/PenFieldRow.vue';
+import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
+import { createTrialBooking, fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 
 const route = useRoute();
 const router = useRouter();
-const studioId = String(route.params.id || 'urban-flow');
+const studioId = Number(route.params.id) || 1;
+const requestedCourseId = Number(route.query.courseId) || undefined;
+const detail = ref<StudioDetail | null>(null);
+const schedule = ref<ScheduleSlot[]>([]);
 
-const days = [
-  { w: '一', d: '27' }, { w: '二', d: '28' }, { w: '三', d: '29' }, { w: '四', d: '30' },
-  { w: '五', d: '31' }, { w: '六', d: '1' }, { w: '日', d: '2' }
-];
-const activeDay = ref('30');
-
-const slots = ['10:00', '14:00', '16:00', '19:30'];
-const activeSlot = ref('14:00');
+const today = new Date();
+const days = Array.from({ length: 7 }, (_, index) => {
+  const date = new Date(today);
+  date.setDate(today.getDate() + index);
+  return { w: '日一二三四五六'[date.getDay()], d: String(date.getDate()), date: date.toISOString().slice(0, 10) };
+});
+const activeDay = ref(days[0].date);
+const availableSlots = computed(() =>
+  schedule.value.filter((slot) => slot.startAt.slice(0, 10) === activeDay.value)
+);
+const slots = computed(() =>
+  availableSlots.value.map((slot) =>
+    new Date(slot.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  )
+);
+const activeSlot = ref('');
 
 const fields = [
   { label: '姓名', value: '请输入称呼' },
@@ -26,10 +39,27 @@ const fields = [
   { label: '舞蹈基础', value: '零基础' }
 ];
 
-const onConfirm = () => {
+const onConfirm = async () => {
+  const selectedIndex = slots.value.indexOf(activeSlot.value);
+  const selected = availableSlots.value[selectedIndex] ?? availableSlots.value[0] ?? schedule.value[0];
+  if (!selected) return;
+  await createTrialBooking({
+    courseId: requestedCourseId ?? selected.courseId,
+    courseScheduleId: selected.id,
+    contactPhone: '13800000789',
+    bookingNote: '试听预约'
+  });
   showSuccessToast('已提交，等待舞室确认');
   router.push('/me/trials');
 };
+
+onMounted(async () => {
+  [detail.value, schedule.value] = await Promise.all([
+    fetchStudioDetail(studioId),
+    fetchStudioSchedule(studioId)
+  ]);
+  activeSlot.value = slots.value[0] ?? '';
+});
 </script>
 
 <template>
@@ -50,11 +80,11 @@ const onConfirm = () => {
       <div class="week">
         <button
           v-for="d in days"
-          :key="d.d"
+          :key="d.date"
           class="day"
-          :class="{ 'day--on': activeDay === d.d }"
+          :class="{ 'day--on': activeDay === d.date }"
           type="button"
-          @click="activeDay = d.d"
+          @click="activeDay = d.date; activeSlot = slots[0] ?? ''"
         >
           <span class="day__w">{{ d.w }}</span>
           <span class="day__d">{{ d.d }}</span>

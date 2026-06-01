@@ -1,19 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music, Heart, Navigation, Phone } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
+import { toggleFavorite } from '@/api/favorite';
 
 const route = useRoute();
 const router = useRouter();
-const studioId = String(route.params.id || 'urban-flow');
+const studioId = Number(route.params.id) || 1;
+const detail = ref<StudioDetail | null>(null);
+const favored = computed(() => detail.value?.favored ?? false);
+
+const toggleStudioFavorite = async () => {
+  const result = await toggleFavorite('studio', studioId);
+  if (detail.value) detail.value.favored = result.favored;
+  showToast(result.favored ? '已收藏' : '已取消收藏');
+};
 
 const actions = [
-  { icon: Heart, label: '收藏', handler: () => showToast('已收藏') },
-  { icon: Navigation, label: '导航', handler: () => showToast('正在打开导航') },
-  { icon: Phone, label: '联系', handler: () => showToast('正在拨号') }
+  { icon: Heart, label: '收藏', handler: toggleStudioFavorite },
+  { icon: Navigation, label: '导航', handler: () => window.open(`https://uri.amap.com/search?keyword=${encodeURIComponent(detail.value?.address ?? '')}`) },
+  { icon: Phone, label: '联系', handler: () => { if (detail.value?.contactPhone) window.location.href = `tel:${detail.value.contactPhone}`; } }
 ];
 
 const tags = ['零基础友好', '地铁近', '课程多'];
@@ -29,6 +39,9 @@ const recommendCourse = {
 };
 
 const onBook = () => router.push(`/studio/${studioId}/trial`);
+onMounted(async () => {
+  detail.value = await fetchStudioDetail(studioId);
+});
 </script>
 
 <template>
@@ -42,12 +55,12 @@ const onBook = () => router.push(`/studio/${studioId}/trial`);
         </div>
         <Music class="hero__icon" :size="42" :stroke-width="2" />
         <strong class="hero__title">URBAN<br />FLOW</strong>
-        <p class="hero__meta">4.8 · 1.2km · 韩舞强</p>
+        <p class="hero__meta">{{ detail?.distanceKm ?? '-' }}km · {{ detail?.transportInfo || '交通信息待完善' }}</p>
       </section>
 
       <section class="body">
-        <h2 class="body__title">Urban Flow 舞室</h2>
-        <p class="body__sub">营业至 22:30 · 五道口地铁站 320m</p>
+        <h2 class="body__title">{{ detail?.name || '舞室详情' }}</h2>
+        <p class="body__sub">{{ detail?.address || '地址待完善' }}</p>
 
         <div class="action-row">
           <button
@@ -101,9 +114,9 @@ const onBook = () => router.push(`/studio/${studioId}/trial`);
     </section>
 
     <PenActionBar
-      soft-label="收藏"
+      :soft-label="favored ? '已收藏' : '收藏'"
       dark-label="预约试听"
-      @soft="showToast('已收藏')"
+      @soft="toggleStudioFavorite"
       @dark="onBook"
     />
   </main>

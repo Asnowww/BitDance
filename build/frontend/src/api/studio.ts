@@ -3,14 +3,14 @@ import request from '@/utils/request';
 export interface StudioCard {
   id: number;
   name: string;
-  cover: string;
-  city: string;
-  area: string;
+  address: string;
+  cityId: number;
+  businessDistrictId: number;
+  coverAssetId?: number;
   distanceKm: number;
-  ratingAvg: number;
-  reviewCount: number;
-  topStyles: string[];
-  beginnerFriendly: boolean;
+  latitude?: number;
+  longitude?: number;
+  favored: boolean;
 }
 
 export interface StudioListResp {
@@ -21,16 +21,11 @@ export interface StudioListResp {
 }
 
 export interface StudioListQuery {
-  city?: string;
+  cityId?: number;
   page?: number;
   pageSize?: number;
-  styles?: string[];
-  priceMin?: number;
-  priceMax?: number;
+  danceStyleId?: number;
   distanceKm?: number;
-  difficulty?: string;
-  audience?: string;
-  beginnerFriendly?: boolean;
   keyword?: string;
   latitude?: number;
   longitude?: number;
@@ -41,12 +36,14 @@ export const fetchNearbyStudios = (params: StudioListQuery) =>
   request.get<unknown, StudioListResp>('/public/studios/nearby', { params });
 
 export interface StudioDetail extends StudioCard {
+  brandName?: string;
   intro: string;
+  transportInfo?: string;
+  contactPhone?: string;
   address: string;
-  openHours: string;
-  photos: string[];
-  courses: Array<{ id: number; name: string; style: string; difficulty: string; price: number }>;
+  claimStatus?: string;
+  danceStyleIds: number[];
 }
 
 export const fetchStudioDetail = (id: number) =>
-  request.get<unknown, StudioDetail>(`/studios/${id}`);
+  request.get<unknown, StudioDetail>(`/public/studios/${id}`);

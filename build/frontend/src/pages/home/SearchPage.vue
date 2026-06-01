@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music, Search } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import { fetchNearbyStudios, type StudioCard, type StudioListQuery } from '@/api/studio';
+import { toggleFavorite } from '@/api/favorite';
 
 const router = useRouter();
 
@@ -22,35 +24,50 @@ interface SearchResult {
   to: string;
 }
 
-const results: SearchResult[] = [
-  {
-    id: 'urban-flow',
-    title: 'Urban Flow 舞室',
-    meta: '1.2km · 4.8 · 韩舞/Urban',
-    tags: ['零基础', '晚课班'],
-    price: '¥79-128 / 节',
-    priceTone: 'ink',
-    to: '/studio/urban-flow'
-  },
-  {
-    id: 'beats-lab',
-    title: 'Beats Lab',
-    meta: '2.8km · 4.7 · Jazz/Hiphop',
-    tags: ['地铁直达', '试听'],
-    price: '¥88 起',
-    priceTone: 'ink',
-    to: '/studio/beats-lab'
-  },
-  {
-    id: 'k-star',
-    title: 'K-Star Studio',
-    meta: '4.6km · 4.6 · 韩舞成品舞',
-    tags: ['热门成品舞'],
-    price: '可约试听',
+const studios = ref<StudioCard[]>([]);
+const loading = ref(false);
+const query = ref<StudioListQuery>({ page: 1, pageSize: 20, distanceKm: 5 });
+
+const results = computed<SearchResult[]>(() =>
+  studios.value.map((studio) => ({
+    id: String(studio.id),
+    title: studio.name,
+    meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
+    tags: studio.favored ? ['已收藏'] : ['附近舞室'],
+    price: '查看详情',
     priceTone: 'success',
-    to: '/studio/k-star'
+    to: `/studio/${studio.id}`
+  }))
+);
+
+const loadStudios = async () => {
+  loading.value = true;
+  try {
+    studios.value = (await fetchNearbyStudios(query.value)).list;
+  } finally {
+    loading.value = false;
   }
-];
+};
+
+const locate = () => {
+  navigator.geolocation?.getCurrentPosition(
+    ({ coords }) => {
+      query.value = { ...query.value, latitude: coords.latitude, longitude: coords.longitude };
+      void loadStudios();
+    },
+    () => void loadStudios()
+  );
+};
+
+const applyFilter = (filter: string) => {
+  activeFilter.value = filter;
+  query.value = {
+    ...query.value,
+    distanceKm: filter === '距离' ? 3 : 5,
+    danceStyleId: filter === '舞种' ? 1 : undefined
+  };
+  void loadStudios();
+};
 
 const selected = ref<Record<string, boolean>>({});
 const toggleSelect = (id: string) => {
@@ -63,8 +80,22 @@ const onCompare = () => {
     showToast('请至少选择 2 个舞室进行对比');
     return;
   }
+  const ids = Object.entries(selected.value).filter(([, on]) => on).map(([id]) => Number(id)).slice(0, 3);
+  sessionStorage.setItem('bitdance_compare_studio_ids', JSON.stringify(ids));
   router.push('/studio/compare');
 };
+
+const onFavorite = async () => {
+  const id = Number(Object.keys(selected.value).find((key) => selected.value[key]) ?? results.value[0]?.id);
+  if (!id) return;
+  const { favored } = await toggleFavorite('studio', id);
+  showToast(favored ? '已加入收藏' : '已取消收藏');
+  await loadStudios();
+};
+
+onMounted(() => {
+  locate();
+});
 </script>
 
 <template>
@@ -84,7 +115,7 @@ const onCompare = () => {
           type="button"
           class="chip"
           :class="activeFilter === filter ? 'chip--active' : 'chip--inactive'"
-          @click="activeFilter = filter"
+          @click="applyFilter(filter)"
         >
           {{ filter }}
         </button>
@@ -138,7 +169,7 @@ const onCompare = () => {
     <PenActionBar
       soft-label="收藏"
       dark-label="加入对比"
-      @soft="showToast('已加入收藏')"
+      @soft="onFavorite"
       @dark="onCompare"
     />
   </main>

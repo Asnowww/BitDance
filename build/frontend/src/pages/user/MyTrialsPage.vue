@@ -1,19 +1,36 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { cancelTrialBooking, fetchMyTrialBookings, type TrialBooking } from '@/api/trial';
 
 const router = useRouter();
 const cats = ['全部', '待确认', '已确认', '已完成'];
 const activeCat = ref('待确认');
 
-const records = [
-  { id: '1', title: 'Urban Flow 舞室', meta: 'K-pop 入门班 · 周日 14:00', status: '待舞室确认', tone: 'ink', action: '查看详情' },
-  { id: '2', title: 'Beats Lab', meta: 'Jazz 基础 · 5/28 19:30', status: '已确认 · 待上课', tone: 'success', action: '去上课' },
-  { id: '3', title: 'Mia Jazz 工作室', meta: '成品舞体验 · 5/20', status: '已完成', tone: 'mute', action: '写评价' }
-];
+const bookings = ref<TrialBooking[]>([]);
+const statusText: Record<string, string> = {
+  pending: '待舞室确认', confirmed: '已确认 · 待上课', arrived: '已完成',
+  noshow: '未到场', rejected: '已拒绝', canceled: '已取消'
+};
+const records = computed(() => bookings.value.map((item) => ({
+  id: String(item.id),
+  title: `舞室 #${item.studioId}`,
+  meta: `课程 #${item.courseId} · ${new Date(item.createdAt).toLocaleString()}`,
+  status: statusText[item.bookingStatus] ?? item.bookingStatus,
+  tone: item.bookingStatus === 'confirmed' ? 'success' : item.bookingStatus === 'pending' ? 'ink' : 'mute',
+  action: item.bookingStatus === 'pending' ? '取消预约' : '查看详情'
+})));
+const onAction = async (id: string, action: string) => {
+  if (action !== '取消预约') return showToast(action);
+  await cancelTrialBooking(Number(id));
+  bookings.value = await fetchMyTrialBookings();
+};
+onMounted(async () => {
+  bookings.value = await fetchMyTrialBookings();
+});
 </script>
 
 <template>
@@ -41,7 +58,7 @@ const records = [
           <p class="rec__meta">{{ r.meta }}</p>
           <div class="rec__foot">
             <span class="rec__status" :class="`rec__status--${r.tone}`">{{ r.status }}</span>
-            <button class="rec__btn" type="button" @click="showToast(r.action)">{{ r.action }}</button>
+            <button class="rec__btn" type="button" @click="onAction(r.id, r.action)">{{ r.action }}</button>
           </div>
         </div>
       </article>

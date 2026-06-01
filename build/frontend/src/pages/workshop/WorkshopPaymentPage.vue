@@ -284,7 +284,7 @@ const onPay = () => {
 .sticky-action {
   position: fixed;
   left: 50%;
-  bottom: 0;
+  bottom: var(--app-tabbar-offset, 0px);
   width: 100%;
   max-width: 480px;
   transform: translateX(-50%);

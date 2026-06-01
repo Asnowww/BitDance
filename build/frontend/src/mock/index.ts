@@ -71,4 +71,5 @@ if (USE_MOCK) {
   import('./modules/community');
   import('./modules/buddy');
   import('./modules/coachOps');
+  import('./modules/favorite');
 }

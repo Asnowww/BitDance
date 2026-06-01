@@ -1,13 +1,18 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import PenFieldRow from '@/components/pen/PenFieldRow.vue';
+import { fetchCourseDetail, type CourseDetail } from '@/api/course';
+import { toggleFavorite } from '@/api/favorite';
 
 const route = useRoute();
 const router = useRouter();
-const courseId = String(route.params.id || 'kpop-intro');
+const courseId = Number(route.params.id) || 1;
+const detail = ref<CourseDetail | null>(null);
+const favored = computed(() => detail.value?.favored ?? false);
 
 const audiences = ['零基础', '想减脂', '喜欢成品舞'];
 const structuredReviews = [
@@ -17,7 +22,16 @@ const structuredReviews = [
   { label: '实际收获', value: '4.9' }
 ];
 
-const onBook = () => router.push(`/studio/${courseId}/trial`);
+const onBook = () => router.push(`/studio/${detail.value?.studioId ?? 1}/trial?courseId=${courseId}`);
+const toggleCourseFavorite = async () => {
+  const result = await toggleFavorite('course', courseId);
+  if (detail.value) detail.value.favored = result.favored;
+  showToast(result.favored ? '已收藏' : '已取消收藏');
+};
+
+onMounted(async () => {
+  detail.value = await fetchCourseDetail(courseId);
+});
 </script>
 
 <template>
@@ -26,11 +40,11 @@ const onBook = () => router.push(`/studio/${courseId}/trial`);
 
     <section class="pen-scroll">
       <header class="head">
-        <h2 class="head__title">K-pop 零基础成品舞</h2>
-        <p class="head__sub">韩舞 · 零基础 · 中等强度 · ¥79 试听</p>
+        <h2 class="head__title">{{ detail?.courseName || '课程详情' }}</h2>
+        <p class="head__sub">{{ detail?.difficultyLevel || '-' }} · {{ detail?.intensityLevel || '-' }} · ¥{{ detail?.priceAmount ?? '-' }} · {{ detail?.durationMinutes ?? '-' }}min</p>
       </header>
 
-      <article class="coach" @click="router.push('/coach/xiaolu')">
+      <article class="coach" @click="router.push(`/coach/${detail?.coachId ?? 1}`)">
         <span class="coach__avatar" aria-hidden="true" />
         <div class="coach__copy">
           <strong class="coach__name">小鹿老师</strong>
@@ -64,9 +78,9 @@ const onBook = () => router.push(`/studio/${courseId}/trial`);
     </section>
 
     <PenActionBar
-      soft-label="收藏"
+      :soft-label="favored ? '已收藏' : '收藏'"
       dark-label="预约 / 报名"
-      @soft="showToast('已收藏')"
+      @soft="toggleCourseFavorite"
       @dark="onBook"
     />
   </main>
