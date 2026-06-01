@@ -1,26 +1,36 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onBeforeUnmount } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { showFailToast, showSuccessToast, showToast } from 'vant';
-import { Smartphone, KeyRound } from 'lucide-vue-next';
+import { Smartphone, KeyRound, Lock, LockKeyhole, MessageSquareCode } from 'lucide-vue-next';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 
+type Mode = 'code' | 'password';
+const mode = ref<Mode>('code');
+const methods = [
+  { key: 'password' as Mode, label: '密码登录', icon: LockKeyhole },
+  { key: 'code' as Mode, label: '验证码登录', icon: MessageSquareCode }
+];
+
 const phone = ref('');
 const code = ref('');
+const password = ref('');
 const cooldown = ref(0);
 const submitting = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const preferences = ['韩舞', '零基础', '塑形', '五道口'];
-const selectedPrefs = reactive<Record<string, boolean>>({ 韩舞: true, 零基础: true });
-
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
 const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0);
-const canSubmit = computed(() => isPhoneValid.value && code.value.length >= 4 && !submitting.value);
+const canSubmit = computed(
+  () =>
+    isPhoneValid.value &&
+    !submitting.value &&
+    (mode.value === 'code' ? code.value.length >= 4 : password.value.length >= 6)
+);
 
 const heroImage =
   'https://images.unsplash.com/photo-1761882628233-1e23102da76d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3Nzk3ODEzMzV8&ixlib=rb-4.1.0&q=80&w=1080';
@@ -52,11 +62,16 @@ const onSendCode = async () => {
 
 const onSubmit = async () => {
   if (!canSubmit.value) {
-    showFailToast('请输入手机号与验证码');
+    showFailToast(mode.value === 'code' ? '请输入手机号与验证码' : '请输入手机号与密码');
     return;
   }
   submitting.value = true;
   try {
+    if (mode.value === 'password') {
+      // 密码登录：待后端 /auth/login/password 接口接入
+      showToast('密码登录待后端接口接入，请先用验证码登录');
+      return;
+    }
     await userStore.login(phone.value, code.value);
     showSuccessToast('登录成功');
     const redirect = (route.query.redirect as string) || '/home';
@@ -69,9 +84,6 @@ const onSubmit = async () => {
 };
 
 const onWechat = () => showToast('请在微信客户端中授权登录');
-const togglePref = (pref: string) => {
-  selectedPrefs[pref] = !selectedPrefs[pref];
-};
 
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer);
@@ -87,7 +99,21 @@ onBeforeUnmount(() => {
     </section>
 
     <main class="login__form">
-      <h1 class="login__title">手机号验证码登录</h1>
+      <div class="mode-seg">
+        <button
+          v-for="m in methods"
+          :key="m.key"
+          class="mode-seg__btn"
+          :class="{ 'mode-seg__btn--active': mode === m.key }"
+          type="button"
+          @click="mode = m.key"
+        >
+          <component :is="m.icon" :size="22" :stroke-width="2" />
+          <span>{{ m.label }}</span>
+        </button>
+      </div>
+
+      <h1 class="login__title">{{ mode === 'code' ? '手机号验证码登录' : '手机号密码登录' }}</h1>
 
       <div class="field">
         <Smartphone class="field__icon" :size="18" :stroke-width="2" />
@@ -99,12 +125,18 @@ onBeforeUnmount(() => {
           maxlength="11"
           placeholder="输入手机号"
         />
-        <button class="field__action" type="button" :disabled="!canSendCode" @click="onSendCode">
+        <button
+          v-if="mode === 'code'"
+          class="field__action"
+          type="button"
+          :disabled="!canSendCode"
+          @click="onSendCode"
+        >
           {{ cooldown > 0 ? `${cooldown}s` : '获取验证码' }}
         </button>
       </div>
 
-      <div class="field">
+      <div v-if="mode === 'code'" class="field">
         <KeyRound class="field__icon" :size="18" :stroke-width="2" />
         <input
           v-model="code"
@@ -115,27 +147,21 @@ onBeforeUnmount(() => {
           placeholder="输入验证码"
         />
       </div>
+      <div v-else class="field">
+        <Lock class="field__icon" :size="18" :stroke-width="2" />
+        <input
+          v-model="password"
+          class="field__input"
+          type="password"
+          maxlength="32"
+          placeholder="输入密码"
+        />
+      </div>
 
       <button class="btn btn--dark" type="button" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '登录中…' : '登录 / 注册' }}
+        {{ submitting ? '登录中…' : mode === 'code' ? '登录 / 注册' : '登录' }}
       </button>
       <button class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
-
-      <section class="prefs">
-        <h2 class="prefs__title">新人偏好</h2>
-        <div class="prefs__chips">
-          <button
-            v-for="pref in preferences"
-            :key="pref"
-            class="chip"
-            :class="{ 'chip--active': selectedPrefs[pref] }"
-            type="button"
-            @click="togglePref(pref)"
-          >
-            {{ pref }}
-          </button>
-        </div>
-      </section>
     </main>
   </div>
 </template>
@@ -185,6 +211,34 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.mode-seg {
+  display: flex;
+  gap: 8px;
+}
+
+.mode-seg__btn {
+  flex: 1;
+  height: 64px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--nike-soft-cloud);
+  color: var(--nike-ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+
+  &--active {
+    background: var(--nike-ink);
+    color: #fff;
+  }
 }
 
 .login__title {
@@ -268,44 +322,6 @@ onBeforeUnmount(() => {
   &--soft {
     background: var(--nike-soft-cloud);
     color: var(--nike-ink);
-  }
-}
-
-.prefs {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  &__title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1.25;
-  }
-
-  &__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-}
-
-.chip {
-  height: 40px;
-  padding: 8px 14px;
-  border: 1px solid var(--nike-hairline-soft);
-  border-radius: 999px;
-  background: var(--nike-canvas);
-  color: var(--nike-ink);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.25;
-  cursor: pointer;
-
-  &--active {
-    border-color: var(--nike-ink);
-    background: var(--nike-ink);
-    color: #fff;
   }
 }
 </style>
