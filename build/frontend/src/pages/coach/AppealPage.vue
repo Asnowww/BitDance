@@ -1,188 +1,170 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast, showFailToast } from 'vant';
-import { submitAppeal, fetchAppeals, type ReviewAppeal } from '@/api/coachOps';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { showSuccessToast } from 'vant';
+import { Star, Plus } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
-const route = useRoute();
 const router = useRouter();
 
-const reviewId = computed(() => Number(route.query.reviewId ?? 0));
-const reason = ref('');
-const evidence = ref('');
-const list = ref<ReviewAppeal[]>([]);
-const submitting = ref(false);
+const reasons = ['与事实不符', '恶意差评', '同行攻击', '其他'];
+const reason = ref('与事实不符');
+const detail = ref('');
 
-const reload = async () => {
-  list.value = await fetchAppeals();
+const onSubmit = () => {
+  showSuccessToast('申诉已提交，等待人工审核');
+  router.back();
 };
-
-const onSubmit = async () => {
-  if (!reviewId.value) {
-    showFailToast('缺少 reviewId');
-    return;
-  }
-  if (reason.value.length < 5) {
-    showFailToast('申诉理由至少 5 字');
-    return;
-  }
-  submitting.value = true;
-  try {
-    await submitAppeal({
-      reviewId: reviewId.value,
-      reason: reason.value,
-      evidence: evidence.value
-    });
-    showSuccessToast('已提交申诉，平台将在 3 个工作日内处理');
-    reason.value = '';
-    evidence.value = '';
-    void reload();
-  } finally {
-    submitting.value = false;
-  }
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: '待平台处理',
-  APPROVED: '已支持',
-  REJECTED: '已驳回'
-};
-
-onMounted(reload);
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">评价申诉</span>
-    </header>
-    <section v-if="reviewId > 0" class="form">
-      <p class="tip">针对评价 #{{ reviewId }} 提交申诉，请描述事实并附上证据线索。</p>
-      <textarea v-model="reason" rows="4" class="ta" placeholder="申诉理由（至少 5 字）" />
-      <textarea v-model="evidence" rows="4" class="ta" placeholder="证据线索（如订单号、签到记录、聊天片段等）" />
-      <button class="btn" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '提交中…' : '提交申诉' }}
-      </button>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="评价申诉" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="quote">
+        <header class="quote__head">
+          <span class="quote__avatar" aria-hidden="true" />
+          <div class="quote__who">
+            <strong class="quote__name">匿名学员</strong>
+            <span class="quote__stars">
+              <Star
+                v-for="i in 5"
+                :key="i"
+                :size="13"
+                :stroke-width="2"
+                :fill="i <= 2 ? '#111111' : 'none'"
+                :color="i <= 2 ? '#111111' : '#E5E5E5'"
+              />
+            </span>
+          </div>
+        </header>
+        <p class="quote__content">环境一般，老师迟到了十分钟。</p>
+      </div>
+
+      <h2 class="block-title">申诉理由</h2>
+      <div class="chip-row">
+        <button
+          v-for="r in reasons"
+          :key="r"
+          class="chip"
+          :class="reason === r ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="reason = r"
+        >
+          {{ r }}
+        </button>
+      </div>
+
+      <h2 class="block-title">补充说明</h2>
+      <textarea
+        v-model="detail"
+        class="note"
+        rows="3"
+        placeholder="补充说明与证据描述，如签到记录、监控时间…"
+      />
+
+      <div class="evidence">
+        <button class="evidence__add" type="button" aria-label="上传证据"><Plus :size="26" :stroke-width="2" /></button>
+      </div>
+
+      <p class="hint">提交后进入平台人工审核，3 个工作日内反馈</p>
     </section>
-    <section class="list">
-      <h3>历史申诉</h3>
-      <div v-if="!list.length" class="empty">没有申诉记录</div>
-      <article v-for="a in list" :key="a.id" class="item">
-        <div class="item__head">
-          <span>评价 #{{ a.reviewId }}</span>
-          <span class="status" :data-s="a.status">{{ STATUS_LABEL[a.status] }}</span>
-        </div>
-        <p class="item__reason">{{ a.reason }}</p>
-        <div class="item__time">{{ new Date(a.createdAt).toLocaleString() }}</div>
-      </article>
-    </section>
-  </div>
+
+    <footer class="save-bar">
+      <button class="save-bar__btn" type="button" @click="onSubmit">提交申诉</button>
+    </footer>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+
+.pen-scroll { display: flex; flex-direction: column; gap: 16px; padding: 16px 18px; }
+
+.quote {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
+  padding: 14px;
+  border-radius: 12px;
+  background: $pen-soft;
+  border-left: 3px solid $pen-ink;
+
+  &__head { display: flex; align-items: center; gap: 8px; }
+  &__avatar { flex: none; width: 32px; height: 32px; border-radius: 999px; background: $pen-ink; }
+  &__who { display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 13px; font-weight: 900; line-height: $pen-lh; }
+  &__stars { display: inline-flex; gap: 3px; }
+  &__content { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.form {
-  background: #fff;
-  padding: 16px;
-}
-.tip {
-  margin: 0 0 12px;
-  font-size: 12px;
-  color: var(--bd-text-secondary);
-}
-.ta {
+
+.block-title { @include pen-h3-section; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.note {
   width: 100%;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 10px;
-  font-size: 13px;
-  font-family: inherit;
+  min-height: 84px;
+  padding: 14px;
+  border: 0;
+  border-radius: 16px;
+  background: $pen-soft;
+  color: $pen-ink;
+  font-family: $pen-font;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
   resize: none;
+  box-sizing: border-box;
   outline: none;
-  &:focus {
-    border-color: var(--bd-primary);
+  &::placeholder { color: $pen-mute; }
+}
+
+.evidence {
+  display: flex;
+  gap: 8px;
+
+  &__add {
+    width: 88px; height: 88px;
+    border: 1px solid $pen-hairline; border-radius: 12px;
+    background: $pen-soft; color: $pen-mute;
+    display: grid; place-items: center; cursor: pointer;
   }
 }
-.btn {
+
+.hint { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+
+.save-bar {
+  position: fixed;
+  right: 0; bottom: 0; left: 0;
+  z-index: 10;
   width: 100%;
-  height: 44px;
-  border: none;
-  border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
-  }
-}
-.list {
-  margin-top: 8px;
-  padding: 16px;
-  background: #fff;
-  h3 {
-    margin: 0 0 12px;
-    font-size: 14px;
-  }
-}
-.empty {
-  text-align: center;
-  padding: 24px;
-  color: var(--bd-text-secondary);
-}
-.item {
-  padding: 12px 0;
-  border-bottom: 1px dashed var(--bd-border);
-  &:last-child {
-    border-bottom: none;
-  }
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-  }
-  &__reason {
-    margin: 6px 0;
-    font-size: 13px;
-  }
-  &__time {
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-}
-.status {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 170, 51, 0.15);
-  color: #c87a00;
-  &[data-s='APPROVED'] {
-    background: rgba(0, 168, 84, 0.12);
-    color: #00a854;
-  }
-  &[data-s='REJECTED'] {
-    background: #f3f3f3;
-    color: var(--bd-text-secondary);
+  max-width: 480px;
+  height: 76px;
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  border-top: 1px solid $pen-hairline;
+  box-sizing: border-box;
+
+  &__btn {
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
   }
 }
 </style>

@@ -1,155 +1,97 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { showConfirmDialog, showSuccessToast } from 'vant';
-import { fetchMyTrialBookings, cancelTrialBooking, type TrialBooking, type TrialStatus } from '@/api/trial';
+import { showToast } from 'vant';
+import { Music } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const router = useRouter();
-const list = ref<TrialBooking[]>([]);
-const loading = ref(true);
+const cats = ['全部', '待确认', '已确认', '已完成'];
+const activeCat = ref('待确认');
 
-const STATUS_LABEL: Record<TrialStatus, string> = {
-  pending: '待确认',
-  confirmed: '已确认',
-  rejected: '已拒绝',
-  arrived: '已到店',
-  noshow: '已失约',
-  canceled: '已取消'
-};
-
-const reload = async () => {
-  loading.value = true;
-  try {
-    list.value = await fetchMyTrialBookings();
-  } finally {
-    loading.value = false;
-  }
-};
-
-const onCancel = async (item: TrialBooking) => {
-  await showConfirmDialog({ title: '取消预约？', message: '取消后无法恢复' }).catch(() => {
-    throw new Error('cancel');
-  });
-  await cancelTrialBooking(item.id);
-  showSuccessToast('已取消');
-  void reload();
-};
-
-onMounted(reload);
+const records = [
+  { id: '1', title: 'Urban Flow 舞室', meta: 'K-pop 入门班 · 周日 14:00', status: '待舞室确认', tone: 'ink', action: '查看详情' },
+  { id: '2', title: 'Beats Lab', meta: 'Jazz 基础 · 5/28 19:30', status: '已确认 · 待上课', tone: 'success', action: '去上课' },
+  { id: '3', title: 'Mia Jazz 工作室', meta: '成品舞体验 · 5/20', status: '已完成', tone: 'mute', action: '写评价' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">我的试听</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <div v-else-if="!list.length" class="empty">还没有预约任何试听</div>
-    <article v-for="it in list" :key="it.id" class="item">
-      <div class="item__head">
-        <span class="item__title" @click="router.push(`/studio/${it.studioId}`)">{{ it.studioName }}</span>
-        <span class="status" :data-status="it.status">{{ STATUS_LABEL[it.status] }}</span>
+  <main class="pen-page">
+    <PenTopBar title="我的试听" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="chip-row">
+        <button
+          v-for="c in cats"
+          :key="c"
+          class="chip"
+          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeCat = c"
+        >
+          {{ c }}
+        </button>
       </div>
-      <div class="item__meta">
-        <span>{{ it.date }} {{ it.time }}</span>
-      </div>
-      <div v-if="it.courseName" class="item__sub">课程：{{ it.courseName }}</div>
-      <div v-if="it.coachName" class="item__sub">教练：{{ it.coachName }}</div>
-      <div v-if="it.remark" class="item__sub">备注：{{ it.remark }}</div>
-      <footer v-if="it.status === 'pending' || it.status === 'confirmed'" class="item__foot">
-        <button class="btn-ghost" @click="onCancel(it)">取消预约</button>
-      </footer>
-    </article>
-  </div>
+
+      <article v-for="r in records" :key="r.id" class="rec">
+        <div class="rec__cover" aria-hidden="true"><Music :size="26" :stroke-width="2" /></div>
+        <div class="rec__body">
+          <strong class="rec__title">{{ r.title }}</strong>
+          <p class="rec__meta">{{ r.meta }}</p>
+          <div class="rec__foot">
+            <span class="rec__status" :class="`rec__status--${r.tone}`">{{ r.status }}</span>
+            <button class="rec__btn" type="button" @click="showToast(r.action)">{{ r.action }}</button>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
 }
-.bar {
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.rec {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__cover {
+    flex: none; width: 88px; height: 88px; border-radius: 12px;
+    background: $pen-soft; color: $pen-ink; display: grid; place-items: center;
   }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  padding: 60px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.item {
-  margin: 8px 12px;
-  padding: 14px;
-  background: #fff;
-  border-radius: 12px;
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  &__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  &__title { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+  &__status {
+    font-size: 13px; font-weight: 800; line-height: $pen-lh;
+    &--ink { color: $pen-ink; }
+    &--success { color: $pen-success; }
+    &--mute { color: $pen-mute; }
   }
-  &__title {
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
+
+  &__btn {
+    flex: none; height: 34px; padding: 6px 14px;
+    border: 1px solid $pen-ink; border-radius: 999px;
+    background: $pen-canvas; color: $pen-ink;
+    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
   }
-  &__meta {
-    margin-top: 6px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__sub {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__foot {
-    margin-top: 10px;
-    display: flex;
-    justify-content: flex-end;
-  }
-}
-.status {
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 170, 51, 0.15);
-  color: #c87a00;
-  &[data-status='confirmed'] {
-    background: rgba(54, 165, 255, 0.12);
-    color: #36a5ff;
-  }
-  &[data-status='canceled'],
-  &[data-status='rejected'],
-  &[data-status='noshow'] {
-    background: #f3f3f3;
-    color: var(--bd-text-secondary);
-  }
-  &[data-status='arrived'] {
-    background: rgba(0, 168, 84, 0.12);
-    color: #00a854;
-  }
-}
-.btn-ghost {
-  border: 1px solid var(--bd-border);
-  background: #fff;
-  color: var(--bd-text-secondary);
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  cursor: pointer;
 }
 </style>

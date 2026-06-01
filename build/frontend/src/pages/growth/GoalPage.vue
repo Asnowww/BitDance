@@ -1,181 +1,144 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
-import { fetchGrowthGoal, saveGrowthGoal, type GrowthGoal } from '@/api/growth';
-
-const router = useRouter();
+import { ref } from 'vue';
+import { showToast } from 'vant';
+import { CircleCheckBig } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const period = ref<'week' | 'month'>('week');
-const targetSessions = ref(3);
-const targetMinutes = ref(180);
 
-const computeRange = () => {
-  const today = new Date();
-  const start = new Date(today);
-  const end = new Date(today);
-  if (period.value === 'week') {
-    const d = (today.getDay() + 6) % 7;
-    start.setDate(today.getDate() - d);
-    end.setDate(start.getDate() + 6);
-  } else {
-    start.setDate(1);
-    end.setMonth(start.getMonth() + 1);
-    end.setDate(0);
-  }
-  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
-};
-
-const onSave = async () => {
-  const { startDate, endDate } = computeRange();
-  const goal: GrowthGoal = {
-    period: period.value,
-    targetSessions: Number(targetSessions.value),
-    targetMinutes: Number(targetMinutes.value),
-    startDate,
-    endDate
-  };
-  await saveGrowthGoal(goal);
-  showSuccessToast('已保存');
-  router.back();
-};
-
-onMounted(async () => {
-  const g = await fetchGrowthGoal();
-  if (g) {
-    period.value = g.period;
-    targetSessions.value = g.targetSessions;
-    targetMinutes.value = g.targetMinutes;
-  }
-});
+const milestones = [
+  { label: '连续打卡 7 天', done: true, value: '已达成' },
+  { label: '累计训练 20 小时', done: false, value: '16 / 20' },
+  { label: '尝试 5 个舞种', done: false, value: '4 / 5' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">训练目标</span>
-    </header>
-    <section class="form">
-      <div class="group">
-        <div class="group__title">周期</div>
-        <div class="chips">
-          <span class="chip" :class="{ active: period === 'week' }" @click="period = 'week'">每周</span>
-          <span class="chip" :class="{ active: period === 'month' }" @click="period = 'month'">每月</span>
-        </div>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="训练目标" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="seg">
+        <button class="seg__btn" :class="{ 'seg__btn--on': period === 'week' }" type="button" @click="period = 'week'">本周</button>
+        <button class="seg__btn" :class="{ 'seg__btn--on': period === 'month' }" type="button" @click="period = 'month'">本月</button>
       </div>
-      <div class="row">
-        <span>训练次数</span>
-        <input v-model.number="targetSessions" type="number" min="1" max="50" class="input" />
+
+      <section class="goal">
+        <span class="goal__label">本周训练目标</span>
+        <strong class="goal__value">4 / 5 次</strong>
+        <div class="goal__track"><span class="goal__fill" /></div>
+        <span class="goal__hint">再练 1 次即可达成本周目标</span>
+      </section>
+
+      <h2 class="block-title">里程碑</h2>
+      <div v-for="m in milestones" :key="m.label" class="mile">
+        <span class="mile__label">{{ m.label }}</span>
+        <span v-if="m.done" class="mile__done">
+          <CircleCheckBig :size="18" :stroke-width="2" />
+          {{ m.value }}
+        </span>
+        <span v-else class="mile__value">{{ m.value }}</span>
       </div>
-      <div class="row">
-        <span>训练分钟</span>
-        <input v-model.number="targetMinutes" type="number" min="30" max="3000" class="input" />
-      </div>
-      <p class="tip">目标设定后会显示在成长档案首屏的进度条中。</p>
     </section>
-    <footer class="footer">
-      <button class="btn" @click="onSave">保存目标</button>
+
+    <footer class="save-bar">
+      <button class="save-bar__btn" type="button" @click="showToast('编辑目标')">编辑目标</button>
     </footer>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.form {
-  background: #fff;
-  padding: 16px;
-}
-.group {
-  padding: 10px 0;
-  &__title {
-    font-size: 13px;
-    margin-bottom: 8px;
-    color: var(--bd-text-secondary);
-  }
-}
-.chips {
+
+.pen-scroll { display: flex; flex-direction: column; gap: 16px; padding: 16px 18px; }
+
+.seg {
   display: flex;
   gap: 8px;
-}
-.chip {
-  padding: 6px 14px;
-  border: 1px solid var(--bd-border);
-  border-radius: 999px;
-  font-size: 13px;
-  cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-    color: var(--bd-primary);
+  &__btn {
+    flex: 1;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+    &--on { background: $pen-ink; color: $pen-on-primary; }
   }
 }
-.row {
+
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 16px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+
+  &__label { color: $pen-subtle-text; font-size: 14px; font-weight: 700; line-height: $pen-lh; }
+  &__value { font-size: 40px; font-weight: 900; line-height: $pen-lh; }
+  &__track { height: 10px; border-radius: 999px; background: $pen-charcoal; overflow: hidden; }
+  &__fill { display: block; width: 80%; height: 100%; border-radius: 999px; background: $pen-on-primary; }
+  &__hint { color: $pen-subtle-text; font-size: 13px; font-weight: 700; line-height: $pen-lh; }
+}
+
+.block-title { @include pen-h3-section; }
+
+.mile {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
-  span {
-    width: 84px;
-    font-size: 13px;
-    color: var(--bd-text-secondary);
+  padding: 14px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__label { flex: 1; font-size: 15px; font-weight: 800; line-height: $pen-lh; }
+  &__value { color: $pen-mute; font-size: 14px; font-weight: 700; line-height: $pen-lh; }
+  &__done {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: $pen-success;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
   }
 }
-.input {
-  flex: 1;
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 8px;
-  background: #fafafa;
-  font-size: 14px;
-  outline: none;
-}
-.tip {
-  margin-top: 12px;
-  font-size: 11px;
-  color: var(--bd-text-secondary);
-}
-.footer {
+
+.save-bar {
   position: fixed;
+  right: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  z-index: 10;
   width: 100%;
   max-width: 480px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-}
-.btn {
-  width: 100%;
-  height: 46px;
-  border: none;
-  border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
+  height: 76px;
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  border-top: 1px solid $pen-hairline;
+  box-sizing: border-box;
+
+  &__btn {
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+  }
 }
 </style>

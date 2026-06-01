@@ -1,109 +1,154 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchMyWorkshopOrders, type WorkshopOrder } from '@/api/workshop';
+import { showToast } from 'vant';
+import { ChevronLeft, ChevronRight, Ticket } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const router = useRouter();
-const list = ref<WorkshopOrder[]>([]);
-const loading = ref(true);
+const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
 
-onMounted(async () => {
-  try {
-    list.value = await fetchMyWorkshopOrders();
-  } finally {
-    loading.value = false;
-  }
-});
+interface Cell {
+  n: number;
+  muted: boolean;
+  event: boolean;
+  selected: boolean;
+}
 
-const grouped = computed(() => {
-  const m = new Map<string, WorkshopOrder[]>();
-  list.value
-    .filter((it) => it.status === 'PAID' || it.status === 'CHECKED_IN')
-    .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate))
-    .forEach((it) => {
-      const arr = m.get(it.sessionDate) ?? [];
-      arr.push(it);
-      m.set(it.sessionDate, arr);
-    });
-  return Array.from(m.entries());
-});
+const cells: Cell[] = [];
+[27, 28, 29, 30].forEach((n) => cells.push({ n, muted: true, event: false, selected: false }));
+for (let d = 1; d <= 31; d++) {
+  cells.push({ n: d, muted: false, event: [14, 22, 31].includes(d), selected: d === 31 });
+}
+[1, 2, 3, 4, 5, 6, 7].forEach((n) => cells.push({ n, muted: true, event: false, selected: false }));
+
+const weeks: Cell[][] = [];
+for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">活动日历</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <div v-else-if="!grouped.length" class="empty">还没有已支付的活动</div>
-    <section v-for="[date, items] in grouped" :key="date" class="day">
-      <h3 class="day__title">{{ date }}</h3>
-      <article v-for="it in items" :key="it.id" class="item" @click="router.push(`/workshop/${it.workshopId}`)">
-        <div class="item__time">{{ it.sessionTime }}</div>
-        <div class="item__body">
-          <div class="item__title">{{ it.workshopTitle }}</div>
-          <div class="item__sub">¥{{ it.amount }} · 签到码 {{ it.checkinCode }}</div>
+  <main class="pen-page">
+    <PenTopBar title="活动日历" @share="showToast('已复制')" />
+
+    <section class="pen-scroll">
+      <div class="month">
+        <button class="month__nav" type="button" aria-label="上个月"><ChevronLeft :size="20" :stroke-width="2" /></button>
+        <span class="month__label">2026 年 5 月</span>
+        <button class="month__nav" type="button" aria-label="下个月"><ChevronRight :size="20" :stroke-width="2" /></button>
+      </div>
+
+      <div class="week-head">
+        <span v-for="w in weekdays" :key="w">{{ w }}</span>
+      </div>
+
+      <div class="grid">
+        <div v-for="(row, ri) in weeks" :key="ri" class="grid__row">
+          <div v-for="(c, ci) in row" :key="ci" class="cell">
+            <span v-if="c.selected" class="cell__sel">{{ c.n }}</span>
+            <span v-else class="cell__num" :class="{ 'cell__num--muted': c.muted }">{{ c.n }}</span>
+            <span v-if="c.event && !c.selected" class="cell__dot" aria-hidden="true" />
+          </div>
         </div>
+      </div>
+
+      <h2 class="day-title">5 月 31 日 · 周日</h2>
+      <article class="event">
+        <div class="event__cover" aria-hidden="true"><Ticket :size="24" :stroke-width="2" /></div>
+        <div class="event__copy">
+          <strong class="event__name">Locking 大师课</strong>
+          <span class="event__meta">14:00 · Joy Studio · 剩 8 位 · ¥199</span>
+        </div>
+        <button class="event__btn" type="button" @click="router.push('/workshop/locking')">报名</button>
       </article>
     </section>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.month {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  justify-content: center;
+  gap: 18px;
+
+  &__label { font-size: 18px; font-weight: 900; line-height: $pen-lh; }
+  &__nav { border: 0; background: transparent; color: $pen-ink; display: grid; place-items: center; cursor: pointer; }
+}
+
+.week-head {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  span {
+    text-align: center;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
   }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  padding: 60px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.day {
-  padding: 12px;
-  &__title {
-    margin: 0 0 8px;
-    font-size: 14px;
-    color: var(--bd-primary);
-  }
-}
-.item {
+
+.grid {
   display: flex;
-  gap: 12px;
-  padding: 12px;
-  background: #fff;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  &__time {
-    width: 96px;
-    font-size: 13px;
-    color: var(--bd-primary);
-    font-weight: 600;
-  }
-  &__title {
+  flex-direction: column;
+  gap: 6px;
+
+  &__row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+}
+
+.cell {
+  height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+
+  &__num { font-size: 14px; font-weight: 700; line-height: $pen-lh; &--muted { color: $pen-hairline; } }
+  &__sel {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    display: grid;
+    place-items: center;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 800;
   }
-  &__sub {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
+  &__dot { width: 5px; height: 5px; border-radius: 999px; background: $pen-ink; }
+}
+
+.day-title { @include pen-h3-section; font-size: 16px; margin-top: 4px; }
+
+.event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: $pen-soft;
+
+  &__cover {
+    flex: none; width: 48px; height: 48px; border-radius: 12px;
+    background: $pen-ink; color: $pen-on-primary; display: grid; place-items: center;
+  }
+  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__btn {
+    flex: none; height: 34px; padding: 8px 16px;
+    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
+    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
   }
 }
 </style>

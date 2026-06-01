@@ -1,75 +1,108 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchPractices, type PracticePost } from '@/api/practice';
+import { showToast } from 'vant';
+import { Users } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const router = useRouter();
-const list = ref<PracticePost[]>([]);
-const loading = ref(true);
+const tab = ref<'mine' | 'joined'>('mine');
 
-onMounted(async () => {
-  try {
-    const data = await fetchPractices({ page: 1, pageSize: 100 });
-    list.value = data.list.filter((it) => it.authorId === 999);
-  } finally {
-    loading.value = false;
-  }
-});
+const records = [
+  { id: '1', title: '周六 Hiphop 中级局', meta: '五道口 DanceLab · 周六 14:00', status: '报名中 2/4 人', tone: 'ink', action: '管理' },
+  { id: '2', title: '韩舞成品舞互拍', meta: '朝阳 Joy Studio · 今晚 19:00', status: '已满员 3/3', tone: 'mute', action: '查看' },
+  { id: '3', title: 'Urban 基础律动复习', meta: '中关村 · 5/20 已结束', status: '待双向互评', tone: 'success', action: '去互评' }
+];
+
+const onAction = (r: (typeof records)[number]) => {
+  if (r.action === '去互评') router.push(`/practice/${r.id}/rate`);
+  else showToast(r.action);
+};
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">我的约练</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <div v-else-if="!list.length" class="empty">还没发布过约练</div>
-    <article v-for="p in list" :key="p.id" class="item" @click="router.push(`/practice/${p.id}`)">
-      <div class="item__title">{{ p.title }}</div>
-      <div class="item__meta">{{ p.date }} {{ p.time }} · {{ p.takenCount }}/{{ p.capacity }} · {{ p.status }}</div>
-    </article>
-  </div>
+  <main class="pen-page">
+    <PenTopBar title="我的约练" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="seg">
+        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'mine' }" type="button" @click="tab = 'mine'">我发起的</button>
+        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'joined' }" type="button" @click="tab = 'joined'">我参加的</button>
+      </div>
+
+      <article v-for="r in records" :key="r.id" class="rec">
+        <div class="rec__cover" aria-hidden="true"><Users :size="26" :stroke-width="2" /></div>
+        <div class="rec__body">
+          <strong class="rec__title">{{ r.title }}</strong>
+          <p class="rec__meta">{{ r.meta }}</p>
+          <div class="rec__foot">
+            <span class="rec__status" :class="`rec__status--${r.tone}`">{{ r.status }}</span>
+            <button class="rec__btn" type="button" @click="onAction(r)">{{ r.action }}</button>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.seg {
+  display: flex;
+  gap: 8px;
+  &__btn {
+    flex: 1;
+    height: 46px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+    &--on { background: $pen-ink; color: $pen-on-primary; }
+  }
+}
+
+.rec {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__cover {
+    flex: none; width: 88px; height: 88px; border-radius: 12px;
+    background: $pen-soft; color: $pen-ink; display: grid; place-items: center;
   }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  padding: 60px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.item {
-  margin: 8px 12px;
-  padding: 12px 14px;
-  background: #fff;
-  border-radius: 12px;
-  cursor: pointer;
-  &__title {
-    font-size: 14px;
-    font-weight: 600;
+  &__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  &__title { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+  &__status {
+    font-size: 13px; font-weight: 800; line-height: $pen-lh;
+    &--ink { color: $pen-ink; }
+    &--success { color: $pen-success; }
+    &--mute { color: $pen-mute; }
   }
-  &__meta {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
+
+  &__btn {
+    flex: none; height: 34px; padding: 6px 14px;
+    border: 1px solid $pen-ink; border-radius: 999px;
+    background: $pen-canvas; color: $pen-ink;
+    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
   }
 }
 </style>

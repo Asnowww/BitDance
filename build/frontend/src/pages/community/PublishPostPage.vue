@@ -1,223 +1,129 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { showSuccessToast, showFailToast } from 'vant';
-import { createPost } from '@/api/community';
+import { showSuccessToast } from 'vant';
+import { ChevronLeft, Image, Plus } from 'lucide-vue-next';
+import PenSettingRow from '@/components/pen/PenSettingRow.vue';
 
 const router = useRouter();
+const content = ref('');
 
-const STYLES = ['Hiphop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waacking'];
-const TOPICS = ['零基础打卡', '街舞日常', '试听感受', '舞室探店', 'Workshop 速记'];
+const rows = [
+  { label: '# 添加话题', trailing: undefined },
+  { label: '关联舞室 / 课程 / 老师', trailing: '推荐' },
+  { label: '所在位置', trailing: '五道口' },
+  { label: '谁可以看', trailing: '公开' }
+];
 
-const text = ref('');
-const style = ref('');
-const topics = ref<string[]>([]);
-const location = ref('');
-const hasVideo = ref(false);
-const submitting = ref(false);
-
-const toggleTopic = (t: string) => {
-  const i = topics.value.indexOf(t);
-  if (i >= 0) topics.value.splice(i, 1);
-  else if (topics.value.length < 3) topics.value.push(t);
-};
-
-const onSubmit = async () => {
-  if (text.value.trim().length < 5) {
-    showFailToast('正文至少 5 个字');
-    return;
-  }
-  submitting.value = true;
-  try {
-    await createPost({
-      text: text.value,
-      images: [],
-      hasVideo: hasVideo.value,
-      topics: topics.value,
-      style: style.value || undefined,
-      location: location.value || undefined,
-      idempotencyToken: `post-${Date.now()}`
-    });
-    showSuccessToast('已发布');
-    router.replace('/community');
-  } finally {
-    submitting.value = false;
-  }
+const onPublish = () => {
+  showSuccessToast('已发布');
+  router.back();
 };
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">发动态</span>
-      <button class="post" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '发布中…' : '发布' }}
+  <main class="pen-page">
+    <header class="topbar">
+      <button class="topbar__icon" type="button" aria-label="返回" @click="router.back()">
+        <ChevronLeft :size="20" :stroke-width="2" />
       </button>
+      <h1 class="topbar__title">发动态</h1>
+      <button class="topbar__pub" type="button" @click="onPublish">发布</button>
     </header>
-    <section class="form">
-      <textarea v-model="text" class="text" rows="6" placeholder="今天练舞的感受 / 想找谁交流 / 想推荐什么…" />
-      <div class="upload">
-        <button class="upload__btn">+ 图片</button>
-        <button class="upload__btn" :class="{ active: hasVideo }" @click="hasVideo = !hasVideo">
-          {{ hasVideo ? '✓' : '+' }} 视频
+
+    <section class="pen-scroll">
+      <textarea
+        v-model="content"
+        class="editor"
+        rows="4"
+        placeholder="分享试听感受 / 课堂记录 / 约练日常…"
+      />
+
+      <div class="media">
+        <div class="media__cell media__cell--filled" aria-hidden="true" />
+        <div class="media__cell media__cell--filled" aria-hidden="true"><Image :size="24" :stroke-width="2" /></div>
+        <button class="media__cell media__cell--add" type="button" aria-label="添加图片">
+          <Plus :size="26" :stroke-width="2" />
         </button>
       </div>
-      <div class="group">
-        <div class="group__title">舞种</div>
-        <div class="chips">
-          <span class="chip" :class="{ active: !style }" @click="style = ''">不指定</span>
-          <span
-            v-for="s in STYLES"
-            :key="s"
-            class="chip"
-            :class="{ active: style === s }"
-            @click="style = s"
-            >{{ s }}</span
-          >
-        </div>
-      </div>
-      <div class="group">
-        <div class="group__title">话题（最多 3 个）</div>
-        <div class="chips">
-          <span
-            v-for="t in TOPICS"
-            :key="t"
-            class="chip"
-            :class="{ active: topics.includes(t) }"
-            @click="toggleTopic(t)"
-            >#{{ t }}</span
-          >
-        </div>
-      </div>
-      <div class="row">
-        <span class="row__label">位置</span>
-        <input v-model="location" class="input" placeholder="选填，例：海淀区舞星 Studio" />
+
+      <div class="rows">
+        <PenSettingRow
+          v-for="r in rows"
+          :key="r.label"
+          :label="r.label"
+          :trailing="r.trailing"
+        />
       </div>
     </section>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
-}
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.topbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    flex: 1;
-    font-size: 16px;
-    font-weight: 600;
+  gap: 10px;
+  height: 68px;
+  padding: 14px 18px;
+  background: $pen-canvas;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__title { flex: 1; margin: 0; font-size: 18px; font-weight: 900; line-height: $pen-lh; }
+
+  &__icon {
+    width: 40px; height: 40px; flex: none;
+    border: 0; border-radius: 999px; background: $pen-soft; color: $pen-ink;
+    display: grid; place-items: center; cursor: pointer;
+  }
+  &__pub {
+    flex: none; height: 36px; padding: 8px 16px;
+    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
+    font-size: 14px; font-weight: 800; line-height: $pen-lh; cursor: pointer;
   }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.post {
-  border: none;
-  background: var(--bd-primary);
-  color: #fff;
-  border-radius: 999px;
-  padding: 6px 16px;
-  font-size: 13px;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
-  }
-}
-.form {
-  padding: 16px;
-  background: #fff;
-}
-.text {
+
+.pen-scroll { display: flex; flex-direction: column; gap: 16px; padding: 16px 18px; }
+
+.editor {
   width: 100%;
-  padding: 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 12px;
-  font-size: 14px;
-  font-family: inherit;
+  min-height: 110px;
+  border: 0;
+  background: transparent;
+  color: $pen-ink;
+  font-family: $pen-font;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
   resize: none;
   outline: none;
-  &:focus {
-    border-color: var(--bd-primary);
-  }
+  &::placeholder { color: $pen-mute; }
 }
-.upload {
-  margin-top: 12px;
+
+.media {
   display: flex;
-  gap: 10px;
-  &__btn {
-    width: 64px;
-    height: 64px;
-    border: 1px dashed var(--bd-border);
-    background: #fafafa;
+  gap: 8px;
+
+  &__cell {
+    width: 88px;
+    height: 88px;
     border-radius: 12px;
-    color: var(--bd-text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-    &.active {
-      border-color: var(--bd-primary);
-      background: rgba(255, 36, 66, 0.06);
-      color: var(--bd-primary);
+    display: grid;
+    place-items: center;
+
+    &--filled { background: $pen-ink; color: $pen-on-primary; }
+    &--add {
+      background: $pen-soft;
+      color: $pen-mute;
+      border: 1px solid $pen-hairline;
+      cursor: pointer;
     }
   }
 }
-.group {
-  margin-top: 16px;
-  &__title {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.chip {
-  padding: 5px 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-    color: var(--bd-primary);
-  }
-}
-.row {
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  &__label {
-    width: 56px;
-    font-size: 13px;
-    color: var(--bd-text-secondary);
-  }
-}
-.input {
-  flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 8px;
-  background: #fafafa;
-  font-size: 13px;
-  outline: none;
-  &:focus {
-    background: #fff;
-    border-color: var(--bd-primary);
-  }
-}
+
+.rows { display: flex; flex-direction: column; }
 </style>

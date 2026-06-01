@@ -1,184 +1,104 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showConfirmDialog, showSuccessToast } from 'vant';
-import {
-  fetchMyWorkshopOrders,
-  cancelWorkshopOrder,
-  refundWorkshopOrder,
-  type WorkshopOrder,
-  type OrderStatus
-} from '@/api/workshop';
+import { ref } from 'vue';
+import { showToast } from 'vant';
+import { Ticket } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
-const router = useRouter();
-const list = ref<WorkshopOrder[]>([]);
-const loading = ref(true);
+const cats = ['全部', '待支付', '已报名', '已完成'];
+const activeCat = ref('待支付');
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  UNPAID: '待支付',
-  PAID: '已支付',
-  CHECKED_IN: '已签到',
-  COMPLETED: '已完成',
-  CANCELED: '已取消',
-  REFUNDED: '已退款'
-};
-
-const reload = async () => {
-  loading.value = true;
-  try {
-    list.value = await fetchMyWorkshopOrders();
-  } finally {
-    loading.value = false;
-  }
-};
-
-const onCancel = async (it: WorkshopOrder) => {
-  await showConfirmDialog({ title: '取消订单？', message: '未支付订单可直接取消' }).catch(() => {
-    throw new Error('cancel');
-  });
-  await cancelWorkshopOrder(it.id);
-  showSuccessToast('已取消');
-  void reload();
-};
-
-const onRefund = async (it: WorkshopOrder) => {
-  await showConfirmDialog({ title: '申请退款？', message: 'mock 阶段退款立即生效' }).catch(() => {
-    throw new Error('cancel');
-  });
-  await refundWorkshopOrder(it.id);
-  showSuccessToast('已退款');
-  void reload();
-};
-
-onMounted(reload);
+const records = [
+  { id: '1', title: 'Locking 大师课', meta: 'Joy Studio · 5/30 14:00', status: '待支付 ¥199', tone: 'ink', action: '去支付', primary: true },
+  { id: '2', title: 'Urban Workshop', meta: 'DanceLab · 5/28 19:30', status: '已报名 · 待签到', tone: 'success', action: '二维码', primary: false },
+  { id: '3', title: 'Jazz 公开课', meta: '5/15 · 已结束', status: '已完成', tone: 'mute', action: '写评价', primary: false }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">我的 Workshop 订单</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <div v-else-if="!list.length" class="empty">还没有报名 Workshop</div>
-    <article v-for="it in list" :key="it.id" class="item">
-      <div class="item__head">
-        <span class="item__title" @click="router.push(`/workshop/${it.workshopId}`)">{{ it.workshopTitle }}</span>
-        <span class="status" :data-s="it.status">{{ STATUS_LABEL[it.status] }}</span>
-      </div>
-      <div class="item__meta">{{ it.sessionDate }} {{ it.sessionTime }} · ¥{{ it.amount }}</div>
-      <div v-if="it.checkinCode" class="item__code">签到码：{{ it.checkinCode }}</div>
-      <footer class="item__foot">
-        <button v-if="it.status === 'UNPAID'" class="btn-ghost" @click="onCancel(it)">取消</button>
-        <button v-if="it.status === 'PAID'" class="btn-ghost" @click="onRefund(it)">申请退款</button>
-        <button v-if="it.status === 'PAID'" class="btn-primary" @click="router.push(`/workshop-checkin/${it.id}`)">
-          扫码签到
+  <main class="pen-page">
+    <PenTopBar title="我的订单" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="chip-row">
+        <button
+          v-for="c in cats"
+          :key="c"
+          class="chip"
+          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeCat = c"
+        >
+          {{ c }}
         </button>
-      </footer>
-    </article>
-  </div>
+      </div>
+
+      <article v-for="r in records" :key="r.id" class="rec">
+        <div class="rec__cover" aria-hidden="true"><Ticket :size="26" :stroke-width="2" /></div>
+        <div class="rec__body">
+          <strong class="rec__title">{{ r.title }}</strong>
+          <p class="rec__meta">{{ r.meta }}</p>
+          <div class="rec__foot">
+            <span class="rec__status" :class="`rec__status--${r.tone}`">{{ r.status }}</span>
+            <button
+              class="rec__btn"
+              :class="{ 'rec__btn--solid': r.primary }"
+              type="button"
+              @click="showToast(r.action)"
+            >
+              {{ r.action }}
+            </button>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
 }
-.bar {
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.rec {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__cover {
+    flex: none; width: 88px; height: 88px; border-radius: 12px;
+    background: $pen-soft; color: $pen-ink; display: grid; place-items: center;
   }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  padding: 60px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.item {
-  margin: 8px 12px;
-  padding: 14px;
-  background: #fff;
-  border-radius: 12px;
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  &__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  &__title { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+  &__status {
+    font-size: 13px; font-weight: 800; line-height: $pen-lh;
+    &--ink { color: $pen-ink; }
+    &--success { color: $pen-success; }
+    &--mute { color: $pen-mute; }
   }
-  &__title {
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
+
+  &__btn {
+    flex: none; height: 34px; padding: 6px 14px;
+    border: 1px solid $pen-ink; border-radius: 999px;
+    background: $pen-canvas; color: $pen-ink;
+    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
+
+    &--solid { background: $pen-ink; color: $pen-on-primary; }
   }
-  &__meta {
-    margin-top: 6px;
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
-  &__code {
-    margin-top: 8px;
-    padding: 6px 10px;
-    background: rgba(255, 170, 51, 0.1);
-    color: #c87a00;
-    border-radius: 6px;
-    font-size: 12px;
-    font-family: monospace;
-  }
-  &__foot {
-    margin-top: 10px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-}
-.status {
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 170, 51, 0.15);
-  color: #c87a00;
-  &[data-s='PAID'] {
-    background: rgba(54, 165, 255, 0.12);
-    color: #36a5ff;
-  }
-  &[data-s='CHECKED_IN'],
-  &[data-s='COMPLETED'] {
-    background: rgba(0, 168, 84, 0.12);
-    color: #00a854;
-  }
-  &[data-s='CANCELED'],
-  &[data-s='REFUNDED'] {
-    background: #f3f3f3;
-    color: var(--bd-text-secondary);
-  }
-}
-.btn-ghost {
-  border: 1px solid var(--bd-border);
-  background: #fff;
-  color: var(--bd-text-secondary);
-  border-radius: 999px;
-  padding: 5px 14px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn-primary {
-  border: none;
-  background: var(--bd-primary);
-  color: #fff;
-  border-radius: 999px;
-  padding: 5px 14px;
-  font-size: 12px;
-  cursor: pointer;
 }
 </style>

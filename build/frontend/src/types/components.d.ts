@@ -20,9 +20,5 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     SkeletonCard: typeof import('./../components/SkeletonCard.vue')['default']
     StarRating: typeof import('./../components/StarRating.vue')['default']
-    VanActionSheet: typeof import('vant/es')['ActionSheet']
-    VanList: typeof import('vant/es')['List']
-    VanPopup: typeof import('vant/es')['Popup']
-    VanPullRefresh: typeof import('vant/es')['PullRefresh']
   }
 }

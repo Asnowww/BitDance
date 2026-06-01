@@ -1,105 +1,126 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { fetchTopicPosts, type ContentPost } from '@/api/community';
+import { computed, ref } from 'vue';
+import { useRoute } from 'vue-router';
+import { showToast } from 'vant';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const route = useRoute();
-const router = useRouter();
-const topic = computed(() => decodeURIComponent(route.params.name as string));
-const list = ref<ContentPost[]>([]);
+const topic = computed(() => decodeURIComponent(String(route.params.name || '零基础打卡挑战')));
 
-onMounted(async () => {
-  const data = await fetchTopicPosts(topic.value);
-  list.value = data.list;
-});
+const sort = ref<'hot' | 'new'>('hot');
+
+const posts = [
+  { id: 'a', name: '小美', time: '2 小时前', text: 'Day 7 打卡，今天练了基础律动，越来越顺了' },
+  { id: 'b', name: 'Leo', time: '昨天', text: '第一次完整跳完一支舞，纪念一下！' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">#{{ topic }}</span>
-    </header>
-    <section class="grid">
-      <article
-        v-for="p in list"
-        :key="p.id"
-        class="card"
-        @click="router.push(`/community/post/${p.id}`)"
-      >
-        <div class="card__cover">{{ p.style ?? '✨' }}</div>
-        <p class="card__text">{{ p.text }}</p>
-        <div class="card__foot">
-          <span>{{ p.authorName }}</span>
-          <span>♥ {{ p.likeCount }}</span>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="话题" @share="showToast('已复制')" />
+
+    <section class="pen-scroll">
+      <section class="hero">
+        <strong class="hero__title"># {{ topic }}</strong>
+        <span class="hero__meta">1.2 万人参与 · 3400 条动态</span>
+      </section>
+
+      <div class="inner">
+        <div class="chip-row">
+          <button class="chip" :class="sort === 'hot' ? 'chip--active' : 'chip--inactive'" type="button" @click="sort = 'hot'">最热</button>
+          <button class="chip" :class="sort === 'new' ? 'chip--active' : 'chip--inactive'" type="button" @click="sort = 'new'">最新</button>
         </div>
-      </article>
+
+        <article v-for="p in posts" :key="p.id" class="post">
+          <header class="post__head">
+            <span class="post__avatar" aria-hidden="true" />
+            <div class="post__who">
+              <strong class="post__name">{{ p.name }}</strong>
+              <span class="post__time">{{ p.time }}</span>
+            </div>
+          </header>
+          <p class="post__text">{{ p.text }}</p>
+          <div class="post__media" aria-hidden="true" />
+        </article>
+      </div>
     </section>
-    <div v-if="!list.length" class="empty">该话题下暂无动态</div>
-  </div>
+
+    <footer class="save-bar">
+      <button class="save-bar__btn" type="button" @click="showToast('已参与话题')">参与话题</button>
+    </footer>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+
+.pen-scroll { display: flex; flex-direction: column; gap: 14px; }
+
+.hero {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: flex-end;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
+  height: 150px;
+  padding: 18px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+  box-sizing: border-box;
+
+  &__title { font-size: 28px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { color: $pen-subtle-text; font-size: 13px; font-weight: 700; line-height: $pen-lh; }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
+
+.inner { display: flex; flex-direction: column; gap: 14px; padding: 0 18px 20px; }
+
+.chip-row { display: flex; gap: 8px; }
+.chip { @include pen-chip; }
+
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__head { display: flex; align-items: center; gap: 10px; }
+  &__avatar { flex: none; width: 36px; height: 36px; border-radius: 999px; background: $pen-ink; }
+  &__who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  &__name { font-size: 14px; font-weight: 900; line-height: $pen-lh; }
+  &__time { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__text { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
+  &__media { height: 130px; border-radius: 14px; background: $pen-soft; }
 }
-.grid {
-  column-count: 2;
-  column-gap: 8px;
-  padding: 8px;
-}
-.card {
-  break-inside: avoid;
-  margin-bottom: 8px;
-  padding: 10px;
-  background: #fff;
-  border-radius: 12px;
-  cursor: pointer;
-  &__cover {
-    aspect-ratio: 4 / 5;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #ffd2da, #ff7799);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: 700;
+
+.save-bar {
+  position: fixed;
+  right: 0; bottom: 0; left: 0;
+  z-index: 10;
+  width: 100%;
+  max-width: 480px;
+  height: 76px;
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  border-top: 1px solid $pen-hairline;
+  box-sizing: border-box;
+
+  &__btn {
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
   }
-  &__text {
-    margin: 8px 0 4px;
-    font-size: 12px;
-    line-height: 1.5;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  &__foot {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
-}
-.empty {
-  padding: 60px;
-  text-align: center;
-  color: var(--bd-text-secondary);
 }
 </style>

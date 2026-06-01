@@ -1,189 +1,211 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showSuccessToast } from 'vant';
-import { useUserStore } from '@/stores/user';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenFieldRow from '@/components/pen/PenFieldRow.vue';
 
 const router = useRouter();
-const user = useUserStore();
 
-const STYLES = ['Hiphop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waacking', '中国舞', 'Urban'];
-const LEVELS = ['零基础', '入门', '初级', '进阶', '高阶'];
-const GOALS = ['强身健体', '考级 / 比赛', '社交 / 兴趣', '舞台表演', '专业进阶'];
+const profile = [
+  { label: '昵称', value: '小李' },
+  { label: '性别', value: '女' },
+  { label: '生日', value: '2003-05' },
+  { label: '个人简介', value: '零基础韩舞爱好者' }
+];
 
-const nickname = ref(user.profile?.nickname ?? '');
-const styles = ref<string[]>([...user.preferences.styles]);
-const level = ref(user.preferences.level || LEVELS[1]);
-const goal = ref(user.preferences.goal || GOALS[2]);
+const styles = ['韩舞', 'Jazz', 'Hiphop', 'Urban'];
+const levels = ['零基础', '初级', '中级', '高级'];
+const goals = ['塑形', '兴趣', '成品舞', '比赛'];
+
+const selStyles = reactive<Record<string, boolean>>({ 韩舞: true, Jazz: true });
+const level = ref('零基础');
+const goal = ref('成品舞');
 
 const toggleStyle = (s: string) => {
-  const i = styles.value.indexOf(s);
-  if (i >= 0) styles.value.splice(i, 1);
-  else styles.value.push(s);
+  selStyles[s] = !selStyles[s];
 };
 
 const onSave = () => {
-  user.updateProfile({ nickname: nickname.value });
-  user.updatePreferences({ styles: styles.value, level: level.value, goal: goal.value });
-  showSuccessToast('已保存');
+  showSuccessToast('资料已保存');
   router.back();
 };
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">资料与偏好</span>
-    </header>
-    <section class="form">
-      <div class="row">
-        <span class="row__label">昵称</span>
-        <input v-model="nickname" class="input" maxlength="20" placeholder="给自己一个有趣的舞名" />
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="资料与偏好" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="avatar">
+        <span class="avatar__img" aria-hidden="true" />
+        <button class="avatar__edit" type="button">更换头像</button>
       </div>
-      <div class="group">
-        <div class="group__title">喜欢的舞种（多选）</div>
-        <div class="chips">
-          <span
-            v-for="s in STYLES"
+
+      <div class="rows">
+        <PenFieldRow
+          v-for="f in profile"
+          :key="f.label"
+          :label="f.label"
+          :value="f.value"
+        />
+      </div>
+
+      <section class="block">
+        <h2 class="block__title">舞蹈偏好</h2>
+
+        <p class="block__label">感兴趣舞种</p>
+        <div class="chip-row">
+          <button
+            v-for="s in styles"
             :key="s"
             class="chip"
-            :class="{ active: styles.includes(s) }"
+            :class="selStyles[s] ? 'chip--active' : 'chip--inactive'"
+            type="button"
             @click="toggleStyle(s)"
-            >{{ s }}</span
           >
+            {{ s }}
+          </button>
         </div>
-      </div>
-      <div class="group">
-        <div class="group__title">当前水平</div>
-        <div class="chips">
-          <span
-            v-for="l in LEVELS"
+
+        <p class="block__label">当前水平</p>
+        <div class="chip-row">
+          <button
+            v-for="l in levels"
             :key="l"
             class="chip"
-            :class="{ active: level === l }"
+            :class="level === l ? 'chip--active' : 'chip--inactive'"
+            type="button"
             @click="level = l"
-            >{{ l }}</span
           >
+            {{ l }}
+          </button>
         </div>
-      </div>
-      <div class="group">
-        <div class="group__title">学习目标</div>
-        <div class="chips">
-          <span
-            v-for="g in GOALS"
+
+        <p class="block__label">学习目标</p>
+        <div class="chip-row">
+          <button
+            v-for="g in goals"
             :key="g"
             class="chip"
-            :class="{ active: goal === g }"
+            :class="goal === g ? 'chip--active' : 'chip--inactive'"
+            type="button"
             @click="goal = g"
-            >{{ g }}</span
           >
+            {{ g }}
+          </button>
         </div>
-      </div>
+      </section>
     </section>
-    <footer class="footer">
-      <button class="btn" @click="onSave">保存</button>
+
+    <footer class="save-bar">
+      <button class="save-bar__btn" type="button" @click="onSave">保存资料</button>
     </footer>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+
+  &--with-bar {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
 }
-.bar {
+
+.pen-scroll {
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.avatar {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+
+  &__img {
+    width: 84px;
+    height: 84px;
+    border-radius: 999px;
+    background: $pen-ink;
+  }
+
+  &__edit {
+    border: 0;
+    background: transparent;
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: $pen-lh;
+    cursor: pointer;
   }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.form {
-  background: #fff;
-  padding: 8px 16px 16px;
-}
-.row {
+
+.rows {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 10px 0;
-  &__label {
-    width: 56px;
-    font-size: 13px;
-    color: var(--bd-text-secondary);
-  }
-}
-.input {
-  flex: 1;
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 8px;
-  background: #fafafa;
-  font-size: 14px;
-  outline: none;
-  &:focus {
-    border-color: var(--bd-primary);
-    background: #fff;
-  }
-}
-.group {
-  padding: 10px 0;
+
   &__title {
+    @include pen-h3-section;
+    margin-top: 4px;
+  }
+
+  &__label {
+    margin: 4px 0 0;
+    color: $pen-mute;
     font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 8px;
+    font-weight: 700;
+    line-height: $pen-lh;
   }
 }
-.chips {
+
+.chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .chip {
-  padding: 6px 14px;
-  border: 1px solid var(--bd-border);
-  border-radius: 999px;
-  background: #fff;
-  font-size: 13px;
-  cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-    color: var(--bd-primary);
-  }
+  @include pen-chip;
 }
-.footer {
+
+.save-bar {
   position: fixed;
+  right: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  z-index: 10;
   width: 100%;
   max-width: 480px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-}
-.btn {
-  width: 100%;
-  height: 46px;
-  border: none;
-  border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
+  height: 76px;
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  border-top: 1px solid $pen-hairline;
+  box-sizing: border-box;
+
+  &__btn {
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+  }
 }
 </style>

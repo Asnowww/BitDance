@@ -1,229 +1,170 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchFeed, type ContentPost } from '@/api/community';
+import { ChevronLeft, SquarePen, MapPin, Users, Heart, MessageCircle, Share2 } from 'lucide-vue-next';
 
 const router = useRouter();
-const list = ref<ContentPost[]>([]);
-const loading = ref(false);
-const refreshing = ref(false);
-const finished = ref(false);
-const page = ref(1);
-const scope = ref<'recommend' | 'follow'>('recommend');
+const cats = ['推荐', '关注', '同城', '话题'];
+const activeCat = ref('推荐');
 
-const load = async (reset = false) => {
-  if (loading.value) return;
-  loading.value = true;
-  if (reset) {
-    page.value = 1;
-    finished.value = false;
+const posts = [
+  {
+    id: '1', name: '小鹿', meta: '五道口 · 2 小时前',
+    text: '今天试听了 Urban Flow 的韩舞课，老师超耐心，零基础也跟得上！',
+    anchorIcon: MapPin, anchor: 'Urban Flow 舞室', likes: '32', comments: '8'
+  },
+  {
+    id: '2', name: 'A Jen', meta: '朝阳 · 昨天',
+    text: '周六约练打卡，和搭子一起磨 Hiphop routine～',
+    anchorIcon: Users, anchor: 'Hiphop 约练', likes: '51', comments: '12'
   }
-  try {
-    const data = await fetchFeed({ scope: scope.value, page: page.value, pageSize: 20 });
-    if (reset) list.value = data.list;
-    else list.value = list.value.concat(data.list);
-    if (list.value.length >= data.total || data.list.length === 0) finished.value = true;
-    else page.value += 1;
-  } finally {
-    loading.value = false;
-    refreshing.value = false;
-  }
-};
-
-const onRefresh = () => {
-  refreshing.value = true;
-  void load(true);
-};
-const onLoad = () => !finished.value && void load(false);
-
-onMounted(() => void load(true));
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">社区</span>
-      <button class="search" @click="router.push('/community/search')">🔍</button>
+  <main class="pen-page">
+    <header class="topbar">
+      <button class="topbar__icon" type="button" aria-label="返回" @click="router.back()">
+        <ChevronLeft :size="20" :stroke-width="2" />
+      </button>
+      <h1 class="topbar__title">社区</h1>
+      <button class="topbar__compose" type="button" aria-label="发动态" @click="router.push('/community/publish')">
+        <SquarePen :size="20" :stroke-width="2" />
+      </button>
     </header>
-    <nav class="scope">
-      <button class="scope__item" :class="{ active: scope === 'recommend' }" @click="scope = 'recommend'; load(true)">推荐</button>
-      <button class="scope__item" :class="{ active: scope === 'follow' }" @click="scope = 'follow'; load(true)">关注</button>
-      <button class="scope__more" @click="router.push('/community/topics')">话题 →</button>
-    </nav>
-    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-list
-        v-model:loading="loading"
-        :finished="finished"
-        finished-text="到底啦"
-        @load="onLoad"
-      >
-        <section class="grid">
-          <article
-            v-for="p in list"
-            :key="p.id"
-            class="card"
-            @click="router.push(`/community/post/${p.id}`)"
-          >
-            <div class="card__cover">
-              <span v-if="p.hasVideo" class="card__video">▶</span>
-              <span class="card__cover-text">{{ p.style ?? '✨' }}</span>
-            </div>
-            <div class="card__body">
-              <p class="card__text">{{ p.text }}</p>
-              <div v-if="p.topics.length" class="card__topics">
-                <span v-for="t in p.topics.slice(0, 2)" :key="t" class="topic">#{{ t }}</span>
-              </div>
-              <div class="card__foot">
-                <span class="author">
-                  <span class="avatar">{{ p.authorName.charAt(0) }}</span>
-                  <span>{{ p.authorName }}</span>
-                </span>
-                <span class="like">♥ {{ p.likeCount }}</span>
-              </div>
-            </div>
-          </article>
-        </section>
-      </van-list>
-    </van-pull-refresh>
-  </div>
+
+    <section class="pen-scroll">
+      <div class="chip-row">
+        <button
+          v-for="c in cats"
+          :key="c"
+          class="chip"
+          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeCat = c"
+        >
+          {{ c }}
+        </button>
+      </div>
+
+      <article v-for="p in posts" :key="p.id" class="post" @click="router.push(`/community/post/${p.id}`)">
+        <header class="post__head">
+          <span class="post__avatar" aria-hidden="true" />
+          <div class="post__who">
+            <strong class="post__name">{{ p.name }}</strong>
+            <span class="post__meta">{{ p.meta }}</span>
+          </div>
+          <button class="post__follow" type="button" @click.stop>关注</button>
+        </header>
+        <p class="post__text">{{ p.text }}</p>
+        <div class="post__media" aria-hidden="true" />
+        <div class="post__anchor">
+          <component :is="p.anchorIcon" :size="14" :stroke-width="2" />
+          <span>{{ p.anchor }}</span>
+        </div>
+        <div class="post__actions">
+          <span class="act"><Heart :size="18" :stroke-width="2" />{{ p.likes }}</span>
+          <span class="act"><MessageCircle :size="18" :stroke-width="2" />{{ p.comments }}</span>
+          <span class="act"><Share2 :size="18" :stroke-width="2" /></span>
+        </div>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
-}
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.topbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    flex: 1;
-    font-size: 16px;
-    font-weight: 600;
+  gap: 10px;
+  height: 68px;
+  padding: 14px 18px;
+  background: $pen-canvas;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__title { flex: 1; margin: 0; font-size: 18px; font-weight: 900; line-height: $pen-lh; }
+
+  &__icon {
+    width: 40px; height: 40px; flex: none;
+    border: 0; border-radius: 999px; background: $pen-soft; color: $pen-ink;
+    display: grid; place-items: center; cursor: pointer;
+  }
+  &__compose {
+    width: 40px; height: 40px; flex: none;
+    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
+    display: grid; place-items: center; cursor: pointer;
   }
 }
-.back,
-.search {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-}
-.scope {
+
+.pen-scroll {
   display: flex;
-  gap: 16px;
-  align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__item {
-    border: none;
-    background: none;
-    font-size: 15px;
-    color: var(--bd-text-secondary);
-    cursor: pointer;
-    &.active {
-      color: var(--bd-text);
-      font-weight: 700;
-    }
-  }
-  &__more {
-    margin-left: auto;
-    border: none;
-    background: none;
-    color: var(--bd-primary);
-    font-size: 13px;
-    cursor: pointer;
-  }
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
 }
-.grid {
-  column-count: 2;
-  column-gap: 8px;
-  padding: 8px;
-}
-.card {
-  break-inside: avoid;
-  margin-bottom: 8px;
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $pen-hairline;
   cursor: pointer;
-  &__cover {
-    aspect-ratio: 4 / 5;
-    background: linear-gradient(135deg, #ffd2da, #ff7799);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
+
+  &__head { display: flex; align-items: center; gap: 10px; }
+  &__avatar { flex: none; width: 40px; height: 40px; border-radius: 999px; background: $pen-ink; }
+  &__who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  &__name { font-size: 14px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+
+  &__follow {
+    flex: none;
+    height: 32px;
+    padding: 6px 12px;
+    border: 1px solid $pen-ink;
+    border-radius: 999px;
+    background: $pen-canvas;
+    color: $pen-ink;
+    font-size: 12px;
     font-weight: 700;
-    position: relative;
+    line-height: $pen-lh;
+    cursor: pointer;
   }
-  &__video {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
+
+  &__text { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
+  &__media { height: 160px; border-radius: 14px; background: $pen-soft; }
+
+  &__anchor {
+    align-self: flex-start;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 6px 12px;
+    border: 1px solid $pen-hairline;
+    border-radius: 999px;
     font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
   }
-  &__body {
-    padding: 8px 10px 10px;
-  }
-  &__text {
-    margin: 0;
-    font-size: 12px;
-    line-height: 1.5;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  &__topics {
-    margin-top: 6px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-  &__foot {
-    margin-top: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
+
+  &__actions { display: flex; gap: 20px; }
 }
-.topic {
-  font-size: 10px;
-  color: var(--bd-primary);
-}
-.author {
-  display: flex;
+
+.act {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-.avatar {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.like {
-  color: var(--bd-primary);
+  gap: 6px;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: $pen-lh;
 }
 </style>

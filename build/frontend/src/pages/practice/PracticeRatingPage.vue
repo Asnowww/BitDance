@@ -1,151 +1,185 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showSuccessToast } from 'vant';
 import StarRating from '@/components/StarRating.vue';
-import { submitPracticeRating } from '@/api/buddy';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const route = useRoute();
 const router = useRouter();
-
-const practiceId = Number(route.params.id);
-const toUserId = Number(route.query.to ?? 0);
+const practiceId = String(route.params.id || '');
 
 const punctuality = ref(5);
 const friendliness = ref(5);
-const levelMatch = ref(5);
+const levelMatch = ref(4);
 const comment = ref('');
-const submitting = ref(false);
+const anonymous = ref(false);
 
-const canSubmit = computed(() => toUserId > 0 && !submitting.value);
+const dims = [
+  { label: '守时', model: punctuality },
+  { label: '友好度', model: friendliness },
+  { label: '水平匹配', model: levelMatch }
+];
 
-const onSubmit = async () => {
-  submitting.value = true;
-  try {
-    await submitPracticeRating({
-      practiceId,
-      toUserId,
-      punctuality: punctuality.value,
-      friendliness: friendliness.value,
-      levelMatch: levelMatch.value,
-      comment: comment.value || undefined
-    });
-    showSuccessToast('已提交，感谢评价');
-    router.replace(`/practice/${practiceId}`);
-  } finally {
-    submitting.value = false;
-  }
+const onSubmit = () => {
+  showSuccessToast('评价已提交');
+  router.back();
 };
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">约练后评价</span>
-    </header>
-    <section class="form">
-      <p class="tip">为对方打分，完成后双方将自动建立"搭子"关系。</p>
-      <div class="dim">
-        <span>守时</span>
-        <StarRating v-model="punctuality" />
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="约练评价" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="target">
+        <span class="target__avatar" aria-hidden="true" />
+        <div class="target__copy">
+          <strong class="target__name">阿 May</strong>
+          <p class="target__meta">本次约练：周六 Hiphop 中级</p>
+        </div>
       </div>
-      <div class="dim">
-        <span>友好度</span>
-        <StarRating v-model="friendliness" />
+
+      <div v-for="d in dims" :key="d.label" class="dim">
+        <span class="dim__label">{{ d.label }}</span>
+        <StarRating v-model="d.model.value" :size="22" />
       </div>
-      <div class="dim">
-        <span>水平匹配</span>
-        <StarRating v-model="levelMatch" />
+
+      <textarea
+        v-model="comment"
+        class="note"
+        rows="3"
+        placeholder="补充说明对方的表现，帮助其他舞友参考…"
+      />
+
+      <div class="anon">
+        <span class="anon__label">匿名评价</span>
+        <button class="switch" :class="{ 'switch--on': anonymous }" type="button" @click="anonymous = !anonymous">
+          <span class="switch__knob" />
+        </button>
       </div>
-      <textarea v-model="comment" rows="4" class="ta" placeholder="可选：写一句话给 TA" />
     </section>
-    <footer class="footer">
-      <button class="btn" :disabled="!canSubmit" @click="onSubmit">
-        {{ submitting ? '提交中…' : '提交评价' }}
-      </button>
+
+    <footer class="save-bar">
+      <button class="save-bar__btn" type="button" @click="onSubmit">提交评价</button>
     </footer>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
-.bar {
+
+.pen-scroll {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px;
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.form {
-  background: #fff;
-  padding: 16px;
-}
-.tip {
-  margin: 0 0 16px;
-  font-size: 12px;
-  color: var(--bd-text-secondary);
-}
-.dim {
+
+.target {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
-  span {
-    width: 76px;
-    font-size: 13px;
-  }
+  padding: 16px;
+  border-radius: 16px;
+  background: $pen-soft;
+
+  &__avatar { flex: none; width: 48px; height: 48px; border-radius: 999px; background: $pen-ink; }
+  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 16px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
 }
-.ta {
-  margin-top: 12px;
+
+.dim {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__label { font-size: 15px; font-weight: 800; line-height: $pen-lh; }
+
+  :deep(.star) { color: $pen-hairline; }
+  :deep(.star.active) { color: $pen-ink; }
+}
+
+.note {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 10px;
+  min-height: 84px;
+  padding: 14px;
+  border: 0;
+  border-radius: 16px;
+  background: $pen-soft;
+  color: $pen-ink;
+  font-family: $pen-font;
   font-size: 14px;
-  font-family: inherit;
+  font-weight: 500;
+  line-height: 1.4;
   resize: none;
+  box-sizing: border-box;
   outline: none;
-  &:focus {
-    border-color: var(--bd-primary);
-  }
+
+  &::placeholder { color: $pen-mute; }
 }
-.footer {
+
+.anon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__label { flex: 1; font-size: 15px; font-weight: 800; line-height: $pen-lh; }
+}
+
+.switch {
+  flex: none;
+  width: 46px;
+  height: 28px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: $pen-hairline;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  cursor: pointer;
+
+  &__knob { width: 22px; height: 22px; border-radius: 999px; background: $pen-canvas; }
+  &--on { background: $pen-ink; justify-content: flex-end; }
+}
+
+.save-bar {
   position: fixed;
+  right: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  z-index: 10;
   width: 100%;
   max-width: 480px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-}
-.btn {
-  width: 100%;
-  height: 46px;
-  border: none;
-  border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
+  height: 76px;
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  border-top: 1px solid $pen-hairline;
+  box-sizing: border-box;
+
+  &__btn {
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
   }
 }
 </style>

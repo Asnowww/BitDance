@@ -1,177 +1,175 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
+import { showToast } from 'vant';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenActionBar from '@/components/pen/PenActionBar.vue';
 
 const route = useRoute();
 const router = useRouter();
-const studioId = Number(route.params.id);
+const studioId = String(route.params.id || 'urban-flow');
 
-const slots = ref<ScheduleSlot[]>([]);
-const loading = ref(true);
-const activeDate = ref('');
+const view = ref<'day' | 'week'>('day');
 
-onMounted(async () => {
-  try {
-    slots.value = await fetchStudioSchedule(studioId);
-    if (slots.value.length) activeDate.value = slots.value[0].date;
-  } finally {
-    loading.value = false;
-  }
-});
+const days = [
+  { w: '一', d: '27' }, { w: '二', d: '28' }, { w: '三', d: '29' }, { w: '四', d: '30' },
+  { w: '五', d: '31' }, { w: '六', d: '1' }, { w: '日', d: '2' }
+];
+const activeDay = ref('1');
 
-const dateList = computed(() => {
-  const seen = new Set<string>();
-  const out: Array<{ date: string; weekday: string }> = [];
-  slots.value.forEach((s) => {
-    if (!seen.has(s.date)) {
-      seen.add(s.date);
-      out.push({ date: s.date, weekday: s.weekday });
-    }
-  });
-  return out;
-});
-
-const dailySlots = computed(() => slots.value.filter((s) => s.date === activeDate.value));
+const classes = [
+  { time: '10:00', dur: '60min', title: '早间塑形基础', teacher: 'Mia 老师 · 1 号厅', level: '零基础友好', price: '¥69 试听', full: false },
+  { time: '14:00', dur: '90min', title: 'K-pop 入门成品舞', teacher: '小鹿老师 · 2 号厅', level: '初级', price: '¥79 试听', full: false },
+  { time: '19:30', dur: '90min', title: 'Hiphop 中级 Groove', teacher: 'Leo 老师 · 3 号厅', level: '中级', price: '已满员', full: true }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">周课表</span>
-    </header>
-    <nav class="dates">
-      <button
-        v-for="d in dateList"
-        :key="d.date"
-        class="date"
-        :class="{ active: d.date === activeDate }"
-        @click="activeDate = d.date"
-      >
-        <span class="date__weekday">{{ d.weekday }}</span>
-        <span class="date__num">{{ d.date.slice(8) }}</span>
-      </button>
-    </nav>
-    <section v-if="loading" class="empty">加载中…</section>
-    <section v-else-if="!dailySlots.length" class="empty">这天暂无课程</section>
-    <section v-else class="slots">
-      <article
-        v-for="s in dailySlots"
-        :key="s.id"
-        class="slot"
-        @click="router.push(`/course/${s.courseId}`)"
-      >
-        <div class="slot__time">{{ s.time }}</div>
-        <div class="slot__body">
-          <div class="slot__name">{{ s.courseName }}</div>
-          <div class="slot__meta">
-            <span>{{ s.style }}</span>
-            <span>·</span>
-            <span>{{ s.difficulty }}</span>
-            <span>·</span>
-            <span>{{ s.coachName }}</span>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="周课表" @share="showToast('课表链接已复制')" />
+
+    <section class="pen-scroll">
+      <h2 class="studio">Urban Flow 舞室</h2>
+
+      <div class="toggle">
+        <button class="toggle__btn" :class="{ 'toggle__btn--on': view === 'day' }" type="button" @click="view = 'day'">日视图</button>
+        <button class="toggle__btn" :class="{ 'toggle__btn--on': view === 'week' }" type="button" @click="view = 'week'">周视图</button>
+      </div>
+
+      <div class="week">
+        <button
+          v-for="d in days"
+          :key="d.d"
+          class="day"
+          :class="{ 'day--on': activeDay === d.d }"
+          type="button"
+          @click="activeDay = d.d"
+        >
+          <span class="day__w">{{ d.w }}</span>
+          <span class="day__d">{{ d.d }}</span>
+        </button>
+      </div>
+
+      <h3 class="date-title">周六 · 5 月 31 日</h3>
+
+      <article v-for="c in classes" :key="c.time" class="lesson">
+        <div class="lesson__time">
+          <strong>{{ c.time }}</strong>
+          <span>{{ c.dur }}</span>
+        </div>
+        <div class="lesson__card">
+          <strong class="lesson__title">{{ c.title }}</strong>
+          <p class="lesson__teacher">{{ c.teacher }}</p>
+          <div class="lesson__foot">
+            <span class="chip chip--inactive">{{ c.level }}</span>
+            <span class="lesson__price" :class="{ 'lesson__price--full': c.full }">{{ c.price }}</span>
           </div>
         </div>
-        <div class="slot__cap">{{ s.taken }}/{{ s.capacity }}</div>
       </article>
     </section>
-  </div>
+
+    <PenActionBar
+      soft-label="导航"
+      dark-label="预约试听"
+      @soft="showToast('正在打开导航')"
+      @dark="router.push(`/studio/${studioId}/trial`)"
+    />
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
-.bar {
+
+.pen-scroll { display: flex; flex-direction: column; gap: 16px; padding: 16px 18px; }
+
+.studio { @include pen-h2; }
+
+.toggle {
   display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  &__btn {
+    flex: 1;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+    &--on { background: $pen-ink; color: $pen-on-primary; }
   }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.dates {
-  display: flex;
-  gap: 4px;
-  padding: 12px 12px 8px;
-  overflow-x: auto;
-}
-.date {
-  flex-shrink: 0;
-  width: 56px;
-  padding: 8px 0;
-  border: 1px solid var(--bd-border);
-  border-radius: 12px;
-  background: #fff;
+
+.week { display: flex; gap: 8px; }
+
+.day {
+  flex: 1;
+  height: 60px;
+  border: 0;
+  border-radius: 16px;
+  background: $pen-soft;
+  color: $pen-ink;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--bd-text-secondary);
+  justify-content: center;
+  gap: 4px;
   cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-    color: var(--bd-primary);
-  }
-  &__num {
-    font-size: 16px;
-    font-weight: 700;
+
+  &__w { font-size: 12px; font-weight: 700; line-height: $pen-lh; color: $pen-mute; }
+  &__d { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+
+  &--on {
+    background: $pen-ink;
+    .day__w, .day__d { color: $pen-on-primary; }
   }
 }
-.slots {
-  padding: 4px 12px;
-}
-.slot {
+
+.date-title { @include pen-h3-section; }
+
+.lesson {
   display: flex;
-  align-items: center;
   gap: 12px;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: #fff;
-  border-radius: 12px;
-  cursor: pointer;
+  align-items: flex-start;
+
   &__time {
-    width: 80px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--bd-primary);
+    flex: none;
+    width: 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    strong { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+    span { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
   }
-  &__body {
+
+  &__card {
     flex: 1;
     min-width: 0;
-  }
-  &__name {
-    font-size: 14px;
-    font-weight: 600;
-  }
-  &__meta {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
     display: flex;
-    gap: 4px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 16px;
+    background: $pen-soft;
   }
-  &__cap {
-    font-size: 12px;
-    color: var(--bd-text-secondary);
-  }
+
+  &__title { font-size: 16px; font-weight: 900; line-height: $pen-lh; }
+  &__teacher { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__foot { display: flex; align-items: center; justify-content: space-between; }
+  &__price { font-size: 14px; font-weight: 800; line-height: $pen-lh; &--full { color: $pen-mute; } }
 }
-.empty {
-  padding: 60px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
+
+.chip {
+  @include pen-chip;
+  height: 32px;
+  padding: 6px 12px;
+  font-size: 12px;
 }
 </style>

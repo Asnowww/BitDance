@@ -1,110 +1,107 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { fetchFollowing, toggleFollow } from '@/api/community';
+import { reactive, ref } from 'vue';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
-const router = useRouter();
-const list = ref<Array<{ id: number; name: string; avatar: string; followed: boolean }>>([]);
-const loading = ref(true);
+const tab = ref<'following' | 'fans'>('following');
 
-const reload = async () => {
-  loading.value = true;
-  try {
-    list.value = await fetchFollowing();
-  } finally {
-    loading.value = false;
-  }
+const users = reactive([
+  { id: '1', name: '小鹿老师', meta: 'Jazz · 认证教练', state: '已关注', followed: true },
+  { id: '2', name: 'A Jen', meta: 'Hiphop · 中级 · 同城', state: '互相关注', followed: true },
+  { id: '3', name: 'Leo', meta: 'Urban · 中级', state: '已关注', followed: true },
+  { id: '4', name: '韩舞研习社', meta: '话题社区 · 8900 成员', state: '关注', followed: false }
+]);
+
+const toggle = (u: (typeof users)[number]) => {
+  u.followed = !u.followed;
+  u.state = u.followed ? '已关注' : '关注';
 };
-
-const onToggle = async (id: number) => {
-  const r = await toggleFollow(id);
-  const item = list.value.find((it) => it.id === id);
-  if (item) item.followed = r.following;
-};
-
-onMounted(reload);
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">关注 / 推荐用户</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <article v-for="u in list" :key="u.id" class="item">
-      <span class="avatar">{{ u.name.charAt(0) }}</span>
-      <span class="name">{{ u.name }}</span>
-      <button
-        class="btn"
-        :class="{ followed: u.followed }"
-        @click="onToggle(u.id)"
-      >
-        {{ u.followed ? '已关注' : '+ 关注' }}
-      </button>
-    </article>
-  </div>
+  <main class="pen-page">
+    <PenTopBar title="关注" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="seg">
+        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'following' }" type="button" @click="tab = 'following'">关注 86</button>
+        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'fans' }" type="button" @click="tab = 'fans'">粉丝 124</button>
+      </div>
+
+      <article v-for="u in users" :key="u.id" class="user">
+        <span class="user__avatar" aria-hidden="true" />
+        <div class="user__copy">
+          <strong class="user__name">{{ u.name }}</strong>
+          <span class="user__meta">{{ u.meta }}</span>
+        </div>
+        <button
+          class="user__pill"
+          :class="{ 'user__pill--solid': !u.followed }"
+          type="button"
+          @click="toggle(u)"
+        >
+          {{ u.state }}
+        </button>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.seg {
+  display: flex;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  &__btn {
+    flex: 1;
+    height: 46px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+    &--on { background: $pen-ink; color: $pen-on-primary; }
   }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  padding: 60px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.item {
+
+.user {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-}
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--bd-primary);
-  color: #fff;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.name {
-  flex: 1;
-  font-size: 14px;
-}
-.btn {
-  border: 1px solid var(--bd-primary);
-  background: var(--bd-primary);
-  color: #fff;
-  border-radius: 999px;
-  padding: 6px 16px;
-  font-size: 12px;
-  cursor: pointer;
-  &.followed {
-    background: #fff;
-    color: var(--bd-text-secondary);
-    border-color: var(--bd-border);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__avatar { flex: none; width: 48px; height: 48px; border-radius: 999px; background: $pen-ink; }
+  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+
+  &__pill {
+    flex: none;
+    height: 36px;
+    padding: 8px 16px;
+    border: 1px solid $pen-ink;
+    border-radius: 999px;
+    background: $pen-canvas;
+    color: $pen-ink;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: $pen-lh;
+    cursor: pointer;
+
+    &--solid { background: $pen-ink; color: $pen-on-primary; }
   }
 }
 </style>

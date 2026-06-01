@@ -1,208 +1,165 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast, showFailToast } from 'vant';
-import { createTrialBooking } from '@/api/trial';
-import { useUserStore } from '@/stores/user';
+import { showSuccessToast } from 'vant';
+import { Music } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenActionBar from '@/components/pen/PenActionBar.vue';
+import PenFieldRow from '@/components/pen/PenFieldRow.vue';
 
 const route = useRoute();
 const router = useRouter();
-const user = useUserStore();
+const studioId = String(route.params.id || 'urban-flow');
 
-const studioId = Number(route.params.id);
-const courseId = route.query.courseId ? Number(route.query.courseId) : undefined;
-const coachId = route.query.coachId ? Number(route.query.coachId) : undefined;
+const days = [
+  { w: '一', d: '27' }, { w: '二', d: '28' }, { w: '三', d: '29' }, { w: '四', d: '30' },
+  { w: '五', d: '31' }, { w: '六', d: '1' }, { w: '日', d: '2' }
+];
+const activeDay = ref('30');
 
-const today = new Date();
-const dateOptions = Array.from({ length: 7 }).map((_, i) => {
-  const d = new Date(today);
-  d.setDate(today.getDate() + i);
-  return d.toISOString().slice(0, 10);
-});
-const TIME_SLOTS = ['10:00', '14:00', '16:00', '19:00', '20:30'];
+const slots = ['10:00', '14:00', '16:00', '19:30'];
+const activeSlot = ref('14:00');
 
-const date = ref(dateOptions[0]);
-const time = ref(TIME_SLOTS[0]);
-const phone = ref(user.profile?.phone ?? '');
-const remark = ref('');
-const submitting = ref(false);
+const fields = [
+  { label: '姓名', value: '请输入称呼' },
+  { label: '手机号', value: '138••••6789' },
+  { label: '舞蹈基础', value: '零基础' }
+];
 
-const phoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
-const canSubmit = computed(() => phoneValid.value && !submitting.value);
-
-const onSubmit = async () => {
-  if (!canSubmit.value) {
-    showFailToast('请检查手机号');
-    return;
-  }
-  submitting.value = true;
-  try {
-    await createTrialBooking({
-      studioId,
-      courseId,
-      coachId,
-      date: date.value,
-      time: time.value,
-      contactPhone: phone.value,
-      remark: remark.value || undefined,
-      idempotencyToken: `trial-${studioId}-${Date.now()}`
-    });
-    showSuccessToast('预约成功，等待舞室确认');
-    router.replace('/me/trials');
-  } catch {
-    /* toast 已弹 */
-  } finally {
-    submitting.value = false;
-  }
+const onConfirm = () => {
+  showSuccessToast('已提交，等待舞室确认');
+  router.push('/me/trials');
 };
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">试听预约</span>
-    </header>
-    <section class="form">
-      <div class="group">
-        <div class="group__title">选择日期</div>
-        <div class="chips">
-          <span
-            v-for="d in dateOptions"
-            :key="d"
-            class="chip"
-            :class="{ active: date === d }"
-            @click="date = d"
-            >{{ d.slice(5) }}</span
-          >
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="试听预约" @share="showSuccessToast('链接已复制')" />
+
+    <section class="pen-scroll">
+      <div class="studio">
+        <div class="studio__cover" aria-hidden="true"><Music :size="26" :stroke-width="2" /></div>
+        <div class="studio__copy">
+          <strong class="studio__name">Urban Flow 舞室</strong>
+          <span class="studio__meta">五道口地铁站 320m · 韩舞强</span>
+          <strong class="studio__price">¥79 体验课</strong>
         </div>
       </div>
-      <div class="group">
-        <div class="group__title">选择时段</div>
-        <div class="chips">
-          <span
-            v-for="t in TIME_SLOTS"
-            :key="t"
-            class="chip"
-            :class="{ active: time === t }"
-            @click="time = t"
-            >{{ t }}</span
-          >
-        </div>
+
+      <h2 class="block-title">选择日期</h2>
+      <div class="week">
+        <button
+          v-for="d in days"
+          :key="d.d"
+          class="day"
+          :class="{ 'day--on': activeDay === d.d }"
+          type="button"
+          @click="activeDay = d.d"
+        >
+          <span class="day__w">{{ d.w }}</span>
+          <span class="day__d">{{ d.d }}</span>
+        </button>
       </div>
-      <div class="group">
-        <div class="group__title">联系手机号</div>
-        <input v-model="phone" class="input" inputmode="numeric" maxlength="11" placeholder="11 位手机号" />
+
+      <h2 class="block-title">选择时段</h2>
+      <div class="chip-row">
+        <button
+          v-for="s in slots"
+          :key="s"
+          class="chip"
+          :class="activeSlot === s ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeSlot = s"
+        >
+          {{ s }}
+        </button>
       </div>
-      <div class="group">
-        <div class="group__title">备注（选填）</div>
-        <textarea
-          v-model="remark"
-          class="input input--textarea"
-          rows="3"
-          placeholder="想试听哪位老师 / 哪门课，给舞室一个提示"
-        />
+
+      <h2 class="block-title">报名信息</h2>
+      <div class="rows">
+        <PenFieldRow v-for="f in fields" :key="f.label" :label="f.label" :value="f.value" />
       </div>
+
+      <div class="remark">备注：想了解的内容、目标舞种…</div>
     </section>
-    <footer class="footer">
-      <button class="btn" :disabled="!canSubmit" @click="onSubmit">
-        {{ submitting ? '提交中…' : '提交预约' }}
-      </button>
-    </footer>
-  </div>
+
+    <PenActionBar
+      soft-label="收藏"
+      dark-label="确认预约"
+      @soft="showSuccessToast('已收藏')"
+      @dark="onConfirm"
+    />
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
-.bar {
+
+.pen-scroll { display: flex; flex-direction: column; gap: 16px; padding: 16px 18px; }
+
+.studio {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: $pen-soft;
+
+  &__cover {
+    flex: none; width: 56px; height: 56px; border-radius: 12px;
+    background: $pen-ink; color: $pen-on-primary; display: grid; place-items: center;
   }
+  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 18px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+  &__price { font-size: 14px; font-weight: 800; line-height: $pen-lh; }
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.form {
-  padding: 8px 16px 16px;
-  background: #fff;
-}
-.group {
-  padding: 12px 0;
-  &__title {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-}
-.chips {
+
+.block-title { @include pen-h3-section; }
+
+.week { display: flex; gap: 8px; }
+
+.day {
+  flex: 1;
+  height: 60px;
+  border: 0;
+  border-radius: 16px;
+  background: $pen-soft;
+  color: $pen-ink;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.chip {
-  padding: 8px 14px;
-  border: 1px solid var(--bd-border);
-  border-radius: 999px;
-  font-size: 13px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   cursor: pointer;
-  &.active {
-    border-color: var(--bd-primary);
-    background: rgba(255, 36, 66, 0.06);
-    color: var(--bd-primary);
+
+  &__w { font-size: 12px; font-weight: 700; line-height: $pen-lh; color: $pen-mute; }
+  &__d { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+
+  &--on {
+    background: $pen-ink;
+    .day__w, .day__d { color: $pen-on-primary; }
   }
 }
-.input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 10px;
-  background: #fafafa;
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.rows { display: flex; flex-direction: column; }
+
+.remark {
+  min-height: 80px;
+  padding: 14px;
+  border-radius: 16px;
+  background: $pen-soft;
+  color: $pen-mute;
   font-size: 14px;
-  outline: none;
-  &:focus {
-    border-color: var(--bd-primary);
-    background: #fff;
-  }
-  &--textarea {
-    resize: none;
-    font-family: inherit;
-  }
-}
-.footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-}
-.btn {
-  width: 100%;
-  height: 46px;
-  border: none;
-  border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
-  }
+  font-weight: 500;
+  line-height: 1.4;
 }
 </style>

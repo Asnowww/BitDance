@@ -1,176 +1,147 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
-import { fetchMessages, markRead, markAllRead, type MessageItem, type MessageCategory } from '@/api/message';
+import { ref } from 'vue';
+import { Users, User, Star, Ticket, Bell } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
-const router = useRouter();
-const list = ref<MessageItem[]>([]);
-const loading = ref(true);
-const activeCat = ref<MessageCategory | 'all'>('all');
+const cats = ['全部', '约练', '评价', '活动', '系统'];
+const activeCat = ref('全部');
 
-const TABS: Array<{ key: MessageCategory | 'all'; label: string }> = [
-  { key: 'all', label: '全部' },
-  { key: 'system', label: '系统' },
-  { key: 'practice', label: '约练' },
-  { key: 'review', label: '评价' },
-  { key: 'trial', label: '试听' }
+const messages = [
+  { icon: Users, name: '约练助手', time: '5 分钟前', preview: '你发起的周六 Hiphop 约练有 2 人报名', unread: true },
+  { icon: User, name: 'Mia 老师', time: '1 小时前', preview: '试听课已确认，周日 14:00 见～', unread: true },
+  { icon: Star, name: '评价提醒', time: '昨天', preview: '本次课程体验如何？来写下结构化评价', unread: false },
+  { icon: Ticket, name: '活动通知', time: '周三', preview: 'Locking 大师课开始报名，剩 8 位', unread: false },
+  { icon: Bell, name: '系统通知', time: '5/28', preview: '你的资料偏好已更新', unread: false }
 ];
-
-const reload = async () => {
-  loading.value = true;
-  try {
-    list.value = await fetchMessages();
-  } finally {
-    loading.value = false;
-  }
-};
-
-const filtered = computed(() =>
-  activeCat.value === 'all' ? list.value : list.value.filter((it) => it.category === activeCat.value)
-);
-
-const unreadCount = computed(() => list.value.filter((it) => !it.read).length);
-
-const onItemClick = async (it: MessageItem) => {
-  if (!it.read) {
-    await markRead(it.id);
-    void reload();
-  }
-};
-
-const onMarkAll = async () => {
-  await markAllRead();
-  showSuccessToast('已全部标记为已读');
-  void reload();
-};
-
-onMounted(reload);
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">消息中心</span>
-      <button v-if="unreadCount > 0" class="all" @click="onMarkAll">全部已读</button>
-    </header>
-    <nav class="tabs">
-      <button
-        v-for="t in TABS"
-        :key="t.key"
-        class="tab"
-        :class="{ active: activeCat === t.key }"
-        @click="activeCat = t.key"
-      >
-        {{ t.label }}
-      </button>
-    </nav>
-    <section class="list">
-      <div v-if="loading" class="empty">加载中…</div>
-      <div v-else-if="!filtered.length" class="empty">暂无消息</div>
-      <article v-for="m in filtered" :key="m.id" class="item" :class="{ unread: !m.read }" @click="onItemClick(m)">
-        <div class="item__head">
-          <span class="item__title">{{ m.title }}</span>
-          <span class="item__time">{{ new Date(m.ts).toLocaleString() }}</span>
+  <main class="pen-page">
+    <PenTopBar title="消息" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="chip-row">
+        <button
+          v-for="c in cats"
+          :key="c"
+          class="chip"
+          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeCat = c"
+        >
+          {{ c }}
+        </button>
+      </div>
+
+      <article v-for="m in messages" :key="m.name" class="msg">
+        <span class="msg__dot" :class="{ 'msg__dot--on': m.unread }" aria-hidden="true" />
+        <span class="msg__avatar" aria-hidden="true">
+          <component :is="m.icon" :size="22" :stroke-width="2" />
+        </span>
+        <div class="msg__body">
+          <div class="msg__top">
+            <span class="msg__name">{{ m.name }}</span>
+            <span class="msg__time">{{ m.time }}</span>
+          </div>
+          <p class="msg__preview">{{ m.preview }}</p>
         </div>
-        <p class="item__body">{{ m.body }}</p>
       </article>
     </section>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
 }
-.bar {
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  @include pen-chip;
+}
+
+.msg {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    flex: 1;
-    font-size: 16px;
-    font-weight: 600;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid $pen-hairline;
+
+  &__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: transparent;
+
+    &--on {
+      background: $pen-ink;
+    }
   }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.all {
-  border: none;
-  background: none;
-  color: var(--bd-primary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.tabs {
-  display: flex;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  overflow-x: auto;
-}
-.tab {
-  flex-shrink: 0;
-  border: none;
-  background: none;
-  padding: 10px 16px;
-  font-size: 13px;
-  color: var(--bd-text-secondary);
-  cursor: pointer;
-  &.active {
-    color: var(--bd-primary);
-    font-weight: 600;
-    border-bottom: 2px solid var(--bd-primary);
+
+  &__avatar {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    display: grid;
+    place-items: center;
   }
-}
-.list {
-  padding: 8px 12px;
-}
-.empty {
-  text-align: center;
-  padding: 60px 24px;
-  color: var(--bd-text-secondary);
-}
-.item {
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  position: relative;
-  &.unread::before {
-    content: '';
-    position: absolute;
-    top: 14px;
-    left: 6px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--bd-primary);
-  }
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  &__title {
-    font-size: 14px;
-    font-weight: 600;
-  }
-  &__time {
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
+
   &__body {
-    margin: 6px 0 0;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__name {
+    font-size: 15px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__time {
+    flex: none;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: $pen-lh;
+  }
+
+  &__preview {
+    margin: 0;
+    color: $pen-mute;
     font-size: 13px;
-    color: var(--bd-text);
+    font-weight: 500;
+    line-height: $pen-lh;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }
 </style>

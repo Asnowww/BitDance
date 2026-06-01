@@ -1,330 +1,165 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast, showFailToast } from 'vant';
-import {
-  fetchPostDetail,
-  togglePostLike,
-  togglePostCollect,
-  reportPost,
-  fetchComments,
-  createComment,
-  type ContentPost,
-  type ContentComment
-} from '@/api/community';
+import { useRoute } from 'vue-router';
+import { showToast } from 'vant';
+import { MapPin, ChevronRight, Heart } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
 const route = useRoute();
-const router = useRouter();
+const postId = String(route.params.id || '1');
 
-const id = computed(() => Number(route.params.id));
-const post = ref<ContentPost | null>(null);
-const comments = ref<ContentComment[]>([]);
-const newComment = ref('');
-
-const reload = async () => {
-  post.value = await fetchPostDetail(id.value);
-  comments.value = await fetchComments(id.value);
-};
-
-const onLike = async () => {
-  if (!post.value) return;
-  const r = await togglePostLike(post.value.id);
-  post.value.liked = r.liked;
-  post.value.likeCount = r.likeCount;
-};
-
-const onCollect = async () => {
-  if (!post.value) return;
-  const r = await togglePostCollect(post.value.id);
-  post.value.collected = r.collected;
-  post.value.collectCount = r.collectCount;
-};
-
-const reportSheetVisible = ref(false);
-const reportActions = [
-  { name: '内容不实' },
-  { name: '广告 / 引流' },
-  { name: '低俗 / 不适' },
-  { name: '其他' }
+const comments = [
+  { id: 'k', name: '小 K', text: '看起来好棒，下次一起约！' },
+  { id: 'm', name: 'Mia 老师', text: '动作进步很大，继续保持～' }
 ];
-
-const onReport = () => {
-  reportSheetVisible.value = true;
-};
-
-const onPickReport = async (a: { name: string }) => {
-  reportSheetVisible.value = false;
-  if (!post.value) return;
-  await reportPost(post.value.id, a.name);
-  showSuccessToast('已提交举报，感谢反馈');
-};
-
-const onSendComment = async () => {
-  const text = newComment.value.trim();
-  if (!text) {
-    showFailToast('评论不能为空');
-    return;
-  }
-  if (!post.value) return;
-  await createComment(post.value.id, text);
-  newComment.value = '';
-  void reload();
-};
-
-onMounted(reload);
 </script>
 
 <template>
-  <div v-if="!post" class="empty">加载中…</div>
-  <div v-else class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <button class="report" @click="onReport">举报</button>
-    </header>
-    <section class="author" @click="router.push(`/u/${post.authorId}`)">
-      <span class="avatar">{{ post.authorName.charAt(0) }}</span>
-      <div class="author__body">
-        <div class="author__name">{{ post.authorName }}</div>
-        <div class="author__time">{{ new Date(post.createdAt).toLocaleString() }}</div>
-      </div>
-    </section>
-    <section class="cover">
-      <span v-if="post.hasVideo" class="cover__video">▶</span>
-      <span class="cover__text">{{ post.style ?? '✨' }}</span>
-    </section>
-    <section class="content">
-      <p class="content__text">{{ post.text }}</p>
-      <div v-if="post.topics.length" class="topics">
-        <span
-          v-for="t in post.topics"
-          :key="t"
-          class="topic"
-          @click="router.push(`/community/topic/${encodeURIComponent(t)}`)"
-        >
-          #{{ t }}
-        </span>
-      </div>
-      <div v-if="post.location" class="loc">📍 {{ post.location }}</div>
-    </section>
-    <section class="comments">
-      <h3>评论 ({{ comments.length }})</h3>
-      <article v-for="c in comments" :key="c.id" class="comment">
-        <span class="avatar avatar--sm">{{ c.authorName.charAt(0) }}</span>
-        <div class="comment__body">
-          <div class="comment__name">{{ c.authorName }}</div>
-          <p class="comment__text">{{ c.text }}</p>
-          <div class="comment__time">{{ new Date(c.createdAt).toLocaleString() }}</div>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="动态" @share="showToast('已复制链接')" />
+
+    <section class="pen-scroll">
+      <header class="author">
+        <span class="author__avatar" aria-hidden="true" />
+        <div class="author__who">
+          <strong class="author__name">小鹿</strong>
+          <span class="author__meta">五道口 · 2 小时前</span>
         </div>
+        <button class="author__follow" type="button">关注</button>
+      </header>
+
+      <p class="text">
+        今天试听了 Urban Flow 的韩舞课，老师会拆动作、节奏适合第一次学韩舞的人，零基础也跟得上，强烈推荐给想入门的姐妹！
+      </p>
+
+      <div class="media" aria-hidden="true" />
+
+      <button class="anchor" type="button" @click="showToast('打开 Urban Flow 舞室')">
+        <MapPin :size="20" :stroke-width="2" />
+        <div class="anchor__copy">
+          <strong>Urban Flow 舞室</strong>
+          <span>韩舞课 · 可预约试听</span>
+        </div>
+        <ChevronRight class="anchor__chev" :size="18" :stroke-width="2" />
+      </button>
+
+      <p class="stats">32 赞 · 8 评论</p>
+
+      <article v-for="c in comments" :key="c.id" class="comment">
+        <span class="comment__avatar" aria-hidden="true" />
+        <div class="comment__body">
+          <strong class="comment__name">{{ c.name }}</strong>
+          <p class="comment__text">{{ c.text }}</p>
+        </div>
+        <Heart class="comment__like" :size="16" :stroke-width="2" />
       </article>
-      <div v-if="!comments.length" class="empty-tip">还没有评论，第一个抢沙发吧</div>
     </section>
-    <footer class="footer">
-      <input v-model="newComment" class="input" placeholder="说点什么…" @keyup.enter="onSendComment" />
-      <button class="action" :class="{ active: post.liked }" @click="onLike">♥ {{ post.likeCount }}</button>
-      <button class="action" :class="{ active: post.collected }" @click="onCollect">⭐ {{ post.collectCount }}</button>
-      <button class="send" @click="onSendComment">发送</button>
+
+    <footer class="comment-bar">
+      <div class="comment-bar__input">写评论…</div>
+      <button class="comment-bar__like" type="button" aria-label="点赞">
+        <Heart :size="20" :stroke-width="2" />
+      </button>
     </footer>
-    <van-action-sheet
-      v-model:show="reportSheetVisible"
-      :actions="reportActions"
-      cancel-text="取消"
-      close-on-click-action
-      @select="onPickReport"
-      @cancel="reportSheetVisible = false"
-    />
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
-.empty {
-  padding: 80px 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.bar {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.report {
-  border: none;
-  background: none;
-  color: var(--bd-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-}
+
+.pen-scroll { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; }
+
 .author {
   display: flex;
+  align-items: center;
   gap: 10px;
-  padding: 12px 16px;
-  background: #fff;
-  cursor: pointer;
-  &__name {
-    font-size: 14px;
-    font-weight: 600;
-  }
-  &__time {
-    margin-top: 2px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
+
+  &__avatar { flex: none; width: 44px; height: 44px; border-radius: 999px; background: $pen-ink; }
+  &__who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  &__name { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
+
+  &__follow {
+    flex: none; height: 34px; padding: 8px 16px;
+    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
+    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
   }
 }
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bd-primary);
-  color: #fff;
-  font-weight: 600;
+
+.text { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.5; }
+.media { height: 190px; border-radius: 14px; background: $pen-soft; }
+
+.anchor {
   display: flex;
   align-items: center;
-  justify-content: center;
-  &--sm {
-    width: 28px;
-    height: 28px;
-    font-size: 12px;
-  }
-}
-.cover {
-  aspect-ratio: 1;
-  background: linear-gradient(135deg, #ffd2da, #ff2442);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 56px;
-  font-weight: 700;
-  position: relative;
-  &__video {
-    position: absolute;
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-  }
-}
-.content {
-  padding: 16px;
-  background: #fff;
-  &__text {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-}
-.topics {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.topic {
-  font-size: 12px;
-  color: var(--bd-primary);
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: $pen-soft;
+  color: $pen-ink;
   cursor: pointer;
-}
-.loc {
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--bd-text-secondary);
-}
-.comments {
-  margin-top: 8px;
-  padding: 16px;
-  background: #fff;
-  h3 {
-    margin: 0 0 12px;
-    font-size: 14px;
+  text-align: left;
+
+  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+    strong { font-size: 14px; font-weight: 900; line-height: $pen-lh; }
+    span { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
   }
+  &__chev { flex: none; color: $pen-mute; }
 }
+
+.stats { margin: 0; color: $pen-mute; font-size: 13px; font-weight: 700; line-height: $pen-lh; }
+
 .comment {
   display: flex;
-  gap: 8px;
-  padding: 10px 0;
-  border-bottom: 1px dashed var(--bd-border);
-  &:last-child {
-    border-bottom: none;
-  }
-  &__name {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--bd-text-secondary);
-  }
-  &__text {
-    margin: 4px 0;
-    font-size: 13px;
-  }
-  &__time {
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
+  align-items: flex-start;
+  gap: 10px;
+
+  &__avatar { flex: none; width: 32px; height: 32px; border-radius: 999px; background: $pen-ink; }
+  &__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 13px; font-weight: 900; line-height: $pen-lh; }
+  &__text { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.4; }
+  &__like { flex: none; color: $pen-mute; margin-top: 8px; }
 }
-.empty-tip {
-  padding: 24px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-  font-size: 12px;
-}
-.footer {
+
+.comment-bar {
   position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
+  right: 0; bottom: 0; left: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.input {
-  flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--bd-border);
-  border-radius: 999px;
-  background: #fafafa;
-  font-size: 13px;
-  outline: none;
-  &:focus {
-    background: #fff;
-    border-color: var(--bd-primary);
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+  height: 76px;
+  margin: 0 auto;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  border-top: 1px solid $pen-hairline;
+  box-sizing: border-box;
+
+  &__input {
+    flex: 1;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-mute;
+    font-size: 14px;
+    font-weight: 500;
   }
-}
-.action {
-  border: none;
-  background: none;
-  font-size: 13px;
-  color: var(--bd-text-secondary);
-  cursor: pointer;
-  &.active {
-    color: var(--bd-primary);
+
+  &__like {
+    flex: none; width: 44px; height: 44px;
+    border: 0; border-radius: 999px; background: $pen-soft; color: $pen-ink;
+    display: grid; place-items: center; cursor: pointer;
   }
-}
-.send {
-  border: none;
-  background: var(--bd-primary);
-  color: #fff;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
 }
 </style>

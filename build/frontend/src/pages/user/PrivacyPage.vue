@@ -1,127 +1,129 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
-import { useUserStore } from '@/stores/user';
+import { reactive } from 'vue';
+import { showToast } from 'vant';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import PenFieldRow from '@/components/pen/PenFieldRow.vue';
 
-const router = useRouter();
-const user = useUserStore();
-
-const local = ref({ ...user.privacy });
-
-const FIELDS: Array<{ key: keyof typeof local.value; label: string; desc: string }> = [
-  { key: 'profile', label: '个人资料', desc: '昵称、头像、简介' },
-  { key: 'checkin', label: '训练打卡', desc: '默认可见性' },
-  { key: 'practice', label: '约练帖', desc: '默认可见性' },
-  { key: 'community', label: '社区动态', desc: '默认可见性' }
+const visibility = [
+  { label: '个人资料', value: '公开' },
+  { label: '训练打卡', value: '仅好友' },
+  { label: '约练动态', value: '公开' },
+  { label: '社区动态', value: '仅好友' }
 ];
 
-const OPTIONS = [
-  { value: 'public', label: '公开' },
-  { value: 'friends', label: '仅搭子' },
-  { value: 'private', label: '仅自己' }
-];
+const toggles = reactive<Record<string, boolean>>({
+  异常登录提醒: true,
+  陌生人私信: false,
+  附近的人可见: true
+});
 
-const onSave = () => {
-  user.updatePrivacy(local.value);
-  showSuccessToast('已保存');
-  router.back();
-};
+const account = [
+  { label: '绑定手机', value: '138••••6789' },
+  { label: '登录设备', value: '2 台' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">隐私设置</span>
-    </header>
-    <section class="list">
-      <div v-for="f in FIELDS" :key="f.key" class="row">
-        <div>
-          <div class="row__label">{{ f.label }}</div>
-          <div class="row__desc">{{ f.desc }}</div>
-        </div>
-        <select v-model="local[f.key]" class="select">
-          <option v-for="o in OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
+  <main class="pen-page">
+    <PenTopBar title="隐私设置" :show-share="false" />
+
+    <section class="pen-scroll">
+      <h2 class="block-title">内容可见范围</h2>
+      <PenFieldRow
+        v-for="v in visibility"
+        :key="v.label"
+        :label="v.label"
+        :value="v.value"
+        @click="showToast(`${v.label}：${v.value}`)"
+      />
+
+      <h2 class="block-title">账号安全</h2>
+      <div
+        v-for="(on, key) in toggles"
+        :key="key"
+        class="toggle-row"
+      >
+        <span class="toggle-row__label">{{ key }}</span>
+        <button
+          class="switch"
+          :class="{ 'switch--on': on }"
+          type="button"
+          :aria-pressed="on"
+          @click="toggles[key] = !on"
+        >
+          <span class="switch__knob" />
+        </button>
       </div>
+      <PenFieldRow
+        v-for="a in account"
+        :key="a.label"
+        :label="a.label"
+        :value="a.value"
+        @click="showToast(a.label)"
+      />
     </section>
-    <footer class="footer">
-      <button class="btn" @click="onSave">保存</button>
-    </footer>
-  </div>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
 }
-.bar {
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.block-title {
+  @include pen-h3-section;
+  margin: 12px 0 4px;
+}
+
+.toggle-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.list {
-  background: #fff;
-  margin-top: 8px;
-}
-.row {
-  padding: 14px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--bd-border);
+  gap: 10px;
+  padding: 16px 0;
+  border-bottom: 1px solid $pen-hairline;
+
   &__label {
-    font-size: 14px;
+    flex: 1;
+    color: $pen-ink;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
   }
-  &__desc {
-    margin-top: 2px;
-    font-size: 11px;
-    color: var(--bd-text-secondary);
-  }
 }
-.select {
-  height: 32px;
-  padding: 0 8px;
-  border: 1px solid var(--bd-border);
-  border-radius: 8px;
-  background: #fff;
-  font-size: 13px;
-}
-.footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid var(--bd-border);
-}
-.btn {
-  width: 100%;
-  height: 46px;
-  border: none;
+
+.switch {
+  flex: none;
+  width: 46px;
+  height: 28px;
+  padding: 3px;
+  border: 0;
   border-radius: 999px;
-  background: var(--bd-primary);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
+  background: $pen-hairline;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
   cursor: pointer;
+  transition: background 0.15s;
+
+  &__knob {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: $pen-canvas;
+  }
+
+  &--on {
+    background: $pen-ink;
+    justify-content: flex-end;
+  }
 }
 </style>

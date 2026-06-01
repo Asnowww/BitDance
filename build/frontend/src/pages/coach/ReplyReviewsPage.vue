@@ -1,147 +1,120 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
-import { fetchReviews, type ReviewItem } from '@/api/review';
-import { replyReview } from '@/api/coachOps';
+import { ref } from 'vue';
+import { showToast } from 'vant';
+import { Star } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
-const router = useRouter();
-const list = ref<ReviewItem[]>([]);
-const drafts = ref<Record<number, string>>({});
-const loading = ref(true);
+const cats = ['全部', '待回复', '已回复'];
+const activeCat = ref('待回复');
 
-const reload = async () => {
-  loading.value = true;
-  try {
-    // 简化：拉取 coach 维度评价 #1 ~ #5 作为占位
-    const merged: ReviewItem[] = [];
-    for (let i = 1; i <= 3; i += 1) {
-      const data = await fetchReviews({ targetType: 'coach', targetId: i, page: 1, pageSize: 10 });
-      merged.push(...data.list);
-    }
-    list.value = merged;
-  } finally {
-    loading.value = false;
-  }
-};
-
-const onReply = async (id: number) => {
-  const text = (drafts.value[id] ?? '').trim();
-  if (!text) return;
-  await replyReview({ reviewId: id, text });
-  showSuccessToast('已回复');
-  drafts.value[id] = '';
-};
-
-onMounted(reload);
+const reviews = [
+  { id: '1', name: '小林', stars: 5, content: '老师会拆动作，零基础也能跟上，节奏很舒服。', reply: '' },
+  { id: '2', name: 'Kiki', stars: 4, content: '场地干净，晚课多，地铁出来很好找。', reply: '商家回复：谢谢支持，欢迎常来一起跳～' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">评价回复</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <div v-else-if="!list.length" class="empty">暂无评价可回复</div>
-    <article v-for="r in list" :key="r.id" class="item">
-      <div class="item__head">
-        <span class="item__author">{{ r.authorName }}</span>
-        <span class="item__rating">★ {{ r.ratingAvg }}</span>
+  <main class="pen-page">
+    <PenTopBar title="评价回复" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="chip-row">
+        <button
+          v-for="c in cats"
+          :key="c"
+          class="chip"
+          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeCat = c"
+        >
+          {{ c }}
+        </button>
       </div>
-      <p class="item__text">{{ r.text }}</p>
-      <textarea v-model="drafts[r.id]" rows="2" class="ta" placeholder="客气、诚恳、就事论事…" />
-      <div class="item__foot">
-        <button class="btn-ghost" @click="router.push(`/coach/appeal?reviewId=${r.id}`)">申诉</button>
-        <button class="btn-primary" :disabled="!(drafts[r.id] ?? '').trim()" @click="onReply(r.id)">回复</button>
-      </div>
-    </article>
-  </div>
+
+      <article v-for="r in reviews" :key="r.id" class="rev">
+        <header class="rev__head">
+          <span class="rev__avatar" aria-hidden="true" />
+          <div class="rev__who">
+            <strong class="rev__name">{{ r.name }}</strong>
+            <span class="rev__stars">
+              <Star
+                v-for="i in 5"
+                :key="i"
+                :size="14"
+                :stroke-width="2"
+                :fill="i <= r.stars ? '#111111' : 'none'"
+                :color="i <= r.stars ? '#111111' : '#E5E5E5'"
+              />
+            </span>
+          </div>
+        </header>
+        <p class="rev__content">{{ r.content }}</p>
+
+        <div v-if="r.reply" class="rev__quote">{{ r.reply }}</div>
+        <div v-else class="rev__reply">
+          <span class="rev__reply-text">回复学员…</span>
+          <button class="rev__send" type="button" @click="showToast('已回复')">发送</button>
+        </div>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
 }
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  padding: 60px;
-  text-align: center;
-  color: var(--bd-text-secondary);
-}
-.item {
-  margin: 8px 12px;
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.rev {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 14px;
-  background: #fff;
-  border-radius: 12px;
-  &__head {
-    display: flex;
-    justify-content: space-between;
+  border-radius: 14px;
+  background: $pen-soft;
+
+  &__head { display: flex; align-items: center; gap: 10px; }
+  &__avatar { flex: none; width: 36px; height: 36px; border-radius: 999px; background: $pen-ink; }
+  &__who { display: flex; flex-direction: column; gap: 4px; }
+  &__name { font-size: 14px; font-weight: 900; line-height: $pen-lh; }
+  &__stars { display: inline-flex; gap: 3px; }
+  &__content { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
+
+  &__quote {
+    padding: 12px;
+    border-radius: 10px;
+    background: $pen-ink;
+    color: $pen-on-primary;
     font-size: 13px;
-  }
-  &__author {
     font-weight: 600;
+    line-height: 1.4;
   }
-  &__rating {
-    color: #ffaa33;
-  }
-  &__text {
-    margin: 8px 0;
-    font-size: 13px;
-  }
-  &__foot {
-    margin-top: 10px;
+
+  &__reply {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
     gap: 8px;
+    height: 42px;
+    padding: 0 8px 0 16px;
+    border-radius: 999px;
+    background: $pen-canvas;
+    border: 1px solid $pen-hairline;
   }
-}
-.ta {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--bd-border);
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: inherit;
-  resize: none;
-  outline: none;
-  &:focus {
-    border-color: var(--bd-primary);
-  }
-}
-.btn-ghost {
-  border: 1px solid var(--bd-border);
-  background: #fff;
-  color: var(--bd-text-secondary);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn-primary {
-  border: none;
-  background: var(--bd-primary);
-  color: #fff;
-  border-radius: 999px;
-  padding: 5px 14px;
-  font-size: 12px;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
+  &__reply-text { flex: 1; color: $pen-mute; font-size: 13px; font-weight: 500; line-height: $pen-lh; }
+  &__send {
+    flex: none; height: 30px; padding: 6px 14px;
+    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
+    font-size: 12px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
   }
 }
 </style>

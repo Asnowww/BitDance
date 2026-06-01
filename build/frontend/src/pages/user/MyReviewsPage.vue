@@ -1,122 +1,102 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showConfirmDialog, showSuccessToast } from 'vant';
-import { fetchMyReviews, deleteReview, type ReviewItem } from '@/api/review';
+import { ref } from 'vue';
+import { Star } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
 
-const router = useRouter();
-const list = ref<ReviewItem[]>([]);
-const loading = ref(true);
+const cats = ['全部', '舞室', '老师', '课程'];
+const activeCat = ref('全部');
 
-const reload = async () => {
-  loading.value = true;
-  try {
-    list.value = await fetchMyReviews();
-  } finally {
-    loading.value = false;
-  }
-};
-
-const onEdit = (id: number) => router.push(`/publish/review?editId=${id}`);
-const onDelete = async (id: number) => {
-  await showConfirmDialog({ title: '删除评价？', message: '删除后无法恢复' }).catch(() => {
-    throw new Error('cancel');
-  });
-  await deleteReview(id);
-  showSuccessToast('已删除');
-  void reload();
-};
-
-onMounted(reload);
+const reviews = [
+  { id: '1', target: 'Urban Flow 舞室', verified: true, stars: 5, dims: '交通 5 · 环境 5 · 氛围 4', content: '地铁出来很好找，场地干净。', date: '5/24' },
+  { id: '2', target: '小鹿老师', verified: true, stars: 5, dims: '耐心 5 · 纠错 5 · 讲解 4', content: '会拆动作，零基础也跟得上。', date: '5/20' },
+  { id: '3', target: 'K-pop 入门班', verified: false, stars: 4, dims: '上手 易 · 节奏 4 · 收获 5', content: '一节课能跟下整段，成就感强。', date: '5/18' }
+];
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <button class="back" @click="router.back()">←</button>
-      <span class="bar__title">我的评价</span>
-    </header>
-    <div v-if="loading" class="empty">加载中…</div>
-    <div v-else-if="!list.length" class="empty">还没有发表评价</div>
-    <article v-for="r in list" :key="r.id" class="item">
-      <div class="item__head">
-        <span class="item__target">[{{ r.targetType }}] #{{ r.targetId }}</span>
-        <span class="item__date">{{ new Date(r.createdAt).toLocaleDateString() }}</span>
+  <main class="pen-page">
+    <PenTopBar title="我的评价" :show-share="false" />
+
+    <section class="pen-scroll">
+      <div class="chip-row">
+        <button
+          v-for="c in cats"
+          :key="c"
+          class="chip"
+          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          type="button"
+          @click="activeCat = c"
+        >
+          {{ c }}
+        </button>
       </div>
-      <p class="item__text">{{ r.text }}</p>
-      <footer class="item__foot">
-        <button class="btn-ghost" @click="onEdit(r.id)">编辑</button>
-        <button class="btn-ghost btn-ghost--danger" @click="onDelete(r.id)">删除</button>
-      </footer>
-    </article>
-  </div>
+
+      <article v-for="r in reviews" :key="r.id" class="rev">
+        <header class="rev__top">
+          <strong class="rev__target">{{ r.target }}</strong>
+          <span v-if="r.verified" class="rev__verified">已验证</span>
+        </header>
+        <span class="rev__stars">
+          <Star
+            v-for="i in 5"
+            :key="i"
+            :size="14"
+            :stroke-width="2"
+            :fill="i <= r.stars ? '#111111' : 'none'"
+            :color="i <= r.stars ? '#111111' : '#E5E5E5'"
+          />
+        </span>
+        <p class="rev__dims">{{ r.dims }}</p>
+        <p class="rev__content">{{ r.content }}</p>
+        <span class="rev__date">{{ r.date }}</span>
+      </article>
+    </section>
+  </main>
 </template>
 
 <style lang="scss" scoped>
-.page {
-  padding-bottom: 24px;
-}
-.bar {
+@import '@/styles/pen-nike.scss';
+
+.pen-page { @include pen-page; }
+
+.pen-scroll {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { @include pen-chip; }
+
+.rev {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
-  &__title {
-    font-size: 16px;
-    font-weight: 600;
-  }
-}
-.back {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-}
-.empty {
-  text-align: center;
-  padding: 60px 24px;
-  color: var(--bd-text-secondary);
-}
-.item {
-  margin: 8px 12px;
   padding: 14px;
-  background: #fff;
-  border-radius: 12px;
-  &__head {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
+  border-radius: 14px;
+  background: $pen-soft;
+
+  &__top { display: flex; align-items: center; gap: 8px; }
+  &__target { flex: 1; min-width: 0; font-size: 15px; font-weight: 900; line-height: $pen-lh; }
+
+  &__verified {
+    flex: none;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border: 1px solid $pen-success;
+    border-radius: 999px;
+    color: $pen-success;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: $pen-lh;
   }
-  &__target {
-    color: var(--bd-primary);
-  }
-  &__date {
-    color: var(--bd-text-secondary);
-  }
-  &__text {
-    margin: 8px 0;
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  &__foot {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-}
-.btn-ghost {
-  border: 1px solid var(--bd-border);
-  background: #fff;
-  color: var(--bd-text-secondary);
-  padding: 5px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-  &--danger {
-    color: var(--bd-primary);
-    border-color: var(--bd-primary);
-  }
+
+  &__stars { display: inline-flex; gap: 3px; }
+  &__dims { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 700; line-height: $pen-lh; }
+  &__content { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
+  &__date { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
 }
 </style>
