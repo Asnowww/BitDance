@@ -23,6 +23,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,7 +46,9 @@ class StudioControllerTest {
     @Test
     void nearby_anonymous_returnsList() throws Exception {
         when(studioService.searchNearby(
-            eq(1L), eq(39.9), eq(116.4), eq(5.0), eq(null), eq(null), eq(1), eq(20), eq(null)
+            eq(1L), eq(39.9), eq(116.4), eq(5.0), eq(null), eq(null),
+            eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+            eq(1), eq(20), eq(null)
         )).thenReturn(new StudioListResponse(List.of(
             new StudioCard(101L, "舞星 Studio", "海淀区学院路 1 号", 1L, null, null,
                 new BigDecimal("0.8"), new BigDecimal("39.901"), new BigDecimal("116.401"), false)
@@ -67,7 +70,8 @@ class StudioControllerTest {
     @Test
     void nearby_authenticated_passesUserIdForFavored() throws Exception {
         when(studioService.searchNearby(
-            any(), any(), any(), any(), any(), any(), eq(1), eq(20), eq(11L)
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+            eq(1), eq(20), eq(11L)
         )).thenReturn(new StudioListResponse(List.of(
             new StudioCard(202L, "灵动 Studio", "朝阳区", 1L, null, null,
                 null, null, null, true)
@@ -76,6 +80,30 @@ class StudioControllerTest {
         mvc.perform(get("/public/studios/nearby").header("Authorization", "Bearer fake"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.list[0].favored").value(true));
+    }
+
+    @Test
+    void nearby_passesDatabaseBackedFilters() throws Exception {
+        when(studioService.searchNearby(
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+            eq(1), eq(20), eq(null)
+        )).thenReturn(new StudioListResponse(List.of(), 1, 20));
+
+        mvc.perform(get("/public/studios/nearby")
+                .param("danceStyleId", "2")
+                .param("minPrice", "80")
+                .param("maxPrice", "180")
+                .param("timeSlot", "evening")
+                .param("trialAvailable", "true")
+                .param("zeroBasicFriendly", "true")
+                .param("nearMetro", "true"))
+            .andExpect(status().isOk());
+
+        verify(studioService).searchNearby(
+            eq(null), eq(null), eq(null), eq(null), eq(null), eq(2L),
+            eq(new BigDecimal("80")), eq(new BigDecimal("180")), eq("evening"),
+            eq(true), eq(true), eq(true), eq(1), eq(20), eq(null)
+        );
     }
 
     @Test

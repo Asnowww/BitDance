@@ -57,7 +57,7 @@ const load = (): Item[] => {
 };
 const save = (items: Item[]) => localStorage.setItem(KEY, JSON.stringify(items));
 
-mock('get', /\/reviews$/, ({ params }) => {
+mock('get', /\/(?:public\/)?reviews$/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   const targetType = p.targetType as string;
   const targetId = Number(p.targetId);
@@ -124,6 +124,55 @@ mock('post', /\/reviews$/, ({ data }) => {
   items.unshift(item);
   save(items);
   return item;
+});
+
+mock('post', /\/h5\/reviews$/, ({ data }) => {
+  const body = data as Record<string, unknown>;
+  const items = load();
+  const dimensions = (body.dimensions ?? []) as Array<{ code: string; score: number }>;
+  const dimensionScores = dimensions.reduce<Record<string, number>>((acc, item) => {
+    acc[item.code] = Number(item.score);
+    return acc;
+  }, {});
+  const avg =
+    typeof body.overallScore === 'number'
+      ? body.overallScore
+      : Object.values(dimensionScores).reduce((a, b) => a + b, 0) / Math.max(1, Object.keys(dimensionScores).length);
+  const item: Item = {
+    id: Date.now(),
+    targetType: body.targetType as string,
+    targetId: Number(body.targetId),
+    authorId: 999,
+    authorName: '我',
+    authorAvatar: '',
+    text: (body.contentText as string) ?? '',
+    images: [],
+    dimensionScores,
+    ratingAvg: +avg.toFixed(1),
+    isVerified: Boolean(body.sourceRefId),
+    verifiedSourceType: body.sourceType ? String(body.sourceType) : undefined,
+    helpfulCount: 0,
+    createdAt: Date.now()
+  };
+  items.unshift(item);
+  save(items);
+  return {
+    id: item.id,
+    userId: item.authorId,
+    targetType: item.targetType,
+    targetId: item.targetId,
+    overallScore: item.ratingAvg,
+    contentText: item.text,
+    isVerified: item.isVerified,
+    verifiedSourceType: item.verifiedSourceType,
+    weightFactor: item.isVerified ? 1.5 : 1,
+    reviewStatus: 'published',
+    riskLevel: 0,
+    helpfulCount: item.helpfulCount,
+    isPinned: false,
+    publishedAt: new Date(item.createdAt).toISOString(),
+    dimensions: dimensions.map((it) => ({ code: it.code, name: it.code, score: it.score }))
+  };
 });
 
 mock('put', /\/reviews\/\d+$/, ({ url, data }) => {

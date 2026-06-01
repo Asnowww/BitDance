@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+
 @RestController
 @RequestMapping("/public/studios")
 public class StudioController {
@@ -29,11 +31,18 @@ public class StudioController {
         @RequestParam(required = false) Double distanceKm,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) Long danceStyleId,
+        @RequestParam(required = false) BigDecimal minPrice,
+        @RequestParam(required = false) BigDecimal maxPrice,
+        @RequestParam(required = false) String timeSlot,
+        @RequestParam(required = false) Boolean trialAvailable,
+        @RequestParam(required = false) Boolean zeroBasicFriendly,
+        @RequestParam(required = false) Boolean nearMetro,
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(defaultValue = "20") int pageSize
     ) {
         return ApiResponse.ok(studioService.searchNearby(
-            cityId, latitude, longitude, distanceKm, keyword, danceStyleId,
+            cityId, latitude, longitude, distanceKm, keyword, danceStyleId, minPrice, maxPrice,
+            timeSlot, trialAvailable, zeroBasicFriendly, nearMetro,
             page, pageSize, CurrentUser.getIdOrNull()
         ));
     }

@@ -14,7 +14,13 @@ const allStudios = Array.from({ length: 80 }).map((_, i) => ({
   distanceKm: +(0.3 + (i % 20) * 0.6).toFixed(1),
   latitude: 39.9 + i * 0.001,
   longitude: 116.3 + i * 0.001,
-  favored: false
+  favored: false,
+  danceStyleId: (i % STYLES.length) + 1,
+  minPrice: 69 + (i % 8) * 20,
+  timeSlots: [['morning', 'weekend'], ['afternoon'], ['evening'], ['afternoon', 'weekend']][i % 4],
+  trialAvailable: i % 3 !== 0,
+  zeroBasicFriendly: i % 2 === 0,
+  nearMetro: i % 4 !== 0
 }));
 
 mock('get', /\/studios\/nearby/, ({ params }) => {
@@ -23,10 +29,21 @@ mock('get', /\/studios\/nearby/, ({ params }) => {
   const pageSize = Number(p.pageSize ?? 20);
   const keyword = (p.keyword as string) ?? '';
   const distanceMax = Number(p.distanceKm ?? 0);
+  const danceStyleId = Number(p.danceStyleId ?? 0);
+  const minPrice = Number(p.minPrice ?? 0);
+  const maxPrice = Number(p.maxPrice ?? 0);
+  const timeSlot = (p.timeSlot as string) ?? '';
 
   let pool = allStudios.slice();
   if (keyword) pool = pool.filter((s) => s.name.includes(keyword) || s.address.includes(keyword));
   if (distanceMax) pool = pool.filter((s) => s.distanceKm <= distanceMax);
+  if (danceStyleId) pool = pool.filter((s) => s.danceStyleId === danceStyleId);
+  if (minPrice) pool = pool.filter((s) => s.minPrice >= minPrice);
+  if (maxPrice) pool = pool.filter((s) => s.minPrice <= maxPrice);
+  if (timeSlot) pool = pool.filter((s) => s.timeSlots.includes(timeSlot));
+  if (p.trialAvailable) pool = pool.filter((s) => s.trialAvailable);
+  if (p.zeroBasicFriendly) pool = pool.filter((s) => s.zeroBasicFriendly);
+  if (p.nearMetro) pool = pool.filter((s) => s.nearMetro);
 
   const start = (page - 1) * pageSize;
   return {

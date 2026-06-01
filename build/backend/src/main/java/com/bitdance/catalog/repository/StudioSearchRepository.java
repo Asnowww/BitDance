@@ -41,6 +41,12 @@ public class StudioSearchRepository {
         Double distanceKm,
         String keyword,
         Long danceStyleId,
+        BigDecimal minPrice,
+        BigDecimal maxPrice,
+        String timeSlot,
+        Boolean trialAvailable,
+        Boolean zeroBasicFriendly,
+        Boolean nearMetro,
         int page,
         int pageSize
     ) {}
@@ -68,6 +74,52 @@ public class StudioSearchRepository {
                     WHERE sds.studio_id = s.id AND sds.dance_style_id = :styleId
                  )
                 """);
+        }
+        if (p.minPrice() != null || p.maxPrice() != null) {
+            sql.append("""
+                 AND EXISTS (
+                    SELECT 1 FROM course c
+                    WHERE c.studio_id = s.id AND c.status = 'published'
+                      AND (:minPrice IS NULL OR c.price_amount >= :minPrice)
+                      AND (:maxPrice IS NULL OR c.price_amount <= :maxPrice)
+                 )
+                """);
+        }
+        if (p.timeSlot() != null && !p.timeSlot().isBlank()) {
+            sql.append("""
+                 AND EXISTS (
+                    SELECT 1 FROM course_schedule cs
+                    WHERE cs.studio_id = s.id AND cs.status = 'scheduled' AND cs.start_at >= now()
+                      AND (
+                        (:timeSlot = 'morning' AND EXTRACT(HOUR FROM cs.start_at) < 12)
+                        OR (:timeSlot = 'afternoon' AND EXTRACT(HOUR FROM cs.start_at) >= 12 AND EXTRACT(HOUR FROM cs.start_at) < 18)
+                        OR (:timeSlot = 'evening' AND EXTRACT(HOUR FROM cs.start_at) >= 18)
+                        OR (:timeSlot = 'weekend' AND EXTRACT(ISODOW FROM cs.start_at) IN (6, 7))
+                      )
+                 )
+                """);
+        }
+        if (Boolean.TRUE.equals(p.trialAvailable())) {
+            sql.append("""
+                 AND EXISTS (
+                    SELECT 1 FROM course c
+                    JOIN course_schedule cs ON cs.course_id = c.id
+                    WHERE c.studio_id = s.id AND c.status = 'published'
+                      AND cs.status = 'scheduled' AND cs.start_at >= now()
+                      AND (cs.capacity IS NULL OR cs.booked_count < cs.capacity)
+                 )
+                """);
+        }
+        if (Boolean.TRUE.equals(p.zeroBasicFriendly())) {
+            sql.append("""
+                 AND EXISTS (
+                    SELECT 1 FROM course c
+                    WHERE c.studio_id = s.id AND c.status = 'published' AND c.zero_basic_friendly = true
+                 )
+                """);
+        }
+        if (Boolean.TRUE.equals(p.nearMetro())) {
+            sql.append(" AND s.transport_info IS NOT NULL AND btrim(s.transport_info) <> '' ");
         }
         boolean hasGeo = p.latitude() != null && p.longitude() != null;
         if (hasGeo) {
@@ -114,6 +166,11 @@ public class StudioSearchRepository {
             q.setParameter("kw", "%" + p.keyword().trim() + "%");
         }
         if (p.danceStyleId() != null) q.setParameter("styleId", p.danceStyleId());
+        if (p.minPrice() != null || p.maxPrice() != null) {
+            q.setParameter("minPrice", p.minPrice());
+            q.setParameter("maxPrice", p.maxPrice());
+        }
+        if (p.timeSlot() != null && !p.timeSlot().isBlank()) q.setParameter("timeSlot", p.timeSlot());
     }
 
     @SuppressWarnings("unchecked")

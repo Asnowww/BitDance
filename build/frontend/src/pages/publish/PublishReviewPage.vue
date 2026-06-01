@@ -1,195 +1,564 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { showSuccessToast, showToast } from 'vant';
+import { computed, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { showFailToast, showSuccessToast, showToast } from 'vant';
+import { Image, Music, Plus, ShieldCheck, Video } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import PenSettingRow from '@/components/pen/PenSettingRow.vue';
+import {
+  createReview,
+  REVIEW_DIMENSIONS,
+  type ReviewCreateBody,
+  type ReviewTargetType
+} from '@/api/review';
 
+const route = useRoute();
 const router = useRouter();
 
-const filters = ['全部', '已验证', '带图', '零基础', '差评'];
-const activeFilter = ref('已验证');
-
-const reviews = [
-  {
-    id: 'lin',
-    author: '已验证 · 小林',
-    content: '老师会拆动作，节奏适合第一次学韩舞的人。',
-    score: '零基础友好 5 · 纠错质量 5 · 氛围 4'
-  },
-  {
-    id: 'kiki',
-    author: '已验证 · Kiki',
-    content: '场地干净，晚课多，地铁出来很好找。',
-    score: '零基础友好 5 · 纠错质量 5 · 氛围 4'
-  }
+const targetTypes: Array<{ type: ReviewTargetType; label: string }> = [
+  { type: 'studio', label: '舞室' },
+  { type: 'coach', label: '老师' },
+  { type: 'course', label: '课程' }
 ];
 
-const formRows = ['评价对象：舞室 / 老师 / 课程', '结构化评分维度', '图文/视频上传', '匿名开关'];
-
-const onPublish = () => {
-  showSuccessToast('评价已发布');
-  router.back();
+const targetNames: Record<ReviewTargetType, string> = {
+  studio: 'Urban Flow 舞室',
+  coach: 'Mia 老师',
+  course: 'K-pop 入门课'
 };
+
+const draftKey = 'bitdance_review_draft';
+const activeType = ref<ReviewTargetType>('studio');
+const content = ref('');
+const anonymous = ref(false);
+const allowReply = ref(true);
+const submitting = ref(false);
+const scores = reactive<Record<string, number>>({});
+
+const sourceType = computed(() => {
+  const raw = route.query.sourceType;
+  return raw === 'trial' || raw === 'order' || raw === 'checkin' ? raw : 'trial';
+});
+const sourceRefId = computed(() => Number(route.query.sourceRefId) || undefined);
+const targetId = computed(() => Number(route.query.targetId) || 1);
+const targetName = computed(
+  () => String(route.query.targetName || targetNames[activeType.value])
+);
+const currentDimensions = computed(() => REVIEW_DIMENSIONS[activeType.value]);
+const averageScore = computed(() => {
+  const values = currentDimensions.value
+    .map((item) => scores[item.key])
+    .filter((score): score is number => score !== undefined);
+  if (!values.length) return 0;
+  const total = values.reduce((sum, score) => sum + score, 0);
+  return Number((total / values.length).toFixed(1));
+});
+
+const resetScores = () => {
+  Object.keys(scores).forEach((key) => delete scores[key]);
+};
+
+const setActiveType = (type: ReviewTargetType) => {
+  activeType.value = type;
+};
+
+const setScore = (key: string, score: number) => {
+  scores[key] = score;
+};
+
+const saveDraft = () => {
+  localStorage.setItem(
+    draftKey,
+    JSON.stringify({
+      targetType: activeType.value,
+      targetId: targetId.value,
+      content: content.value,
+      anonymous: anonymous.value,
+      allowReply: allowReply.value,
+      scores: { ...scores }
+    })
+  );
+  showSuccessToast('草稿已保存');
+};
+
+const submitReview = async () => {
+  if (currentDimensions.value.some((item) => scores[item.key] === undefined)) {
+    showFailToast('请完成所有维度评分');
+    return;
+  }
+  if (!content.value.trim()) {
+    showFailToast('请填写评价内容');
+    return;
+  }
+  submitting.value = true;
+  try {
+    const body: ReviewCreateBody = {
+      targetType: activeType.value,
+      targetId: targetId.value,
+      overallScore: averageScore.value,
+      contentText: content.value.trim(),
+      dimensions: currentDimensions.value.map((item) => ({
+        code: item.key,
+        name: item.label,
+        score: scores[item.key] as number
+      })),
+      sourceType: sourceType.value,
+      sourceRefId: sourceRefId.value
+    };
+    await createReview(body);
+    localStorage.removeItem(draftKey);
+    showSuccessToast('评价已提交');
+    router.back();
+  } finally {
+    submitting.value = false;
+  }
+};
+
+watch(activeType, resetScores, { immediate: true });
 </script>
 
 <template>
-  <main class="pen-page">
-    <PenTopBar title="评价系统" @share="showToast('评价链接已复制')" />
+  <main class="review-page">
+    <PenTopBar title="写评价" @share="showToast('评价草稿已准备')" />
 
-    <section class="pen-scroll">
-      <section class="score">
-        <strong class="score__value">4.8</strong>
-        <div class="score__copy">
-          <span class="score__title">综合评分</span>
-          <span class="score__detail">环境 4.7 · 纠错 4.9 · 零基础友好 4.8</span>
+    <section class="review-scroll">
+      <section class="target-card">
+        <div class="target-card__icon" aria-hidden="true">
+          <Music :size="20" :stroke-width="2" />
+        </div>
+        <div class="target-card__copy">
+          <strong>{{ targetName }}</strong>
+          <span>已完成试听 · 权重 1.5x</span>
         </div>
       </section>
 
-      <div class="chip-row" aria-label="评价筛选">
+      <nav class="segment" aria-label="评价对象">
         <button
-          v-for="filter in filters"
-          :key="filter"
+          v-for="item in targetTypes"
+          :key="item.type"
+          class="segment__btn"
+          :class="{ 'segment__btn--active': activeType === item.type }"
           type="button"
-          class="chip"
-          :class="activeFilter === filter ? 'chip--active' : 'chip--inactive'"
-          @click="activeFilter = filter"
+          @click="setActiveType(item.type)"
         >
-          {{ filter }}
+          {{ item.label }}
         </button>
-      </div>
+      </nav>
 
-      <article v-for="review in reviews" :key="review.id" class="review">
-        <strong class="review__author">{{ review.author }}</strong>
-        <p class="review__content">{{ review.content }}</p>
-        <p class="review__score">{{ review.score }}</p>
-      </article>
-
-      <section class="form">
-        <h3 class="form__title">写评价表单</h3>
-        <PenSettingRow
-          v-for="row in formRows"
-          :key="row"
-          :label="row"
-          trailing="设置"
-          @click="showToast(`设置：${row}`)"
-        />
+      <section class="block">
+        <h2 class="block__title">结构化评分</h2>
+        <div class="dimension-list">
+          <div v-for="item in currentDimensions" :key="item.key" class="dimension">
+            <span class="dimension__label">{{ item.label }}</span>
+            <div class="dimension__scores" :aria-label="`${item.label}评分`">
+              <button
+                v-for="score in 5"
+                :key="score"
+                class="score-dot"
+                :class="{ 'score-dot--active': scores[item.key] !== undefined && score <= scores[item.key] }"
+                type="button"
+                @click="setScore(item.key, score)"
+              >
+                {{ score }}
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <button type="button" class="publish" @click="onPublish">发布评价</button>
+      <section class="verify-card">
+        <ShieldCheck :size="17" :stroke-width="2" />
+        <span>{{ averageScore ? `综合 ${averageScore}` : '待评分' }}，将按已验证试听评价计入聚合</span>
+      </section>
+
+      <label class="content-box">
+        <span>评价内容</span>
+        <textarea
+          v-model="content"
+          rows="3"
+          maxlength="5000"
+          placeholder="说说真实体验：交通、环境、老师引导、是否适合零基础……"
+        />
+      </label>
+
+      <section class="block">
+        <h2 class="block__title">照片 / 短视频</h2>
+        <div class="media-grid">
+          <button class="media-cell" type="button" @click="showToast('图片上传待接入')">
+            <Image :size="19" :stroke-width="2" />
+            <span>照片</span>
+          </button>
+          <button class="media-cell" type="button" @click="showToast('视频上传待接入')">
+            <Video :size="19" :stroke-width="2" />
+            <span>视频</span>
+          </button>
+          <button class="media-cell" type="button" @click="showToast('继续添加媒体')">
+            <Plus :size="19" :stroke-width="2" />
+            <span>添加</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="option-list">
+        <label class="option-row">
+          <span>
+            <strong>匿名展示</strong>
+            <em>隐藏昵称，仅展示已验证标签</em>
+          </span>
+          <input v-model="anonymous" type="checkbox" />
+        </label>
+        <label class="option-row">
+          <span>
+            <strong>允许商家回复</strong>
+            <em>收到回复后通知我</em>
+          </span>
+          <input v-model="allowReply" type="checkbox" />
+        </label>
+      </section>
     </section>
+
+    <footer class="submit-bar">
+      <button class="submit-bar__draft" type="button" @click="saveDraft">存草稿</button>
+      <button
+        class="submit-bar__submit"
+        type="button"
+        :disabled="submitting"
+        @click="submitReview"
+      >
+        {{ submitting ? '提交中' : '提交评价' }}
+      </button>
+    </footer>
   </main>
 </template>
 
 <style lang="scss" scoped>
 @import '@/styles/pen-nike.scss';
 
-.pen-page {
+.review-page {
   @include pen-page;
+  min-height: 100%;
+  padding-bottom: calc(74px + var(--app-tabbar-offset, 0px));
 }
 
-.pen-scroll {
+.review-scroll {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+  gap: 8px;
+  padding: 12px 18px;
 }
 
-.score {
+.target-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 16px;
-  background: $pen-ink;
-  color: $pen-on-primary;
+  gap: 10px;
+  min-height: 66px;
+  padding: 10px;
+  background: $pen-soft;
 
-  &__value {
-    font-size: 48px;
-    font-weight: 900;
-    line-height: $pen-lh;
+  &__icon {
+    flex: none;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: $pen-hairline;
+    color: $pen-ink;
+    place-items: center;
   }
 
   &__copy {
+    min-width: 0;
     display: flex;
+    flex: 1;
     flex-direction: column;
-    gap: 6px;
+    gap: 3px;
   }
 
-  &__title {
+  strong {
     font-size: 16px;
     font-weight: 900;
     line-height: $pen-lh;
   }
 
-  &__detail {
-    color: $pen-subtle-text;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: $pen-lh;
-  }
-}
-
-.chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  @include pen-chip;
-}
-
-.review {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  border-radius: 16px;
-  background: $pen-soft;
-
-  &__author {
-    font-size: 14px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  &__content {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 500;
-    line-height: $pen-lh;
-  }
-
-  &__score {
-    margin: 0;
+  span {
     color: $pen-mute;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     line-height: $pen-lh;
   }
 }
 
-.form {
+.segment {
   display: flex;
-  flex-direction: column;
+  gap: 8px;
+  height: 38px;
 
-  &__title {
-    @include pen-h3-section;
-    padding: 8px 0;
+  &__btn {
+    flex: 1;
+    border: 1px solid $pen-hairline;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+
+    &--active {
+      border-color: $pen-ink;
+      background: $pen-ink;
+      color: $pen-on-primary;
+    }
   }
 }
 
-.publish {
-  height: 48px;
-  margin-top: 2px;
-  border: 0;
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+}
+
+.dimension-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dimension {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+
+  &__label {
+    flex: none;
+    width: 82px;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+
+  &__scores {
+    display: flex;
+    flex: 1;
+    gap: 5px;
+  }
+}
+
+.score-dot {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  border: 1px solid $pen-hairline;
   border-radius: 999px;
-  background: $pen-ink;
-  color: $pen-on-primary;
-  font-size: 15px;
+  background: $pen-soft;
+  color: $pen-mute;
+  font-size: 10px;
   font-weight: 800;
-  line-height: $pen-lh;
   cursor: pointer;
+  place-items: center;
+
+  &--active {
+    border-color: $pen-ink;
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+}
+
+.verify-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #f1f8f3;
+  color: $pen-success;
+
+  span {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+}
+
+.content-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 86px;
+  padding: 10px;
+  border-radius: 8px;
+  background: $pen-soft;
+
+  span {
+    font-size: 14px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  textarea {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $pen-ink;
+    font-family: $pen-font;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    resize: none;
+    box-sizing: border-box;
+
+    &::placeholder {
+      color: $pen-mute;
+    }
+  }
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.media-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 60px;
+  border: 1px solid $pen-hairline;
+  border-radius: 8px;
+  background: $pen-soft;
+  color: $pen-mute;
+  cursor: pointer;
+
+  span {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  border-bottom: 1px solid $pen-hairline;
+
+  span {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: 13px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  em {
+    color: $pen-mute;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: $pen-lh;
+  }
+
+  input {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex: none;
+    margin: 0;
+    border: 0;
+    border-radius: 999px;
+    appearance: none;
+    background: #dadada;
+    cursor: pointer;
+
+    &::after {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: $pen-canvas;
+      content: '';
+      transition: transform 0.18s ease;
+    }
+
+    &:checked {
+      background: $pen-ink;
+    }
+
+    &:checked::after {
+      transform: translateX(18px);
+    }
+  }
+}
+
+.submit-bar {
+  position: fixed;
+  right: 0;
+  bottom: var(--app-tabbar-offset, 0px);
+  left: 0;
+  z-index: 90;
+  display: flex;
+  width: 100%;
+  max-width: 480px;
+  height: 74px;
+  margin: 0 auto;
+  padding: 12px 18px;
+  border-top: 1px solid $pen-hairline;
+  background: $pen-canvas;
+  gap: 10px;
+  box-sizing: border-box;
+
+  button {
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  &__draft {
+    width: 104px;
+    background: $pen-soft;
+    color: $pen-ink;
+  }
+
+  &__submit {
+    flex: 1;
+    background: $pen-ink;
+    color: $pen-on-primary;
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+  }
 }
 </style>

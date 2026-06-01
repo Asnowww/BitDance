@@ -117,11 +117,40 @@ const loadWorkshops = (): Workshop[] => {
 };
 const saveWorkshops = (items: Workshop[]) => localStorage.setItem(WORKSHOP_KEY, JSON.stringify(items));
 
+const seedOrders = (): Order[] => {
+  const workshops = seed();
+  const now = Date.now();
+  const samples = [
+    { status: 'UNPAID' as const, offset: 0 },
+    { status: 'PAID' as const, offset: 1 },
+    { status: 'COMPLETED' as const, offset: 2 },
+    { status: 'REFUNDED' as const, offset: 3 }
+  ];
+  return samples.map(({ status, offset }) => {
+    const w = workshops[offset];
+    const session = w.sessions[0];
+    const id = now - offset;
+    return {
+      id,
+      workshopId: w.id,
+      workshopTitle: w.title,
+      sessionId: session.id,
+      sessionDate: session.date,
+      sessionTime: `${session.startTime}-${session.endTime}`,
+      amount: session.price,
+      status,
+      checkinCode: status === 'PAID' || status === 'COMPLETED' ? `BD-${id.toString(36).toUpperCase().slice(-6)}` : '',
+      createdAt: now - offset * 86400000
+    };
+  });
+};
+
 const loadOrders = (): Order[] => {
   try {
-    return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]') as Order[];
+    const raw = localStorage.getItem(ORDER_KEY);
+    return raw ? (JSON.parse(raw) as Order[]) : seedOrders();
   } catch {
-    return [];
+    return seedOrders();
   }
 };
 const saveOrders = (items: Order[]) => localStorage.setItem(ORDER_KEY, JSON.stringify(items));
@@ -147,7 +176,7 @@ mock('get', /\/workshops\/\d+$/, ({ url }) => {
   return loadWorkshops().find((it) => it.id === id) ?? null;
 });
 
-mock('post', /\/workshop-orders$/, ({ data }) => {
+mock('post', /\/(?:h5\/)?workshop-orders$/, ({ data }) => {
   const body = data as Record<string, unknown>;
   const ws = loadWorkshops();
   const w = ws.find((it) => it.id === Number(body.workshopId));
@@ -173,7 +202,7 @@ mock('post', /\/workshop-orders$/, ({ data }) => {
   return order;
 });
 
-mock('post', /\/workshop-orders\/\d+\/pay$/, ({ url }) => {
+mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/pay$/, ({ url }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const orders = loadOrders();
   const idx = orders.findIndex((it) => it.id === id);
@@ -196,7 +225,7 @@ mock('post', /\/workshop-orders\/\d+\/pay$/, ({ url }) => {
   return orders[idx];
 });
 
-mock('post', /\/workshop-orders\/\d+\/cancel$/, ({ url }) => {
+mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/cancel$/, ({ url }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const orders = loadOrders();
   const idx = orders.findIndex((it) => it.id === id);
@@ -207,7 +236,7 @@ mock('post', /\/workshop-orders\/\d+\/cancel$/, ({ url }) => {
   return orders[idx];
 });
 
-mock('post', /\/workshop-orders\/\d+\/refund$/, ({ url }) => {
+mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/refund$/, ({ url }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const orders = loadOrders();
   const idx = orders.findIndex((it) => it.id === id);
@@ -229,9 +258,9 @@ mock('post', /\/workshop-orders\/\d+\/refund$/, ({ url }) => {
   return orders[idx];
 });
 
-mock('get', /\/workshop-orders\/mine$/, () => loadOrders());
+mock('get', /\/(?:h5\/)?workshop-orders\/mine$/, () => loadOrders());
 
-mock('post', /\/workshop-orders\/\d+\/checkin$/, ({ url, data }) => {
+mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/checkin$/, ({ url, data }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const body = (data ?? {}) as Record<string, unknown>;
   const orders = loadOrders();

@@ -17,7 +17,7 @@ export interface StudioListResp {
   list: StudioCard[];
   page: number;
   pageSize: number;
-  total: number;
+  total?: number;
 }
 
 export interface StudioListQuery {
@@ -29,6 +29,12 @@ export interface StudioListQuery {
   keyword?: string;
   latitude?: number;
   longitude?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  timeSlot?: 'morning' | 'afternoon' | 'evening' | 'weekend';
+  trialAvailable?: boolean;
+  zeroBasicFriendly?: boolean;
+  nearMetro?: boolean;
 }
 
 export const fetchNearbyStudios = (params: StudioListQuery) =>

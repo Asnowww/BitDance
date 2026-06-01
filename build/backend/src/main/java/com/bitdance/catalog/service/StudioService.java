@@ -16,6 +16,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -45,12 +46,16 @@ public class StudioService {
     @Transactional(readOnly = true)
     public StudioListResponse searchNearby(
         Long cityId, Double latitude, Double longitude, Double distanceKm,
-        String keyword, Long danceStyleId, int page, int pageSize, Long currentUserId
+        String keyword, Long danceStyleId, BigDecimal minPrice, BigDecimal maxPrice,
+        String timeSlot, Boolean trialAvailable, Boolean zeroBasicFriendly, Boolean nearMetro,
+        int page, int pageSize, Long currentUserId
     ) {
         int safePage = Math.max(1, page);
         int safeSize = Math.min(Math.max(1, pageSize), 100);
         SearchParams p = new SearchParams(
-            cityId, latitude, longitude, distanceKm, keyword, danceStyleId, safePage, safeSize
+            cityId, latitude, longitude, distanceKm, keyword, danceStyleId,
+            minPrice, maxPrice, timeSlot, trialAvailable, zeroBasicFriendly, nearMetro,
+            safePage, safeSize
         );
         List<StudioNearbyRow> rows = searchRepo.searchNearby(p);
 

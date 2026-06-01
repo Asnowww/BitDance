@@ -5,6 +5,7 @@ import { showToast } from 'vant';
 import { Music, Search } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import StudioFilterDrawer, { type StudioFilterValue } from '@/components/studio/StudioFilterDrawer.vue';
 import { fetchNearbyStudios, type StudioCard, type StudioListQuery } from '@/api/studio';
 import { toggleFavorite } from '@/api/favorite';
 
@@ -12,6 +13,7 @@ const router = useRouter();
 
 const filters = ['舞种', '距离', '价格', '时段', '舞室'];
 const activeFilter = ref('距离');
+const drawerVisible = ref(false);
 const viewMode = ref<'list' | 'map'>('list');
 
 interface SearchResult {
@@ -25,8 +27,10 @@ interface SearchResult {
 }
 
 const studios = ref<StudioCard[]>([]);
+const resultCount = ref<number>();
 const loading = ref(false);
 const query = ref<StudioListQuery>({ page: 1, pageSize: 20, distanceKm: 5 });
+const appliedFilters = ref<StudioFilterValue>({ distanceKm: 5 });
 
 const results = computed<SearchResult[]>(() =>
   studios.value.map((studio) => ({
@@ -43,7 +47,9 @@ const results = computed<SearchResult[]>(() =>
 const loadStudios = async () => {
   loading.value = true;
   try {
-    studios.value = (await fetchNearbyStudios(query.value)).list;
+    const response = await fetchNearbyStudios(query.value);
+    studios.value = response.list;
+    resultCount.value = response.total;
   } finally {
     loading.value = false;
   }
@@ -59,14 +65,48 @@ const locate = () => {
   );
 };
 
-const applyFilter = (filter: string) => {
+const openFilter = (filter: string) => {
   activeFilter.value = filter;
+  drawerVisible.value = true;
+};
+
+const applyFilters = (filters: StudioFilterValue) => {
+  appliedFilters.value = filters;
+  const {
+    danceStyleId: _danceStyleId,
+    minPrice: _minPrice,
+    maxPrice: _maxPrice,
+    timeSlot: _timeSlot,
+    trialAvailable: _trialAvailable,
+    zeroBasicFriendly: _zeroBasicFriendly,
+    nearMetro: _nearMetro,
+    ...baseQuery
+  } = query.value;
   query.value = {
-    ...query.value,
-    distanceKm: filter === '距离' ? 3 : 5,
-    danceStyleId: filter === '舞种' ? 1 : undefined
+    ...baseQuery,
+    ...filters,
+    page: 1
   };
+  drawerVisible.value = false;
   void loadStudios();
+};
+
+const filterSummary = (filter: string) => {
+  if (filter === '舞种' && appliedFilters.value.danceStyleId) return `${filter} · 已选`;
+  if (filter === '距离' && appliedFilters.value.distanceKm) return `${appliedFilters.value.distanceKm}km`;
+  if (filter === '价格' && (appliedFilters.value.minPrice || appliedFilters.value.maxPrice !== undefined)) {
+    return `¥${appliedFilters.value.minPrice ?? 0}-${appliedFilters.value.maxPrice ?? 500}`;
+  }
+  if (filter === '时段' && appliedFilters.value.timeSlot) {
+    return { morning: '上午', afternoon: '下午', evening: '晚上', weekend: '周末' }[appliedFilters.value.timeSlot];
+  }
+  if (
+    filter === '舞室' &&
+    (appliedFilters.value.trialAvailable || appliedFilters.value.zeroBasicFriendly || appliedFilters.value.nearMetro)
+  ) {
+    return `${filter} · 已选`;
+  }
+  return filter;
 };
 
 const selected = ref<Record<string, boolean>>({});
@@ -115,9 +155,9 @@ onMounted(() => {
           type="button"
           class="chip"
           :class="activeFilter === filter ? 'chip--active' : 'chip--inactive'"
-          @click="applyFilter(filter)"
+          @click="openFilter(filter)"
         >
-          {{ filter }}
+          {{ filterSummary(filter) }}
         </button>
       </div>
 
@@ -165,6 +205,14 @@ onMounted(() => {
         </li>
       </ul>
     </section>
+
+    <StudioFilterDrawer
+      :visible="drawerVisible"
+      :value="appliedFilters"
+      :result-count="resultCount"
+      @close="drawerVisible = false"
+      @apply="applyFilters"
+    />
 
     <PenActionBar
       soft-label="收藏"
