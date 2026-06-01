@@ -28,6 +28,9 @@ public class AppUser extends BaseEntity {
     @Column(name = "status", nullable = false, length = 16)
     private String status = "ACTIVE";
 
+    @Column(name = "password_hash", length = 255)
+    private String passwordHash;
+
     public Long getId() { return id; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
@@ -37,4 +40,6 @@ public class AppUser extends BaseEntity {
     public void setUnionId(String unionId) { this.unionId = unionId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 }

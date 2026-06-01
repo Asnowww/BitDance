@@ -3,6 +3,7 @@ package com.bitdance.iam.controller;
 import com.bitdance.common.web.ApiResponse;
 import com.bitdance.iam.dto.LoginRequest;
 import com.bitdance.iam.dto.LoginResponse;
+import com.bitdance.iam.dto.PasswordLoginRequest;
 import com.bitdance.iam.dto.SendSmsRequest;
 import com.bitdance.iam.service.AuthService;
 import jakarta.validation.Valid;
@@ -32,5 +33,10 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest body) {
         return ApiResponse.ok(authService.loginWithSms(body.phone(), body.code()));
+    }
+
+    @PostMapping("/login/password")
+    public ApiResponse<LoginResponse> loginPassword(@Valid @RequestBody PasswordLoginRequest body) {
+        return ApiResponse.ok(authService.loginWithPassword(body.phone(), body.password()));
     }
 }

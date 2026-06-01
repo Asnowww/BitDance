@@ -1,102 +1,115 @@
 <script setup lang="ts">
+import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import NikeIcon from '@/components/NikeIcon.vue';
-
-interface PracticeCard {
-  title: string;
-  place: string;
-  meta: string;
-  action: string;
-  tone: 'dark' | 'light';
-  to: string;
-}
+import { Bell, Search, User, Heart } from 'lucide-vue-next';
 
 const router = useRouter();
 
-const scopeChips = ['推荐', '附近', '同舞种', '我的'];
-const filterChips = ['Hiphop', '中级', '周末', '3人'];
-const practices: PracticeCard[] = [
-  {
-    title: '周六 Hiphop 中级复习',
-    place: '五道口 DanceLab · 15:00',
-    meta: '2/4 人 · 发起人已验证',
-    action: '我要参加',
-    tone: 'dark',
-    to: '/practice/recommend'
-  },
-  {
-    title: '韩舞成品舞互拍',
-    place: '朝阳 Joy Studio · 今晚',
-    meta: '1/3 人 · 接受新手',
-    action: '查看详情',
-    tone: 'light',
-    to: '/practice/kpop-shoot'
-  },
-  {
-    title: 'Urban 基础律动',
-    place: '中关村 · 明天 19:30',
-    meta: '3/3 人 · 已满员',
-    action: '查看详情',
-    tone: 'light',
-    to: '/practice/urban-basic'
-  }
+const scopes = ['推荐', '附近', '同舞种', '我的'];
+const activeScope = ref('推荐');
+const filters = ['Hiphop', '中级', '周末', '3人'];
+const activeFilters = reactive<Record<string, boolean>>({});
+
+interface PracticeCard {
+  id: string;
+  cover: string;
+  coverH: number;
+  tag: string;
+  title: string;
+  place: string;
+  time: string;
+  joined: number;
+  capacity: number;
+  host: string;
+}
+
+const cards: PracticeCard[] = [
+  { id: 'hiphop-mid', cover: 'https://images.unsplash.com/photo-1667384447307-9ae9cd6ff1d8?w=640&q=80&auto=format&fit=crop', coverH: 150, tag: 'Hiphop', title: '周六 Hiphop 中级复习', place: '五道口 DanceLab', time: '15:00', joined: 2, capacity: 4, host: '阿 May' },
+  { id: 'kpop-shoot', cover: 'https://images.unsplash.com/photo-1761882628233-1e23102da76d?w=640&q=80&auto=format&fit=crop', coverH: 120, tag: '韩舞', title: '韩舞成品舞互拍', place: '朝阳 Joy', time: '今晚', joined: 1, capacity: 3, host: 'Leo' },
+  { id: 'urban-basic', cover: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=640&q=80&auto=format&fit=crop', coverH: 110, tag: 'Urban', title: 'Urban 基础律动', place: '中关村', time: '明天 19:30', joined: 3, capacity: 3, host: 'Kiki' },
+  { id: 'locking-battle', cover: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=640&q=80&auto=format&fit=crop', coverH: 160, tag: 'Locking', title: '周日 Locking battle', place: '望京 SPACE', time: '14:00', joined: 0, capacity: 4, host: 'Mia' },
+  { id: 'jazz-night', cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=640&q=80&auto=format&fit=crop', coverH: 130, tag: 'Jazz', title: '工作日晚 Jazz 慢练', place: '国贸 Studio M', time: '周三 20:00', joined: 2, capacity: 5, host: 'Coco' },
+  { id: 'breaking-jam', cover: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=640&q=80&auto=format&fit=crop', coverH: 120, tag: 'Breaking', title: 'Breaking 地板 jam', place: '五棵松', time: '周六 16:00', joined: 4, capacity: 6, host: 'Ray' }
 ];
 
-const goPractice = (practice: PracticeCard) => {
-  router.push(practice.to);
+const toggleFilter = (f: string) => {
+  activeFilters[f] = !activeFilters[f];
 };
+const dots = (n: number) => Math.min(n, 5);
+const goDetail = (id: string) => router.push(`/practice/${id}`);
 </script>
 
 <template>
-  <div class="practice-page">
-    <header class="practice-topbar">
-      <div class="practice-topbar__copy">
-        <h1>约练</h1>
-        <p>推荐匹配同城舞友</p>
+  <div class="square">
+    <header class="square__top">
+      <div class="square__copy">
+        <h1>约练广场</h1>
+        <p>找同城舞友一起练</p>
       </div>
-      <button class="icon-button" type="button" aria-label="消息提醒" @click="router.push('/messages')">
-        <NikeIcon name="bell" :size="20" />
+      <button class="icon-btn" type="button" aria-label="消息" @click="router.push('/messages')">
+        <Bell :size="20" :stroke-width="2" />
       </button>
     </header>
 
-    <main class="practice-content">
-      <button class="search-pill" type="button" @click="router.push('/search')">
-        <NikeIcon name="search" :size="18" />
+    <main class="square__content">
+      <button class="search" type="button" @click="router.push('/search')">
+        <Search :size="18" :stroke-width="2" />
         <span>搜索舞种、地点、发起人</span>
       </button>
 
-      <section class="chip-row" aria-label="约练推荐范围">
+      <div class="chips">
         <button
-          v-for="(chip, index) in scopeChips"
-          :key="chip"
-          class="filter-chip"
-          :class="{ 'filter-chip--active': index === 0 }"
+          v-for="s in scopes"
+          :key="s"
+          class="chip"
+          :class="{ 'chip--active': activeScope === s }"
           type="button"
+          @click="activeScope = s"
         >
-          {{ chip }}
+          {{ s }}
         </button>
-      </section>
-
-      <section class="chip-row" aria-label="约练筛选条件">
-        <button v-for="chip in filterChips" :key="chip" class="filter-chip" type="button">
-          {{ chip }}
-        </button>
-      </section>
-
-      <section class="practice-list" aria-label="推荐约练">
-        <article
-          v-for="practice in practices"
-          :key="practice.title"
-          class="practice-card"
-          :class="`practice-card--${practice.tone}`"
-          @click="goPractice(practice)"
+      </div>
+      <div class="chips">
+        <button
+          v-for="f in filters"
+          :key="f"
+          class="chip"
+          :class="{ 'chip--active': activeFilters[f] }"
+          type="button"
+          @click="toggleFilter(f)"
         >
-          <h2>{{ practice.title }}</h2>
-          <p class="practice-card__place">{{ practice.place }}</p>
-          <p class="practice-card__meta">{{ practice.meta }}</p>
-          <button class="practice-card__action" type="button" @click.stop="goPractice(practice)">
-            {{ practice.action }}
-          </button>
+          {{ f }}
+        </button>
+      </div>
+
+      <section class="masonry">
+        <article v-for="c in cards" :key="c.id" class="card" @click="goDetail(c.id)">
+          <div
+            class="card__cover"
+            :style="{ backgroundImage: `url(${c.cover})`, height: `${c.coverH}px` }"
+          >
+            <span class="card__tag">{{ c.tag }}</span>
+          </div>
+          <div class="card__body">
+            <h3 class="card__title">{{ c.title }}</h3>
+            <p class="card__meta">{{ c.place }} · {{ c.time }}</p>
+            <div class="card__avatars">
+              <span
+                v-for="n in dots(c.capacity)"
+                :key="n"
+                class="dot"
+                :class="{ 'dot--filled': n <= c.joined }"
+              >
+                <User v-if="n <= c.joined" :size="13" :stroke-width="2" />
+              </span>
+              <span class="card__count">{{ c.joined }}/{{ c.capacity }} 人</span>
+            </div>
+            <div class="card__foot">
+              <span class="card__host-avatar" aria-hidden="true" />
+              <span class="card__host">{{ c.host }} 发起</span>
+              <Heart class="card__like" :size="16" :stroke-width="2" />
+            </div>
+          </div>
         </article>
       </section>
     </main>
@@ -104,86 +117,82 @@ const goPractice = (practice: PracticeCard) => {
 </template>
 
 <style lang="scss" scoped>
-.practice-page {
+.square {
   --nike-ink: #111111;
   --nike-canvas: #ffffff;
-  --nike-soft-cloud: #f5f5f5;
+  --nike-soft: #f5f5f5;
   --nike-mute: #707072;
-  --nike-hairline-soft: #e5e5e5;
+  --nike-charcoal: #39393b;
+  --nike-hairline: #e5e5e5;
+  --nike-hairline-strong: #cacacb;
 
-  min-height: calc(100vh - 72px - env(safe-area-inset-bottom));
-  background: var(--nike-canvas);
+  min-height: 100%;
+  background: var(--nike-soft);
   color: var(--nike-ink);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
-    sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
 }
 
-.practice-topbar {
+.square__top {
   height: 68px;
   padding: 14px 18px;
   background: var(--nike-canvas);
-  border-bottom: 1px solid var(--nike-hairline-soft);
+  border-bottom: 1px solid var(--nike-hairline);
   display: flex;
   align-items: center;
   gap: 12px;
+}
 
-  &__copy {
-    min-width: 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
+.square__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 
   h1,
   p {
     margin: 0;
   }
-
   h1 {
     font-size: 18px;
+    font-weight: 900;
     line-height: 1.25;
-    font-weight: 800;
-    letter-spacing: 0;
   }
-
   p {
     color: var(--nike-mute);
     font-size: 12px;
-    line-height: 1.25;
     font-weight: 500;
-    letter-spacing: 0;
+    line-height: 1.25;
   }
 }
 
-.icon-button {
+.icon-btn {
   width: 40px;
   height: 40px;
+  flex: none;
   border: 0;
   border-radius: 999px;
-  background: var(--nike-soft-cloud);
+  background: var(--nike-soft);
   color: var(--nike-ink);
   display: grid;
   place-items: center;
-  flex: none;
   cursor: pointer;
 }
 
-.practice-content {
-  padding: 18px;
+.square__content {
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  background: var(--nike-canvas);
+  gap: 12px;
 }
 
-.search-pill {
+.search {
   width: 100%;
   height: 44px;
-  border: 0;
+  border: 1px solid var(--nike-hairline);
   border-radius: 24px;
   padding: 0 16px;
-  background: var(--nike-soft-cloud);
+  background: var(--nike-canvas);
   color: var(--nike-mute);
   display: flex;
   align-items: center;
@@ -192,38 +201,29 @@ const goPractice = (practice: PracticeCard) => {
   text-align: left;
 
   span {
-    min-width: 0;
     flex: 1;
-    color: var(--nike-mute);
     font-size: 14px;
-    line-height: 1.25;
     font-weight: 500;
+    color: var(--nike-mute);
   }
 }
 
-.chip-row {
+.chips {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 }
 
-.filter-chip {
-  height: 40px;
-  border: 1px solid var(--nike-hairline-soft);
+.chip {
+  height: 34px;
+  padding: 6px 14px;
+  border: 1px solid var(--nike-hairline);
   border-radius: 999px;
-  padding: 8px 14px;
-  background: var(--nike-soft-cloud);
+  background: var(--nike-canvas);
   color: var(--nike-ink);
   font-size: 13px;
+  font-weight: 700;
   line-height: 1.25;
-  font-weight: 600;
-  white-space: nowrap;
   cursor: pointer;
 
   &--active {
@@ -233,88 +233,121 @@ const goPractice = (practice: PracticeCard) => {
   }
 }
 
-.practice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.masonry {
+  column-count: 2;
+  column-gap: 10px;
 }
 
-.practice-card {
-  width: 100%;
-  min-height: 153px;
-  border: 0;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.card {
+  break-inside: avoid;
+  margin-bottom: 10px;
+  background: var(--nike-canvas);
+  border: 1px solid var(--nike-hairline);
+  border-radius: 16px;
+  overflow: hidden;
   cursor: pointer;
 
-  h2,
-  p {
+  &__cover {
+    background-color: var(--nike-charcoal);
+    background-size: cover;
+    background-position: center;
+    padding: 10px;
+  }
+
+  &__tag {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--nike-canvas);
+    color: var(--nike-ink);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  &__body {
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__title {
     margin: 0;
-  }
-
-  h2 {
-    font-size: 18px;
-    line-height: 1.25;
-    font-weight: 900;
-    letter-spacing: 0;
-  }
-
-  &__place {
-    font-size: 14px;
-    line-height: 1.25;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.3;
   }
 
   &__meta {
+    margin: 0;
+    color: var(--nike-mute);
     font-size: 12px;
+    font-weight: 500;
     line-height: 1.25;
-    font-weight: 600;
   }
 
-  &__action {
-    width: 100%;
-    height: 42px;
-    border: 0;
-    border-radius: 999px;
-    padding: 12px 24px;
+  &__avatars {
     display: flex;
-    justify-content: center;
     align-items: center;
-    font-size: 15px;
-    line-height: 1.25;
+    gap: 6px;
+  }
+
+  &__count {
+    color: var(--nike-mute);
+    font-size: 12px;
     font-weight: 700;
-    cursor: pointer;
+    line-height: 1.25;
   }
 
-  &--dark {
+  &__foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__host-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--nike-charcoal);
+    flex: none;
+  }
+
+  &__host {
+    flex: 1;
+    min-width: 0;
+    color: var(--nike-mute);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  &__like {
+    flex: none;
+    color: var(--nike-mute);
+  }
+}
+
+.dot {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--nike-canvas);
+  border: 1px solid var(--nike-hairline-strong);
+  display: grid;
+  place-items: center;
+
+  &--filled {
     background: var(--nike-ink);
+    border-color: var(--nike-ink);
     color: var(--nike-canvas);
-
-    .practice-card__meta {
-      color: var(--nike-hairline-soft);
-    }
-
-    .practice-card__action {
-      background: var(--nike-soft-cloud);
-      color: var(--nike-ink);
-    }
-  }
-
-  &--light {
-    background: var(--nike-soft-cloud);
-    color: var(--nike-ink);
-
-    .practice-card__place,
-    .practice-card__meta {
-      color: var(--nike-mute);
-    }
-
-    .practice-card__action {
-      background: var(--nike-ink);
-      color: var(--nike-canvas);
-    }
   }
 }
 </style>

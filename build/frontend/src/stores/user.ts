@@ -76,16 +76,28 @@ export const useUserStore = defineStore('user', () => {
     return request.post<unknown, { sent: boolean; expiresIn: number }>('/auth/sms/send', { phone });
   };
 
-  const login = async (phone: string, code: string) => {
-    const data = await request.post<unknown, { token: string; user: UserProfile }>('/auth/login', {
-      phone,
-      code
-    });
+  const applyLogin = (data: { token: string; user: UserProfile }) => {
     token.value = data.token;
     profile.value = data.user;
     setToken(data.token);
     localStorage.setItem(PROFILE_KEY, JSON.stringify(data.user));
     return data.user;
+  };
+
+  const login = async (phone: string, code: string) => {
+    const data = await request.post<unknown, { token: string; user: UserProfile }>('/auth/login', {
+      phone,
+      code
+    });
+    return applyLogin(data);
+  };
+
+  const loginWithPassword = async (phone: string, password: string) => {
+    const data = await request.post<unknown, { token: string; user: UserProfile }>(
+      '/auth/login/password',
+      { phone, password }
+    );
+    return applyLogin(data);
   };
 
   const logout = () => {
@@ -105,6 +117,7 @@ export const useUserStore = defineStore('user', () => {
     privacy,
     sendSmsCode,
     login,
+    loginWithPassword,
     logout,
     switchRole,
     updateProfile,

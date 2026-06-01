@@ -68,11 +68,10 @@ const onSubmit = async () => {
   submitting.value = true;
   try {
     if (mode.value === 'password') {
-      // 密码登录：待后端 /auth/login/password 接口接入
-      showToast('密码登录待后端接口接入，请先用验证码登录');
-      return;
+      await userStore.loginWithPassword(phone.value, password.value);
+    } else {
+      await userStore.login(phone.value, code.value);
     }
-    await userStore.login(phone.value, code.value);
     showSuccessToast('登录成功');
     const redirect = (route.query.redirect as string) || '/home';
     router.replace(redirect);
