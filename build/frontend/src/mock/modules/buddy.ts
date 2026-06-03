@@ -42,6 +42,16 @@ const loadBuddies = (): Buddy[] => {
 
 mock('get', /\/buddies\/mine$/, () => loadBuddies());
 
+mock('get', /^\/h5\/buddies$/, () =>
+  loadBuddies().map((b, index) => ({
+    relationId: index + 1,
+    peerUserId: b.userId,
+    sourcePracticePostId: 1,
+    relationStatus: 'active',
+    createdAt: new Date(b.lastAt).toISOString()
+  }))
+);
+
 mock('get', /\/practices\/recommend$/, () => {
   // 简化：从已有 practice mock 中选取与本人偏好接近的前 8 条
   try {
@@ -89,4 +99,41 @@ mock('post', /\/practices\/ratings$/, ({ data }) => {
     /* ignore */
   }
   return { ok: true };
+});
+
+mock('post', /\/h5\/practices\/\d+\/ratings$/, ({ url, data }) => {
+  const postId = Number(url.split('/').slice(-2)[0]);
+  const body = data as Record<string, unknown>;
+  try {
+    const arr = JSON.parse(localStorage.getItem(RATING_KEY) ?? '[]');
+    arr.push({ ...body, practiceId: postId, ts: Date.now() });
+    localStorage.setItem(RATING_KEY, JSON.stringify(arr));
+    const buddies = loadBuddies();
+    const toUserId = Number(body.toUserId);
+    const exists = buddies.find((b) => b.userId === toUserId);
+    if (!exists) {
+      buddies.unshift({
+        userId: toUserId,
+        name: `Buddy ${toUserId}`,
+        avatar: '',
+        sharedStyles: [],
+        pastSessions: 1,
+        lastAt: Date.now()
+      });
+      localStorage.setItem(BUDDY_KEY, JSON.stringify(buddies));
+    }
+  } catch {
+    /* ignore */
+  }
+  return {
+    id: Date.now(),
+    practicePostId: postId,
+    fromUserId: 999,
+    toUserId: Number(body.toUserId),
+    punctualityScore: Number(body.punctuality ?? 5),
+    friendlinessScore: Number(body.friendliness ?? 5),
+    skillMatchScore: Number(body.skillMatch ?? 5),
+    ratingComment: body.comment,
+    createdAt: new Date().toISOString()
+  };
 });

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { showSuccessToast } from 'vant';
 import StarRating from '@/components/StarRating.vue';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { submitPracticeRating } from '@/api/buddy';
 
 const route = useRoute();
 const router = useRouter();
@@ -21,7 +22,18 @@ const dims = [
   { label: '水平匹配', model: levelMatch }
 ];
 
-const onSubmit = () => {
+const onSubmit = async () => {
+  const id = Number(practiceId);
+  if (Number.isFinite(id)) {
+    await submitPracticeRating({
+      practiceId: id,
+      toUserId: 1,
+      punctuality: punctuality.value,
+      friendliness: friendliness.value,
+      levelMatch: levelMatch.value,
+      comment: comment.value
+    });
+  }
   showSuccessToast('评价已提交');
   router.back();
 };

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Bell, Search, User, Heart } from 'lucide-vue-next';
+import { fetchPractices, type PracticePost } from '@/api/practice';
 
 const router = useRouter();
 
@@ -23,14 +24,40 @@ interface PracticeCard {
   host: string;
 }
 
-const cards: PracticeCard[] = [
+const cards = ref<PracticeCard[]>([
   { id: 'hiphop-mid', cover: 'https://images.unsplash.com/photo-1667384447307-9ae9cd6ff1d8?w=640&q=80&auto=format&fit=crop', coverH: 150, tag: 'Hiphop', title: '周六 Hiphop 中级复习', place: '五道口 DanceLab', time: '15:00', joined: 2, capacity: 4, host: '阿 May' },
   { id: 'kpop-shoot', cover: 'https://images.unsplash.com/photo-1761882628233-1e23102da76d?w=640&q=80&auto=format&fit=crop', coverH: 120, tag: '韩舞', title: '韩舞成品舞互拍', place: '朝阳 Joy', time: '今晚', joined: 1, capacity: 3, host: 'Leo' },
   { id: 'urban-basic', cover: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=640&q=80&auto=format&fit=crop', coverH: 110, tag: 'Urban', title: 'Urban 基础律动', place: '中关村', time: '明天 19:30', joined: 3, capacity: 3, host: 'Kiki' },
   { id: 'locking-battle', cover: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=640&q=80&auto=format&fit=crop', coverH: 160, tag: 'Locking', title: '周日 Locking battle', place: '望京 SPACE', time: '14:00', joined: 0, capacity: 4, host: 'Mia' },
   { id: 'jazz-night', cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=640&q=80&auto=format&fit=crop', coverH: 130, tag: 'Jazz', title: '工作日晚 Jazz 慢练', place: '国贸 Studio M', time: '周三 20:00', joined: 2, capacity: 5, host: 'Coco' },
   { id: 'breaking-jam', cover: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=640&q=80&auto=format&fit=crop', coverH: 120, tag: 'Breaking', title: 'Breaking 地板 jam', place: '五棵松', time: '周六 16:00', joined: 4, capacity: 6, host: 'Ray' }
-];
+]);
+
+const coverOf = (index: number) => cards.value[index % cards.value.length]?.cover ?? cards.value[0].cover;
+
+const toCard = (item: PracticePost, index: number): PracticeCard => ({
+  id: String(item.id),
+  cover: coverOf(index),
+  coverH: 120 + (index % 4) * 10,
+  tag: item.style,
+  title: item.title,
+  place: item.location,
+  time: item.time || item.date,
+  joined: item.takenCount,
+  capacity: item.capacity,
+  host: item.authorName
+});
+
+onMounted(async () => {
+  try {
+    const resp = await fetchPractices({ page: 1, pageSize: 20 });
+    if (resp.list.length > 0) {
+      cards.value = resp.list.map(toCard);
+    }
+  } catch {
+    // Keep the local fallback cards when backend/mock data is unavailable.
+  }
+});
 
 const toggleFilter = (f: string) => {
   activeFilters[f] = !activeFilters[f];

@@ -77,7 +77,25 @@ const loadJoins = (): number[] => {
 };
 const saveJoins = (ids: number[]) => localStorage.setItem(JOIN_KEY, JSON.stringify(ids));
 
-mock('get', /\/practices$/, ({ params }) => {
+const STYLE_BY_ID: Record<string, string> = {
+  '1': 'Hiphop',
+  '2': 'Jazz',
+  '3': 'Breaking',
+  '4': 'Locking',
+  '5': 'Popping',
+  '6': 'Kpop',
+  '7': 'Waacking'
+};
+
+const CITY_BY_ID: Record<string, string> = {
+  '1': CITIES[0],
+  '2': CITIES[1],
+  '3': CITIES[2],
+  '4': CITIES[3],
+  '5': CITIES[4]
+};
+
+mock('get', /^\/practices$/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   let items = load();
   if (p.city) items = items.filter((it) => it.city === p.city);
@@ -94,7 +112,29 @@ mock('get', /\/practices$/, ({ params }) => {
   };
 });
 
+mock('get', /^\/public\/practices$/, ({ params }) => {
+  const p = (params ?? {}) as Record<string, unknown>;
+  let items = load();
+  if (p.cityId) items = items.filter((it) => it.city === CITY_BY_ID[String(p.cityId)] || it.city === String(p.cityId));
+  if (p.danceStyleId) items = items.filter((it) => it.style === STYLE_BY_ID[String(p.danceStyleId)] || it.style === String(p.danceStyleId));
+  if (p.skillLevel) items = items.filter((it) => it.level === p.skillLevel);
+  const page = Number(p.page ?? 1);
+  const pageSize = Number(p.pageSize ?? 20);
+  const start = (page - 1) * pageSize;
+  return {
+    list: items.slice(start, start + pageSize),
+    page,
+    pageSize,
+    total: items.length
+  };
+});
+
 mock('get', /\/practices\/\d+$/, ({ url }) => {
+  const id = Number(url.split('/').pop());
+  return load().find((it) => it.id === id) ?? null;
+});
+
+mock('get', /\/public\/practices\/\d+$/, ({ url }) => {
   const id = Number(url.split('/').pop());
   return load().find((it) => it.id === id) ?? null;
 });
@@ -127,6 +167,36 @@ mock('post', /\/practices$/, ({ data }) => {
   return item;
 });
 
+mock('post', /^\/h5\/practices$/, ({ data }) => {
+  const body = data as Record<string, unknown>;
+  const items = load();
+  const id = Date.now();
+  const startAt = String(body.startAt ?? new Date().toISOString());
+  const endAt = String(body.endAt ?? new Date(Date.now() + 7200_000).toISOString());
+  const item: Item = {
+    id,
+    title: `${STYLE_BY_ID[String(body.danceStyleId)] ?? 'Hiphop'} ${body.skillLevel ?? ''}`.trim(),
+    style: STYLE_BY_ID[String(body.danceStyleId)] ?? 'Hiphop',
+    level: String(body.skillLevel ?? ''),
+    date: startAt.slice(0, 10),
+    time: `${startAt.slice(11, 16)}-${endAt.slice(11, 16)}`,
+    city: CITY_BY_ID[String(body.cityId)] ?? CITIES[0],
+    area: String(body.locationAddress ?? ''),
+    location: String(body.locationName ?? ''),
+    capacity: Number(body.expectedPeopleMax ?? 4),
+    takenCount: 1,
+    remark: body.description as string | undefined,
+    status: 'PUBLISHED',
+    authorId: 999,
+    authorName: 'Me',
+    authorAvatar: '',
+    createdAt: id
+  };
+  items.unshift(item);
+  save(items);
+  return item;
+});
+
 mock('post', /\/practices\/\d+\/join$/, ({ url }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const items = load();
@@ -141,6 +211,18 @@ mock('post', /\/practices\/\d+\/join$/, ({ url }) => {
   save(items);
   saveJoins(joins);
   return { joined: true, takenCount: items[idx].takenCount };
+});
+
+mock('post', /\/h5\/practices\/\d+\/join$/, ({ url }) => {
+  const id = Number(url.split('/').slice(-2)[0]);
+  const items = load();
+  const idx = items.findIndex((it) => it.id === id);
+  if (idx >= 0 && items[idx].takenCount < items[idx].capacity) {
+    items[idx].takenCount += 1;
+    if (items[idx].takenCount >= items[idx].capacity) items[idx].status = 'MATCHED';
+    save(items);
+  }
+  return { id: Date.now(), practicePostId: id, applicantUserId: 999, joinStatus: idx >= 0 ? 'pending' : 'rejected' };
 });
 
 mock('post', /\/practices\/\d+\/cancel$/, ({ url }) => {
@@ -159,6 +241,16 @@ mock('post', /\/practices\/\d+\/cancel$/, ({ url }) => {
   return { canceled: true, takenCount: items[idx].takenCount };
 });
 
+mock('post', /\/h5\/practices\/\d+\/cancel$/, ({ url }) => {
+  const id = Number(url.split('/').slice(-2)[0]);
+  const items = load();
+  const idx = items.findIndex((it) => it.id === id);
+  if (idx < 0) return { canceled: false, takenCount: 0 };
+  items[idx].status = 'CANCELED';
+  save(items);
+  return items[idx];
+});
+
 mock('post', /\/practices\/\d+\/confirm$/, ({ url }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const items = load();
@@ -167,4 +259,33 @@ mock('post', /\/practices\/\d+\/confirm$/, ({ url }) => {
   items[idx].status = 'CONFIRMED';
   save(items);
   return items[idx];
+});
+
+mock('get', /\/public\/users\/\d+\/practices$/, ({ url }) => {
+  const userId = Number(url.split('/').slice(-2)[0]);
+  let items = load().filter((item) => item.authorId === userId);
+  if (items.length === 0 && userId === 1) {
+    items = [
+      {
+        id: 9301,
+        title: '韩舞成品复盘找搭子',
+        style: '韩舞',
+        level: '零基础',
+        date: new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 10),
+        time: '14:00-16:00',
+        city: '北京',
+        area: '海淀区',
+        location: '五道口 Urban Flow',
+        capacity: 4,
+        takenCount: 2,
+        remark: '一起复盘副歌段落，零基础友好。',
+        status: 'PUBLISHED',
+        authorId: 1,
+        authorName: '小李',
+        authorAvatar: '',
+        createdAt: Date.now() - 7200_000
+      }
+    ];
+  }
+  return items;
 });

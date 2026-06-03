@@ -5,6 +5,7 @@ import { Users } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import PenFieldRow from '@/components/pen/PenFieldRow.vue';
+import { joinPractice } from '@/api/practice';
 
 const route = useRoute();
 const router = useRouter();
@@ -23,7 +24,11 @@ const fields = [
   { label: '水平要求', value: '中级及以上' }
 ];
 
-const onJoin = () => {
+const onJoin = async () => {
+  const id = Number(practiceId);
+  if (Number.isFinite(id)) {
+    await joinPractice(id);
+  }
   showToast('已报名，等待发起人确认');
   router.push(`/practice/${practiceId}/rate`);
 };
