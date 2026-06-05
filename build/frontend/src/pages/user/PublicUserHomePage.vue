@@ -1,29 +1,27 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   BookOpen,
   ChevronLeft,
+  MessageCircle,
   Music2,
-  PencilLine,
-  Play,
-  Plus,
-  Settings,
-  User
+  Share2,
+  ShieldCheck,
+  User,
+  UserPlus
 } from 'lucide-vue-next';
 import { fetchUserPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
 import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
-import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
-const user = useUserStore();
+const route = useRoute();
 
 type ContentTab = 'posts' | 'reviews' | 'practices';
 
-const socials = [
-  { platform: '抖音', account: '@urban_lili', state: '公开', icon: Music2, dark: true },
-  { platform: '小红书', account: '小李练舞日记', state: '公开', icon: BookOpen, dark: false },
-  { platform: 'B站', account: '未绑定', state: '仅自己可见', icon: Play, dark: false }
+const publicSocials = [
+  { platform: '抖音', account: '@urban_lili', icon: Music2, dark: true },
+  { platform: '小红书', account: '小李练舞日记', icon: BookOpen, dark: false }
 ];
 
 const activeTab = ref<ContentTab>('posts');
@@ -33,14 +31,8 @@ const practices = ref<UserPracticePost[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
 const loading = ref(false);
 
-const profileName = computed(() => user.profile?.nickname || '小李');
-const profileId = computed(() => user.profile?.id || 1);
-const stats = computed(() => [
-  { value: String(totals.value.posts), label: '动态' },
-  { value: String(totals.value.reviews), label: '评价' },
-  { value: String(totals.value.practices), label: '约练' },
-  { value: '2.1k', label: '获赞' }
-]);
+const userId = computed(() => Number(route.params.id || 1));
+const displayName = computed(() => (userId.value === 1 ? '小李' : `用户 ${userId.value}`));
 
 const topicLabel = (topic: string | { name?: string; topicName?: string }) =>
   typeof topic === 'string' ? topic : topic.topicName || topic.name || '话题';
@@ -62,9 +54,9 @@ const loadHomeData = async () => {
   loading.value = true;
   try {
     const [postResp, reviewResp, practiceResp] = await Promise.all([
-      fetchUserPosts(profileId.value, 1, 20),
-      fetchUserReviews(profileId.value, 1, 20),
-      fetchUserPractices(profileId.value)
+      fetchUserPosts(userId.value, 1, 20),
+      fetchUserReviews(userId.value, 1, 20),
+      fetchUserPractices(userId.value)
     ]);
     posts.value = postResp.list ?? [];
     reviews.value = reviewResp.list ?? [];
@@ -80,49 +72,52 @@ const loadHomeData = async () => {
 };
 
 onMounted(loadHomeData);
+watch(userId, loadHomeData);
 </script>
 
 <template>
-  <main class="profile-page profile-page--self">
+  <main class="public-home">
     <header class="topbar">
       <button type="button" aria-label="返回" @click="router.back()">
         <ChevronLeft :size="24" />
       </button>
-      <h1>我的个人主页</h1>
-      <button type="button" aria-label="主页设置" @click="router.push('/me/profile')">
-        <Settings :size="23" />
+      <h1>{{ displayName }}的主页</h1>
+      <button type="button" aria-label="分享">
+        <Share2 :size="22" />
       </button>
     </header>
 
-    <section class="profile-scroll">
+    <section class="public-scroll">
       <section class="hero-card">
-        <div class="avatar">
-          <User :size="36" />
-        </div>
-        <div class="hero-card__copy">
-          <h2>{{ profileName }}</h2>
-          <p>@bitdance_lili · 零基础韩舞爱好者</p>
-          <div class="chips">
-            <span class="chip chip--active">韩舞</span>
-            <span class="chip">Jazz</span>
-            <span class="chip">北京</span>
+        <div class="hero-card__main">
+          <div class="avatar">
+            <User :size="36" />
+          </div>
+          <div class="hero-card__copy">
+            <h2>{{ displayName }}</h2>
+            <p>@bitdance_lili · 零基础韩舞爱好者 · 北京海淀</p>
+            <div class="chips">
+              <span class="chip chip--active">韩舞</span>
+              <span class="chip">周末约练</span>
+              <span class="chip">Urban</span>
+            </div>
           </div>
         </div>
-        <button class="edit-btn" type="button" aria-label="编辑资料" @click="router.push('/me/profile')">
-          <PencilLine :size="22" />
-        </button>
-      </section>
-
-      <section class="stats" aria-label="主页数据">
-        <div v-for="item in stats" :key="item.label" class="stats__item">
-          <strong>{{ item.value }}</strong>
-          <span>{{ item.label }}</span>
+        <div class="hero-actions">
+          <button class="hero-actions__follow" type="button">
+            <UserPlus :size="18" />
+            <span>关注</span>
+          </button>
+          <button class="hero-actions__message" type="button">
+            <MessageCircle :size="18" />
+            <span>私信</span>
+          </button>
         </div>
       </section>
 
       <section class="section">
-        <h2>社交账号</h2>
-        <article v-for="item in socials" :key="item.platform" class="social-row">
+        <h2>公开社交账号</h2>
+        <article v-for="item in publicSocials" :key="item.platform" class="social-row">
           <span class="social-row__icon" :class="{ 'social-row__icon--dark': item.dark }">
             <component :is="item.icon" :size="23" />
           </span>
@@ -130,35 +125,24 @@ onMounted(loadHomeData);
             <strong>{{ item.platform }}</strong>
             <em>{{ item.account }}</em>
           </span>
-          <span class="state" :class="{ 'state--active': item.state === '公开' }">{{ item.state }}</span>
+          <span class="state state--active">公开</span>
         </article>
-        <button class="bind-btn" type="button" @click="router.push('/me/profile')">
-          <Plus :size="20" />
-          <span>管理绑定</span>
-        </button>
       </section>
 
-      <section class="section">
-        <h2>他人视角预览</h2>
-        <div class="preview-card">
-          <strong>仅展示标记为公开的社交账号</strong>
-          <div class="preview-card__chips">
-            <span>抖音 @urban_lili</span>
-            <span>小红书 小李练舞日记</span>
-          </div>
-          <p>按平台单独控制可见性</p>
-        </div>
+      <section class="notice">
+        <ShieldCheck :size="20" />
+        <span>对方未公开或未绑定的账号不会在此显示</span>
       </section>
 
       <nav class="segment" aria-label="主页内容筛选">
         <button class="segment__item" :class="{ 'segment__item--active': activeTab === 'posts' }" type="button" @click="activeTab = 'posts'">
-          动态
+          动态 {{ totals.posts }}
         </button>
         <button class="segment__item" :class="{ 'segment__item--active': activeTab === 'reviews' }" type="button" @click="activeTab = 'reviews'">
-          评价
+          评价 {{ totals.reviews }}
         </button>
         <button class="segment__item" :class="{ 'segment__item--active': activeTab === 'practices' }" type="button" @click="activeTab = 'practices'">
-          约练
+          约练 {{ totals.practices }}
         </button>
       </nav>
 
@@ -172,7 +156,7 @@ onMounted(loadHomeData);
               <span v-for="topic in postTopics(item)" :key="topic" class="chip">{{ topic }}</span>
             </div>
           </article>
-          <p v-if="!posts.length" class="empty-state">还没有发布动态</p>
+          <p v-if="!posts.length" class="empty-state">还没有公开动态</p>
         </template>
         <template v-else-if="activeTab === 'reviews'">
           <article v-for="item in reviews" :key="item.id" class="content-card">
@@ -182,7 +166,7 @@ onMounted(loadHomeData);
               <span class="chip" :class="{ 'chip--active': item.isVerified }">{{ item.isVerified ? '已验证' : '普通评价' }}</span>
             </div>
           </article>
-          <p v-if="!reviews.length" class="empty-state">还没有发布评价</p>
+          <p v-if="!reviews.length" class="empty-state">还没有公开评价</p>
         </template>
         <template v-else>
           <article v-for="item in practices" :key="item.id" class="content-card">
@@ -193,24 +177,19 @@ onMounted(loadHomeData);
               <span class="chip">{{ item.currentPeopleCount ?? item.takenCount ?? 1 }}/{{ item.expectedPeopleMax ?? item.capacity ?? 4 }} 人</span>
             </div>
           </article>
-          <p v-if="!practices.length" class="empty-state">还没有发布约练</p>
+          <p v-if="!practices.length" class="empty-state">还没有公开约练</p>
         </template>
       </section>
     </section>
-
-    <footer class="save-bar">
-      <button type="button" @click="router.push('/me/profile')">保存主页设置</button>
-    </footer>
   </main>
 </template>
 
 <style lang="scss" scoped>
 @import '@/styles/pen-nike.scss';
 
-.profile-page {
+.public-home {
   @include pen-page;
   min-height: 100%;
-  padding-bottom: calc(76px + var(--app-tabbar-offset, 0px));
 }
 
 .topbar {
@@ -244,7 +223,7 @@ onMounted(loadHomeData);
   }
 }
 
-.profile-scroll {
+.public-scroll {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -253,12 +232,18 @@ onMounted(loadHomeData);
 
 .hero-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 126px;
+  min-height: 180px;
+  flex-direction: column;
+  gap: 14px;
   padding: 14px;
   border-radius: 18px;
   background: $pen-soft;
+
+  &__main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 
   &__copy {
     min-width: 0;
@@ -296,21 +281,51 @@ onMounted(loadHomeData);
   place-items: center;
 }
 
-.edit-btn {
+.hero-actions {
   display: grid;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: 999px;
-  background: $pen-canvas;
-  color: $pen-ink;
-  cursor: pointer;
-  place-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 42px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: $pen-lh;
+    cursor: pointer;
+  }
+
+  &__follow {
+    border: 0;
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+
+  &__message {
+    border: 1px solid $pen-hairline;
+    background: $pen-canvas;
+    color: $pen-ink;
+  }
 }
 
-.chips,
-.preview-card__chips {
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+}
+
+.chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -318,8 +333,8 @@ onMounted(loadHomeData);
 }
 
 .chip,
-.preview-card__chips span,
-.state {
+.state,
+.segment__item {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -336,52 +351,11 @@ onMounted(loadHomeData);
 }
 
 .chip--active,
-.preview-card__chips span,
-.state--active {
+.state--active,
+.segment__item--active {
   border-color: $pen-ink;
   background: $pen-ink;
   color: $pen-on-primary;
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-height: 58px;
-  gap: 8px;
-
-  &__item {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-
-    strong {
-      font-size: 22px;
-      font-weight: 900;
-      line-height: $pen-lh;
-    }
-
-    span {
-      color: $pen-mute;
-      font-size: 12px;
-      font-weight: 800;
-      line-height: $pen-lh;
-    }
-  }
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  h2 {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
 }
 
 .social-row {
@@ -436,43 +410,21 @@ onMounted(loadHomeData);
   }
 }
 
-.bind-btn,
-.save-bar button {
-  display: inline-flex;
+.notice {
+  display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  border: 0;
-  border-radius: 999px;
-  background: $pen-ink;
-  color: $pen-on-primary;
-  font-size: 15px;
-  font-weight: 900;
-  line-height: $pen-lh;
-  cursor: pointer;
-}
-
-.bind-btn {
-  height: 46px;
-}
-
-.preview-card {
-  min-height: 94px;
+  min-height: 52px;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: $pen-soft;
+  color: $pen-success;
 
-  strong {
-    font-size: 13px;
+  span {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
     font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  p {
-    margin: 8px 0 0;
-    color: $pen-mute;
-    font-size: 11px;
-    font-weight: 800;
     line-height: $pen-lh;
   }
 }
@@ -480,36 +432,13 @@ onMounted(loadHomeData);
 .segment {
   display: flex;
   gap: 8px;
+  overflow-x: auto;
 }
 
 .segment__item {
-  display: inline-flex;
   min-width: 70px;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  padding: 7px 12px;
   border: 1px solid $pen-hairline;
-  border-radius: 999px;
-  background: $pen-canvas;
-  color: $pen-ink;
-  font-size: 12px;
-  font-weight: 900;
-  line-height: $pen-lh;
-  white-space: nowrap;
   cursor: pointer;
-}
-
-.segment__item--active {
-  border-color: $pen-ink;
-  background: $pen-ink;
-  color: $pen-on-primary;
-}
-
-.content-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .content-card {
@@ -540,6 +469,12 @@ onMounted(loadHomeData);
   }
 }
 
+.content-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .empty-state {
   margin: 0;
   padding: 18px 12px;
@@ -550,41 +485,5 @@ onMounted(loadHomeData);
   font-weight: 900;
   line-height: $pen-lh;
   text-align: center;
-}
-
-.save-bar {
-  position: fixed;
-  right: 0;
-  bottom: var(--app-tabbar-offset, 0px);
-  left: 0;
-  z-index: 90;
-  width: 100%;
-  max-width: 480px;
-  height: 76px;
-  margin: 0 auto;
-  padding: 12px 18px;
-  border-top: 1px solid $pen-hairline;
-  background: $pen-canvas;
-  box-sizing: border-box;
-
-  button {
-    width: 100%;
-    height: 48px;
-  }
-}
-
-@media (max-width: 360px) {
-  .hero-card {
-    align-items: flex-start;
-  }
-
-  .avatar {
-    width: 58px;
-    height: 58px;
-  }
-
-  .hero-card__copy h2 {
-    font-size: 24px;
-  }
 }
 </style>

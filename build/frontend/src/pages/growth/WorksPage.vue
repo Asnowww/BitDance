@@ -43,7 +43,7 @@ const works = [
     </section>
 
     <footer class="save-bar">
-      <button class="save-bar__btn" type="button" @click="showToast('上传新作品')">上传新作品</button>
+      <button class="save-bar__btn" type="button" @click="router.push('/me/works/upload')">上传新作品</button>
     </footer>
   </main>
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Bell, Search, User, Heart } from 'lucide-vue-next';
+import { Bell, Heart, Search, User } from 'lucide-vue-next';
 import { fetchPractices, type PracticePost } from '@/api/practice';
 
 const router = useRouter();
@@ -14,39 +14,59 @@ const activeFilters = reactive<Record<string, boolean>>({});
 interface PracticeCard {
   id: string;
   cover: string;
-  coverH: number;
   tag: string;
   title: string;
-  place: string;
+  area: string;
+  studio: string;
   time: string;
   joined: number;
   capacity: number;
   host: string;
 }
 
+const covers = [
+  'https://images.unsplash.com/photo-1547153760-18fc86324498?w=640&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=640&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=640&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=640&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1667384447307-9ae9cd6ff1d8?w=640&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1535525153412-5a42439a210d?w=640&q=80&auto=format&fit=crop'
+];
+
 const cards = ref<PracticeCard[]>([
-  { id: 'hiphop-mid', cover: 'https://images.unsplash.com/photo-1667384447307-9ae9cd6ff1d8?w=640&q=80&auto=format&fit=crop', coverH: 150, tag: 'Hiphop', title: '周六 Hiphop 中级复习', place: '五道口 DanceLab', time: '15:00', joined: 2, capacity: 4, host: '阿 May' },
-  { id: 'kpop-shoot', cover: 'https://images.unsplash.com/photo-1761882628233-1e23102da76d?w=640&q=80&auto=format&fit=crop', coverH: 120, tag: '韩舞', title: '韩舞成品舞互拍', place: '朝阳 Joy', time: '今晚', joined: 1, capacity: 3, host: 'Leo' },
-  { id: 'urban-basic', cover: 'https://images.unsplash.com/photo-1547153760-18fc86324498?w=640&q=80&auto=format&fit=crop', coverH: 110, tag: 'Urban', title: 'Urban 基础律动', place: '中关村', time: '明天 19:30', joined: 3, capacity: 3, host: 'Kiki' },
-  { id: 'locking-battle', cover: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=640&q=80&auto=format&fit=crop', coverH: 160, tag: 'Locking', title: '周日 Locking battle', place: '望京 SPACE', time: '14:00', joined: 0, capacity: 4, host: 'Mia' },
-  { id: 'jazz-night', cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=640&q=80&auto=format&fit=crop', coverH: 130, tag: 'Jazz', title: '工作日晚 Jazz 慢练', place: '国贸 Studio M', time: '周三 20:00', joined: 2, capacity: 5, host: 'Coco' },
-  { id: 'breaking-jam', cover: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=640&q=80&auto=format&fit=crop', coverH: 120, tag: 'Breaking', title: 'Breaking 地板 jam', place: '五棵松', time: '周六 16:00', joined: 4, capacity: 6, host: 'Ray' }
+  { id: 'jazz-match', cover: covers[0], tag: 'Jazz', title: 'Jazz 找搭子', area: '朝阳区', studio: '舞星 Studio 2', time: '14:00-16:00', joined: 1, capacity: 4, host: '舞月' },
+  { id: 'popping-match', cover: covers[1], tag: 'Popping', title: 'Popping 找搭子', area: '朝阳区', studio: '舞星 Studio 6', time: '20:00-22:00', joined: 2, capacity: 5, host: '羊羊' },
+  { id: 'breaking-jam', cover: covers[2], tag: 'Breaking', title: 'Breaking 地板练习', area: '海淀区', studio: 'DanceLab', time: '周六 16:00', joined: 2, capacity: 4, host: 'Ray' },
+  { id: 'kpop-shoot', cover: covers[3], tag: 'Kpop', title: 'Kpop 成品舞互拍', area: '东城区', studio: 'Joy Dance', time: '今晚 19:30', joined: 3, capacity: 4, host: 'Leo' }
 ]);
 
-const coverOf = (index: number) => cards.value[index % cards.value.length]?.cover ?? cards.value[0].cover;
+const coverOf = (index: number) => covers[index % covers.length];
 
-const toCard = (item: PracticePost, index: number): PracticeCard => ({
-  id: String(item.id),
-  cover: coverOf(index),
-  coverH: 120 + (index % 4) * 10,
-  tag: item.style,
-  title: item.title,
-  place: item.location,
-  time: item.time || item.date,
-  joined: item.takenCount,
-  capacity: item.capacity,
-  host: item.authorName
-});
+const splitPlace = (location: string, area: string) => {
+  const normalized = location.trim();
+  if (!normalized) return { area, studio: '待定场地' };
+  const parts = normalized.split(/\s*[·|,，]\s*/).filter(Boolean);
+  if (parts.length >= 2) return { area: parts[0], studio: parts.slice(1).join(' ') };
+  return { area: area || '同城', studio: normalized };
+};
+
+const toCard = (item: PracticePost, index: number): PracticeCard => {
+  const place = splitPlace(item.location, item.area);
+  return {
+    id: String(item.id),
+    cover: coverOf(index),
+    tag: item.style,
+    title: item.title,
+    area: place.area,
+    studio: place.studio,
+    time: item.time || item.date,
+    joined: item.takenCount,
+    capacity: item.capacity,
+    host: item.authorName
+  };
+};
+
+const filteredCards = computed(() => cards.value);
 
 onMounted(async () => {
   try {
@@ -55,14 +75,17 @@ onMounted(async () => {
       cards.value = resp.list.map(toCard);
     }
   } catch {
-    // Keep the local fallback cards when backend/mock data is unavailable.
+    // Mock data is enough for the static prototype when the API is unavailable.
   }
 });
 
-const toggleFilter = (f: string) => {
-  activeFilters[f] = !activeFilters[f];
+const toggleFilter = (filter: string) => {
+  activeFilters[filter] = !activeFilters[filter];
 };
-const dots = (n: number) => Math.min(n, 5);
+
+const visibleSlots = (capacity: number) => Math.min(Math.max(capacity, 1), 4);
+const coverHeights = [150, 120, 112, 160, 132, 122];
+const coverH = (i: number) => `${coverHeights[i % coverHeights.length]}px`;
 const goDetail = (id: string) => router.push(`/practice/${id}`);
 </script>
 
@@ -84,58 +107,68 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
         <span>搜索舞种、地点、发起人</span>
       </button>
 
-      <div class="chips">
-        <button
-          v-for="s in scopes"
-          :key="s"
-          class="chip"
-          :class="{ 'chip--active': activeScope === s }"
-          type="button"
-          @click="activeScope = s"
-        >
-          {{ s }}
-        </button>
-      </div>
-      <div class="chips">
-        <button
-          v-for="f in filters"
-          :key="f"
-          class="chip"
-          :class="{ 'chip--active': activeFilters[f] }"
-          type="button"
-          @click="toggleFilter(f)"
-        >
-          {{ f }}
-        </button>
-      </div>
+      <section class="filter-panel" aria-label="约练筛选">
+        <div class="chips">
+          <button
+            v-for="scope in scopes"
+            :key="scope"
+            class="chip"
+            :class="{ 'chip--active': activeScope === scope }"
+            type="button"
+            @click="activeScope = scope"
+          >
+            {{ scope }}
+          </button>
+        </div>
+        <div class="chips">
+          <button
+            v-for="filter in filters"
+            :key="filter"
+            class="chip"
+            :class="{ 'chip--active': activeFilters[filter] }"
+            type="button"
+            @click="toggleFilter(filter)"
+          >
+            {{ filter }}
+          </button>
+        </div>
+      </section>
 
-      <section class="masonry">
-        <article v-for="c in cards" :key="c.id" class="card" @click="goDetail(c.id)">
+      <section class="masonry" aria-label="约练列表">
+        <article
+          v-for="(card, i) in filteredCards"
+          :key="card.id"
+          class="card"
+          @click="goDetail(card.id)"
+        >
           <div
             class="card__cover"
-            :style="{ backgroundImage: `url(${c.cover})`, height: `${c.coverH}px` }"
+            :style="{ backgroundImage: `url(${card.cover})`, height: coverH(i) }"
           >
-            <span class="card__tag">{{ c.tag }}</span>
+            <span class="card__tag">{{ card.tag }}</span>
           </div>
+
           <div class="card__body">
-            <h3 class="card__title">{{ c.title }}</h3>
-            <p class="card__meta">{{ c.place }} · {{ c.time }}</p>
-            <div class="card__avatars">
+            <h2 class="card__title">{{ card.title }}</h2>
+            <p class="card__meta">{{ card.area }} {{ card.studio }} · {{ card.time }}</p>
+
+            <div class="slot-row" :aria-label="`${card.joined}/${card.capacity} 人`">
               <span
-                v-for="n in dots(c.capacity)"
-                :key="n"
+                v-for="slot in visibleSlots(card.capacity)"
+                :key="slot"
                 class="dot"
-                :class="{ 'dot--filled': n <= c.joined }"
+                :class="{ 'dot--filled': slot <= card.joined }"
               >
-                <User v-if="n <= c.joined" :size="13" :stroke-width="2" />
+                <User v-if="slot <= card.joined" :size="13" :stroke-width="2" />
               </span>
-              <span class="card__count">{{ c.joined }}/{{ c.capacity }} 人</span>
+              <span class="slot-row__count">{{ card.joined }}/{{ card.capacity }} 人</span>
             </div>
-            <div class="card__foot">
-              <span class="card__host-avatar" aria-hidden="true" />
-              <span class="card__host">{{ c.host }} 发起</span>
+
+            <footer class="card__foot">
+              <span class="host-avatar" aria-hidden="true" />
+              <span class="card__host">{{ card.host }} 发起</span>
               <Heart class="card__like" :size="16" :stroke-width="2" />
-            </div>
+            </footer>
           </div>
         </article>
       </section>
@@ -145,51 +178,54 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
 
 <style lang="scss" scoped>
 .square {
-  --nike-ink: #111111;
-  --nike-canvas: #ffffff;
-  --nike-soft: #f5f5f5;
-  --nike-mute: #707072;
-  --nike-charcoal: #39393b;
-  --nike-hairline: #e5e5e5;
-  --nike-hairline-strong: #cacacb;
+  --ink: #111111;
+  --canvas: #ffffff;
+  --soft: #f5f5f5;
+  --mute: #707072;
+  --line: #e5e5e5;
+  --line-strong: #cacacb;
+  --charcoal: #39393b;
 
   min-height: 100%;
-  background: var(--nike-soft);
-  color: var(--nike-ink);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  background: var(--soft);
+  color: var(--ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
 }
 
 .square__top {
   height: 68px;
   padding: 14px 18px;
-  background: var(--nike-canvas);
-  border-bottom: 1px solid var(--nike-hairline);
+  background: var(--canvas);
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 12px;
+  box-sizing: border-box;
 }
 
 .square__copy {
-  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1;
 
   h1,
   p {
     margin: 0;
+    letter-spacing: 0;
   }
+
   h1 {
     font-size: 18px;
+    line-height: 1.25;
     font-weight: 900;
-    line-height: 1.25;
   }
+
   p {
-    color: var(--nike-mute);
+    margin-top: 2px;
+    color: var(--mute);
     font-size: 12px;
-    font-weight: 500;
     line-height: 1.25;
+    font-weight: 500;
   }
 }
 
@@ -199,15 +235,15 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
   flex: none;
   border: 0;
   border-radius: 999px;
-  background: var(--nike-soft);
-  color: var(--nike-ink);
+  background: var(--soft);
+  color: var(--ink);
   display: grid;
   place-items: center;
   cursor: pointer;
 }
 
 .square__content {
-  padding: 12px 14px;
+  padding: 12px 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -216,23 +252,32 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
 .search {
   width: 100%;
   height: 44px;
-  border: 1px solid var(--nike-hairline);
+  border: 1px solid var(--line);
   border-radius: 24px;
   padding: 0 16px;
-  background: var(--nike-canvas);
-  color: var(--nike-mute);
+  background: var(--canvas);
+  color: var(--mute);
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
   text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
 
   span {
+    min-width: 0;
     flex: 1;
+    color: var(--mute);
     font-size: 14px;
+    line-height: 1.25;
     font-weight: 500;
-    color: var(--nike-mute);
   }
+}
+
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .chips {
@@ -243,20 +288,21 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
 
 .chip {
   height: 34px;
-  padding: 6px 14px;
-  border: 1px solid var(--nike-hairline);
+  padding: 0 14px;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--nike-canvas);
-  color: var(--nike-ink);
+  background: var(--canvas);
+  color: var(--ink);
   font-size: 13px;
-  font-weight: 700;
   line-height: 1.25;
+  font-weight: 700;
   cursor: pointer;
+  box-sizing: border-box;
 
   &--active {
-    border-color: var(--nike-ink);
-    background: var(--nike-ink);
-    color: var(--nike-canvas);
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--canvas);
   }
 }
 
@@ -268,30 +314,31 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
 .card {
   break-inside: avoid;
   margin-bottom: 10px;
-  background: var(--nike-canvas);
-  border: 1px solid var(--nike-hairline);
+  border: 1px solid var(--line);
   border-radius: 16px;
+  background: var(--canvas);
   overflow: hidden;
   cursor: pointer;
 
   &__cover {
-    background-color: var(--nike-charcoal);
-    background-size: cover;
+    background-color: var(--charcoal);
     background-position: center;
+    background-size: cover;
     padding: 10px;
+    box-sizing: border-box;
   }
 
   &__tag {
     display: inline-flex;
     align-items: center;
     height: 24px;
-    padding: 4px 10px;
+    padding: 0 10px;
     border-radius: 999px;
-    background: var(--nike-canvas);
-    color: var(--nike-ink);
+    background: var(--canvas);
+    color: var(--ink);
     font-size: 11px;
-    font-weight: 700;
     line-height: 1.25;
+    font-weight: 700;
   }
 
   &__body {
@@ -304,29 +351,24 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
   &__title {
     margin: 0;
     font-size: 15px;
-    font-weight: 800;
     line-height: 1.3;
+    font-weight: 800;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   &__meta {
     margin: 0;
-    color: var(--nike-mute);
+    color: var(--mute);
     font-size: 12px;
+    line-height: 1.3;
     font-weight: 500;
-    line-height: 1.25;
-  }
-
-  &__avatars {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  &__count {
-    color: var(--nike-mute);
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.25;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   &__foot {
@@ -335,21 +377,13 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
     gap: 6px;
   }
 
-  &__host-avatar {
-    width: 20px;
-    height: 20px;
-    border-radius: 999px;
-    background: var(--nike-charcoal);
-    flex: none;
-  }
-
   &__host {
     flex: 1;
     min-width: 0;
-    color: var(--nike-mute);
+    color: var(--mute);
     font-size: 12px;
-    font-weight: 600;
     line-height: 1.25;
+    font-weight: 600;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -357,24 +391,47 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
 
   &__like {
     flex: none;
-    color: var(--nike-mute);
+    color: var(--mute);
   }
+}
+
+.slot-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .dot {
   width: 24px;
   height: 24px;
   flex: none;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: var(--nike-canvas);
-  border: 1px solid var(--nike-hairline-strong);
+  background: var(--canvas);
+  color: var(--canvas);
   display: grid;
   place-items: center;
+  box-sizing: border-box;
 
   &--filled {
-    background: var(--nike-ink);
-    border-color: var(--nike-ink);
-    color: var(--nike-canvas);
+    border-color: var(--ink);
+    background: var(--ink);
   }
+}
+
+.slot-row__count {
+  margin-left: 2px;
+  color: var(--mute);
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.host-avatar {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--charcoal);
 }
 </style>
