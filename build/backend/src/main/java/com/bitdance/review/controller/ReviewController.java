@@ -45,10 +45,11 @@ public class ReviewController {
         @RequestParam String targetType,
         @RequestParam Long targetId,
         @RequestParam(required = false) String sort,
+        @RequestParam(required = false) String status,
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(defaultValue = "20") int pageSize
     ) {
-        return ApiResponse.ok(service.list(targetType, targetId, sort, page, pageSize));
+        return ApiResponse.ok(service.list(targetType, targetId, sort, status, page, pageSize));
     }
 
     @GetMapping("/public/reviews/summary")
@@ -57,5 +58,14 @@ public class ReviewController {
         @RequestParam Long targetId
     ) {
         return ApiResponse.ok(service.summary(targetType, targetId));
+    }
+
+    @GetMapping("/public/users/{userId}/reviews")
+    public ApiResponse<ReviewListResponse> listByUser(
+        @PathVariable Long userId,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.ok(service.listByUser(userId, page, pageSize));
     }
 }

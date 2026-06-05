@@ -2,12 +2,13 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast, showToast } from 'vant';
-import { Image, Music, Plus, ShieldCheck, Video } from 'lucide-vue-next';
+import { Image, Music, Plus, ShieldCheck, Trash2, Video } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import {
   createReview,
   REVIEW_DIMENSIONS,
   type ReviewCreateBody,
+  type ReviewMediaDto,
   type ReviewTargetType
 } from '@/api/review';
 
@@ -32,6 +33,10 @@ const content = ref('');
 const anonymous = ref(false);
 const allowReply = ref(true);
 const submitting = ref(false);
+const imageInput = ref<HTMLInputElement | null>(null);
+const videoInput = ref<HTMLInputElement | null>(null);
+const mixedInput = ref<HTMLInputElement | null>(null);
+const mediaAssets = ref<ReviewMediaDto[]>([]);
 const scores = reactive<Record<string, number>>({});
 
 const sourceType = computed(() => {
@@ -65,6 +70,57 @@ const setScore = (key: string, score: number) => {
   scores[key] = score;
 };
 
+const fileToMedia = (file: File): Promise<ReviewMediaDto | null> =>
+  new Promise((resolve) => {
+    const kind = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : null;
+    if (!kind) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve({
+        type: kind,
+        url: String(reader.result),
+        name: file.name,
+        size: file.size
+      });
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+
+const pickMedia = (kind: 'image' | 'video' | 'mixed') => {
+  if (kind === 'image') imageInput.value?.click();
+  else if (kind === 'video') videoInput.value?.click();
+  else mixedInput.value?.click();
+};
+
+const onMediaSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  if (!files.length) return;
+
+  const slots = Math.max(0, 6 - mediaAssets.value.length);
+  if (!slots) {
+    showFailToast('最多添加 6 个媒体');
+    return;
+  }
+
+  const picked = await Promise.all(files.slice(0, slots).map(fileToMedia));
+  const valid = picked.filter((item): item is ReviewMediaDto => Boolean(item));
+  if (!valid.length) {
+    showFailToast('请选择图片或视频文件');
+    return;
+  }
+  mediaAssets.value = [...mediaAssets.value, ...valid];
+  if (files.length > slots) showToast('已达到 6 个媒体上限');
+};
+
+const removeMedia = (index: number) => {
+  mediaAssets.value = mediaAssets.value.filter((_, itemIndex) => itemIndex !== index);
+};
+
 const saveDraft = () => {
   localStorage.setItem(
     draftKey,
@@ -74,6 +130,7 @@ const saveDraft = () => {
       content: content.value,
       anonymous: anonymous.value,
       allowReply: allowReply.value,
+      mediaAssets: mediaAssets.value,
       scores: { ...scores }
     })
   );
@@ -101,6 +158,7 @@ const submitReview = async () => {
         name: item.label,
         score: scores[item.key] as number
       })),
+      mediaAssets: mediaAssets.value,
       sourceType: sourceType.value,
       sourceRefId: sourceRefId.value
     };
@@ -182,16 +240,27 @@ watch(activeType, resetScores, { immediate: true });
 
       <section class="block">
         <h2 class="block__title">照片 / 短视频</h2>
+        <input ref="imageInput" class="media-input" type="file" accept="image/*" multiple @change="onMediaSelected" />
+        <input ref="videoInput" class="media-input" type="file" accept="video/*" multiple @change="onMediaSelected" />
+        <input ref="mixedInput" class="media-input" type="file" accept="image/*,video/*" multiple @change="onMediaSelected" />
         <div class="media-grid">
-          <button class="media-cell" type="button" @click="showToast('图片上传待接入')">
+          <article v-for="(item, index) in mediaAssets" :key="`${item.name}-${index}`" class="media-preview">
+            <img v-if="item.type === 'image'" :src="item.url" :alt="item.name" />
+            <video v-else :src="item.url" muted playsinline preload="metadata" />
+            <button type="button" aria-label="删除媒体" @click="removeMedia(index)">
+              <Trash2 :size="14" :stroke-width="2" />
+            </button>
+            <span>{{ item.type === 'image' ? '照片' : '视频' }}</span>
+          </article>
+          <button class="media-cell" type="button" @click="pickMedia('image')">
             <Image :size="19" :stroke-width="2" />
             <span>照片</span>
           </button>
-          <button class="media-cell" type="button" @click="showToast('视频上传待接入')">
+          <button class="media-cell" type="button" @click="pickMedia('video')">
             <Video :size="19" :stroke-width="2" />
             <span>视频</span>
           </button>
-          <button class="media-cell" type="button" @click="showToast('继续添加媒体')">
+          <button class="media-cell" type="button" @click="pickMedia('mixed')">
             <Plus :size="19" :stroke-width="2" />
             <span>添加</span>
           </button>
@@ -429,6 +498,10 @@ watch(activeType, resetScores, { immediate: true });
   gap: 8px;
 }
 
+.media-input {
+  display: none;
+}
+
 .media-cell {
   display: flex;
   flex-direction: column;
@@ -446,6 +519,55 @@ watch(activeType, resetScores, { immediate: true });
     font-size: 11px;
     font-weight: 700;
     line-height: $pen-lh;
+  }
+}
+
+.media-preview {
+  position: relative;
+  min-width: 0;
+  height: 60px;
+  overflow: hidden;
+  border: 1px solid $pen-hairline;
+  border-radius: 8px;
+  background: $pen-ink;
+
+  img,
+  video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  button {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(17, 17, 17, 0.78);
+    color: $pen-on-primary;
+    cursor: pointer;
+    place-items: center;
+  }
+
+  span {
+    position: absolute;
+    right: 6px;
+    bottom: 4px;
+    left: 6px;
+    overflow: hidden;
+    color: $pen-on-primary;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 5px rgba(17, 17, 17, 0.85);
+    white-space: nowrap;
   }
 }
 

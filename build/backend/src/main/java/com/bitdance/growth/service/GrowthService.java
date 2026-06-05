@@ -126,21 +126,40 @@ public class GrowthService {
     public GrowthStats stats(Long userId) {
         List<GrowthCheckin> items = checkinRepo.findByUserIdOrderByCheckinAtDesc(userId);
         if (items.isEmpty()) {
-            return new GrowthStats(0, 0, 0, 0, 0, null);
+            return new GrowthStats(0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0);
         }
         long totalSessions = items.size();
         long totalMinutes = items.stream().mapToLong(GrowthCheckin::getDurationMinutes).sum();
         Set<LocalDate> distinctDays = new HashSet<>();
         Set<Long> styleSet = new HashSet<>();
+        Set<Long> courseSet = new HashSet<>();
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = today.minusDays(today.getDayOfWeek().getValue() - 1L);
+        LocalDate monthStart = today.withDayOfMonth(1);
+        long weekSessions = 0;
+        long weekMinutes = 0;
+        long monthSessions = 0;
+        long monthMinutes = 0;
         for (GrowthCheckin c : items) {
-            distinctDays.add(c.getCheckinAt().toLocalDate());
+            LocalDate day = c.getCheckinAt().toLocalDate();
+            distinctDays.add(day);
             if (c.getDanceStyleId() != null) styleSet.add(c.getDanceStyleId());
+            if (c.getCourseScheduleId() != null) courseSet.add(c.getCourseScheduleId());
+            if (!day.isBefore(weekStart) && !day.isAfter(today)) {
+                weekSessions++;
+                weekMinutes += c.getDurationMinutes();
+            }
+            if (!day.isBefore(monthStart) && !day.isAfter(today)) {
+                monthSessions++;
+                monthMinutes += c.getDurationMinutes();
+            }
         }
         int streak = computeStreak(distinctDays);
         OffsetDateTime last = items.get(0).getCheckinAt();
         return new GrowthStats(
             totalSessions, totalMinutes, distinctDays.size(),
-            styleSet.size(), streak, last
+            styleSet.size(), streak, last, courseSet.size(),
+            weekSessions, weekMinutes, monthSessions, monthMinutes
         );
     }
 

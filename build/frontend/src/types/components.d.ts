@@ -16,6 +16,7 @@ declare module 'vue' {
     PenFieldRow: typeof import('./../components/pen/PenFieldRow.vue')['default']
     PenSettingRow: typeof import('./../components/pen/PenSettingRow.vue')['default']
     PenTopBar: typeof import('./../components/pen/PenTopBar.vue')['default']
+    ReviewAggregatePanel: typeof import('./../components/review/ReviewAggregatePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SkeletonCard: typeof import('./../components/SkeletonCard.vue')['default']

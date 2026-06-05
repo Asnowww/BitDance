@@ -145,7 +145,7 @@ class ReviewControllerTest {
 
     @Test
     void list_returnsPaged() throws Exception {
-        when(service.list(eq("studio"), eq(1L), eq("verified"), eq(1), eq(20)))
+        when(service.list(eq("studio"), eq(1L), eq("verified"), eq(null), eq(1), eq(20)))
             .thenReturn(new ReviewListResponse(
                 List.of(fixture("published", new BigDecimal("1.500"), true)),
                 1, 20, 1L

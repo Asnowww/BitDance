@@ -2,41 +2,45 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { Music } from 'lucide-vue-next';
+import { Heart, Music, UserRound } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
+import ReviewAggregatePanel from '@/components/review/ReviewAggregatePanel.vue';
 import { fetchCoachDetail, type CoachDetail } from '@/api/course';
 import { toggleFavorite } from '@/api/favorite';
 
 const route = useRoute();
 const router = useRouter();
-const coachId = Number(route.params.id) || 1;
+const coachId = computed(() => Number(route.params.id) || 1);
 const detail = ref<CoachDetail | null>(null);
 const favored = computed(() => detail.value?.favored ?? false);
 
-const stats = [
-  { value: '4.9', label: '耐心' },
-  { value: '4.8', label: '纠错' },
-  { value: '4.9', label: '讲解' }
-];
+const styleNames = ['Hip-hop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'K-pop', 'Waacking', 'Urban'];
+
+const styleText = computed(() => {
+  const styles = detail.value?.styles ?? [];
+  if (!styles.length) return '擅长舞种待完善';
+  return styles.map((item) => styleNames[(item.danceStyleId - 1) % styleNames.length]).join(' / ');
+});
 
 const course = {
-  id: 'jazz-basic',
-  title: 'Jazz 基础律动',
+  id: 3,
+  title: 'Mira Locking Workshop',
   meta: '明天 20:00 · Urban Flow',
   tag: '初级',
   price: '¥99 / 节'
 };
 
 const onBook = () => router.push(`/course/${course.id}`);
+
 const toggleCoachFavorite = async () => {
-  const result = await toggleFavorite('coach', coachId);
+  const result = await toggleFavorite('coach', coachId.value);
   if (detail.value) detail.value.favored = result.favored;
   showToast(result.favored ? '已收藏' : '已取消收藏');
 };
 
 onMounted(async () => {
-  detail.value = await fetchCoachDetail(coachId);
+  detail.value = await fetchCoachDetail(coachId.value);
 });
 </script>
 
@@ -45,25 +49,27 @@ onMounted(async () => {
     <PenTopBar title="老师详情" @share="showToast('老师主页链接已复制')" />
 
     <section class="pen-scroll">
-      <section class="hero">
-        <div class="hero__bars" aria-hidden="true">
-          <span v-for="i in 6" :key="i" />
-        </div>
-        <Music class="hero__icon" :size="42" :stroke-width="2" />
-        <strong class="hero__title">MIA</strong>
-        <p class="hero__meta">{{ detail?.styles.map((item) => `#${item.danceStyleId}`).join(' / ') || '舞种待完善' }}</p>
-      </section>
-
       <section class="body">
-        <h2 class="body__title">{{ detail?.displayName || '老师详情' }}</h2>
-        <p class="body__sub">{{ detail?.certificationStatus || '待认证' }} · {{ detail?.teachingStyle || '教学风格待完善' }}</p>
-
-        <div class="stats">
-          <div v-for="stat in stats" :key="stat.label" class="stat">
-            <strong class="stat__value">{{ stat.value }}</strong>
-            <span class="stat__label">{{ stat.label }}</span>
+        <section class="profile-card">
+          <div class="profile-card__avatar">
+            <UserRound :size="34" :stroke-width="2" />
           </div>
-        </div>
+          <div class="profile-card__content">
+            <h1>{{ detail?.displayName || 'Mira Chen' }}</h1>
+            <p>{{ styleText }} · {{ detail?.teachingStyle || '零基础友好，可预约课程' }}</p>
+          </div>
+          <button type="button" class="profile-card__fav" @click="toggleCoachFavorite">
+            <Heart :size="18" :fill="favored ? 'currentColor' : 'none'" />
+          </button>
+        </section>
+
+        <section class="intro-card">
+          <h2>教学风格</h2>
+          <p>{{ detail?.intro || '注重基础律动与节奏感，会把动作拆成小节，适合零基础和进阶练习。' }}</p>
+          <span>{{ detail?.availableTimeSlots || '周一 / 周三 19:00-20:30，周六 14:00-16:00' }}</span>
+        </section>
+
+        <ReviewAggregatePanel target-type="coach" :target-id="coachId" />
 
         <header class="section-head">
           <h3>可预约课程</h3>
@@ -110,99 +116,93 @@ onMounted(async () => {
   gap: 16px;
 }
 
-.hero {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 8px;
-  height: 216px;
-  padding: 18px;
-  background: $pen-ink;
-  color: $pen-on-primary;
-  box-sizing: border-box;
-
-  &__bars {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 8px;
-    height: 30px;
-    margin-bottom: auto;
-
-    span {
-      height: 100%;
-      background: $pen-charcoal;
-    }
-  }
-
-  &__icon {
-    flex-shrink: 0;
-    color: $pen-on-primary;
-  }
-
-  &__title {
-    margin: 0;
-    font-size: 32px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  &__meta {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
-}
-
 .body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   padding: 0 18px 20px;
-
-  &__title {
-    margin: 0;
-    font-size: 26px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  &__sub {
-    margin: 0;
-    color: $pen-mute;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  height: 92px;
-}
-
-.stat {
+.profile-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border-radius: 16px;
-  background: $pen-soft;
+  gap: 13px;
+  padding: 16px;
+  border-radius: 22px;
+  background: #efece6;
 
-  &__value {
+  &__avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+
+  &__content {
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__fav {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: $pen-canvas;
+    color: $pen-ink;
+    cursor: pointer;
+  }
+
+  h1 {
+    margin: 0 0 6px;
     font-size: 22px;
     font-weight: 900;
     line-height: $pen-lh;
+    letter-spacing: 0;
   }
 
-  &__label {
+  p {
+    margin: 0;
     color: $pen-mute;
     font-size: 12px;
     font-weight: 700;
+    line-height: 1.45;
+  }
+}
+
+.intro-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: $pen-soft;
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 900;
     line-height: $pen-lh;
+  }
+
+  p,
+  span {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  span {
+    color: $pen-ink;
   }
 }
 
@@ -221,7 +221,7 @@ onMounted(async () => {
     background: transparent;
     color: $pen-mute;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 800;
     cursor: pointer;
   }
 }
@@ -263,29 +263,29 @@ onMounted(async () => {
     margin: 0;
     color: $pen-mute;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     line-height: $pen-lh;
   }
 
   &__price {
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 900;
     line-height: $pen-lh;
   }
 }
 
 .tag {
   align-self: flex-start;
-  height: 40px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
-  padding: 8px 14px;
+  padding: 7px 12px;
   border: 1px solid $pen-hairline;
   border-radius: 999px;
   background: $pen-canvas;
   color: $pen-ink;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   line-height: $pen-lh;
 }
 </style>

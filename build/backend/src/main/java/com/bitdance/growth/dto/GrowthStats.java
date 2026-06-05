@@ -8,5 +8,10 @@ public record GrowthStats(
     int totalDays,
     int styleCount,
     int streakDays,
-    OffsetDateTime lastCheckinAt
+    OffsetDateTime lastCheckinAt,
+    int courseCount,
+    long weekSessions,
+    long weekMinutes,
+    long monthSessions,
+    long monthMinutes
 ) {}

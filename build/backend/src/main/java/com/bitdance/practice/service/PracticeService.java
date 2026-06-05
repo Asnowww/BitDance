@@ -236,6 +236,12 @@ public class PracticeService {
     }
 
     @Transactional(readOnly = true)
+    public List<PracticePostDto> publicPostsByCreator(Long userId) {
+        return postRepo.publicPostsByCreator(userId).stream()
+            .map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<JoinRequestDto> myJoinRequests(Long userId) {
         return joinRepo.findByApplicantUserIdOrderByIdDesc(userId).stream()
             .map(this::toJoinDto).toList();

@@ -34,6 +34,13 @@ export interface DimensionScoreDto {
   score: number;
 }
 
+export interface ReviewMediaDto {
+  type: 'image' | 'video';
+  url: string;
+  name: string;
+  size: number;
+}
+
 export interface ReviewItem {
   id: number;
   userId: number;
@@ -50,12 +57,14 @@ export interface ReviewItem {
   isPinned: boolean;
   publishedAt: string;
   dimensions: DimensionScoreDto[];
+  mediaAssets?: ReviewMediaDto[];
 }
 
 export interface ReviewListQuery {
   targetType: ReviewTargetType;
   targetId: number;
   sort?: 'latest' | 'helpful' | 'verified';
+  status?: 'published' | 'folded';
   page?: number;
   pageSize?: number;
 }
@@ -70,9 +79,9 @@ export interface ReviewListResp {
 export interface ReviewSummary {
   targetType: ReviewTargetType;
   targetId: number;
-  reviewCount: number;
+  count: number;
   verifiedCount: number;
-  ratingAvg: number;
+  weightedAvgScore: number;
   dimensionAvg: Record<string, number>;
 }
 
@@ -82,6 +91,7 @@ export interface ReviewCreateBody {
   overallScore: number;
   contentText: string;
   dimensions: DimensionScoreDto[];
+  mediaAssets?: ReviewMediaDto[];
   sourceType?: 'trial' | 'order' | 'checkin';
   sourceRefId?: number;
 }

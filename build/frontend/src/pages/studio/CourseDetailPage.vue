@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
-import PenFieldRow from '@/components/pen/PenFieldRow.vue';
+import ReviewAggregatePanel from '@/components/review/ReviewAggregatePanel.vue';
 import { fetchCourseDetail, type CourseDetail } from '@/api/course';
 import { toggleFavorite } from '@/api/favorite';
 
@@ -15,12 +15,6 @@ const detail = ref<CourseDetail | null>(null);
 const favored = computed(() => detail.value?.favored ?? false);
 
 const audiences = ['零基础', '想减脂', '喜欢成品舞'];
-const structuredReviews = [
-  { label: '上手难度', value: '低' },
-  { label: '节奏合理性', value: '4.8' },
-  { label: '练习强度', value: '中' },
-  { label: '实际收获', value: '4.9' }
-];
 
 const onBook = () => router.push(`/studio/${detail.value?.studioId ?? 1}/trial?courseId=${courseId}`);
 const toggleCourseFavorite = async () => {
@@ -62,18 +56,13 @@ onMounted(async () => {
 
       <section class="block">
         <header class="block__head">
-          <h3 class="block__title">结构化评价</h3>
-          <span class="block__count">128 条</span>
+          <h3 class="block__title">评价聚合</h3>
         </header>
-        <div class="rows">
-          <PenFieldRow
-            v-for="row in structuredReviews"
-            :key="row.label"
-            :label="row.label"
-            :value="row.value"
-            @click="showToast(`${row.label}：${row.value}`)"
-          />
-        </div>
+        <ReviewAggregatePanel
+          target-type="course"
+          :target-id="courseId"
+          :target-name="detail?.courseName || '课程'"
+        />
       </section>
     </section>
 

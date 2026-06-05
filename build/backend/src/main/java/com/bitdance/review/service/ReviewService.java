@@ -130,23 +130,44 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public ReviewListResponse list(
-        String targetType, Long targetId, String sort, int page, int pageSize
+        String targetType, Long targetId, String sort, String status, int page, int pageSize
     ) {
         validateTargetType(targetType);
+        String safeStatus = validatePublicStatus(status);
         int safePage = Math.max(1, page);
         int safeSize = Math.min(Math.max(1, pageSize), 100);
         PageRequest pr = PageRequest.of(safePage - 1, safeSize);
         Page<Review> p = switch (sort == null ? "latest" : sort) {
             case "helpful" -> reviewRepo
                 .findByTargetTypeAndTargetIdAndReviewStatusOrderByHelpfulCountDescPublishedAtDesc(
-                    targetType, targetId, "published", pr);
+                    targetType, targetId, safeStatus, pr);
             case "verified" -> reviewRepo
                 .findByTargetTypeAndTargetIdAndReviewStatusAndIsVerifiedOrderByPublishedAtDesc(
-                    targetType, targetId, "published", true, pr);
+                    targetType, targetId, safeStatus, true, pr);
             default -> reviewRepo
                 .findByTargetTypeAndTargetIdAndReviewStatusOrderByPublishedAtDesc(
-                    targetType, targetId, "published", pr);
+                    targetType, targetId, safeStatus, pr);
         };
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewListResponse listByUser(Long userId, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 100);
+        Page<Review> p = reviewRepo.findByUserIdAndReviewStatusOrderByPublishedAtDesc(
+            userId, "published", PageRequest.of(safePage - 1, safeSize));
 
         List<Long> ids = p.getContent().stream().map(Review::getId).toList();
         Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
@@ -230,6 +251,14 @@ public class ReviewService {
         if (!Set.of("studio", "course", "coach").contains(targetType)) {
             throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach");
         }
+    }
+
+    private String validatePublicStatus(String status) {
+        if (status == null || status.isBlank()) return "published";
+        if (!Set.of("published", "folded").contains(status)) {
+            throw new BizException("INVALID_ARGUMENT", "status 蹇呴』鏄?published/folded");
+        }
+        return status;
     }
 
     private ReviewDto toDto(Review r, List<ReviewDimensionScore> dims) {

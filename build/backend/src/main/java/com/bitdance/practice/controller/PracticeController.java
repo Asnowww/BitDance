@@ -50,6 +50,11 @@ public class PracticeController {
         return ApiResponse.ok(service.detail(id));
     }
 
+    @GetMapping("/public/users/{userId}/practices")
+    public ApiResponse<List<PracticePostDto>> publicPostsByUser(@PathVariable Long userId) {
+        return ApiResponse.ok(service.publicPostsByCreator(userId));
+    }
+
     @PostMapping("/h5/practices/{id}/cancel")
     public ApiResponse<PracticePostDto> cancel(@PathVariable Long id) {
         return ApiResponse.ok(service.cancel(CurrentUser.getId(), id));
