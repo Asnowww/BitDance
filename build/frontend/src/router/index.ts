@@ -46,8 +46,20 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/me',
     name: 'me',
-    component: () => import('@/pages/user/UserCenterPage.vue'),
+    component: () => import('@/pages/user/MePage.vue'),
     meta: { tab: 'me', title: '我的', requiresAuth: true }
+  },
+  {
+    path: '/me/home',
+    name: 'my-home',
+    component: () => import('@/pages/user/UserCenterPage.vue'),
+    meta: { tab: 'me', title: '我的个人主页', requiresAuth: true }
+  },
+  {
+    path: '/user/:id',
+    name: 'public-user-home',
+    component: () => import('@/pages/user/PublicUserHomePage.vue'),
+    meta: { tab: 'practice', title: '个人主页' }
   },
   {
     path: '/login',
@@ -209,7 +221,7 @@ const routes: RouteRecordRaw[] = [
     path: '/community/publish',
     name: 'publish-post',
     component: () => import('@/pages/community/PublishPostPage.vue'),
-    meta: { title: '发动态', requiresAuth: true }
+    meta: { tab: 'activity', title: '发动态', requiresAuth: true }
   },
   {
     path: '/community/topics',
@@ -252,6 +264,12 @@ const routes: RouteRecordRaw[] = [
     name: 'my-works',
     component: () => import('@/pages/growth/WorksPage.vue'),
     meta: { title: '阶段作品', requiresAuth: true }
+  },
+  {
+    path: '/me/works/upload',
+    name: 'publish-work',
+    component: () => import('@/pages/community/PublishPostPage.vue'),
+    meta: { tab: 'growth', title: '上传作品', requiresAuth: true }
   },
   {
     path: '/me/goal',

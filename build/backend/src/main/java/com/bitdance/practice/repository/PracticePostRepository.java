@@ -30,6 +30,14 @@ public interface PracticePostRepository extends JpaRepository<PracticePost, Long
 
     List<PracticePost> findByCreatorUserIdOrderByIdDesc(Long userId);
 
+    @Query("""
+        select p from PracticePost p
+        where p.creatorUserId = :creatorUserId
+          and p.postStatus in ('published','matched','confirmed','completed')
+        order by p.startAt desc, p.id desc
+        """)
+    List<PracticePost> publicPostsByCreator(@Param("creatorUserId") Long creatorUserId);
+
     @Modifying
     @Query("""
         update PracticePost p

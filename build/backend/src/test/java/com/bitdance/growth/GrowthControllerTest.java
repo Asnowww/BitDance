@@ -125,12 +125,15 @@ class GrowthControllerTest {
     @Test
     void stats_returns() throws Exception {
         when(service.stats(42L)).thenReturn(new GrowthStats(
-            12L, 720L, 8, 3, 4, OffsetDateTime.now()
+            12L, 720L, 8, 3, 4, OffsetDateTime.now(),
+            6, 3L, 180L, 10L, 600L
         ));
         mvc.perform(get("/h5/growth/stats").header("Authorization", "Bearer fake"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalSessions").value(12))
-            .andExpect(jsonPath("$.data.streakDays").value(4));
+            .andExpect(jsonPath("$.data.streakDays").value(4))
+            .andExpect(jsonPath("$.data.courseCount").value(6))
+            .andExpect(jsonPath("$.data.weekMinutes").value(180));
     }
 
     @Test

@@ -4,12 +4,21 @@ const KEY = 'bitdance_mock_checkins';
 
 interface Item {
   id: number;
-  style: string;
-  durationMin: number;
-  location: string;
-  feeling: string;
-  visibility: string;
-  createdAt: number;
+  userId?: number;
+  danceStyleId?: number | null;
+  studioId?: number | null;
+  courseScheduleId?: number | null;
+  practicePostId?: number | null;
+  durationMinutes?: number;
+  feelingText?: string;
+  isPublic?: boolean;
+  checkinAt?: string;
+  style?: string;
+  durationMin?: number;
+  location?: string;
+  feeling?: string;
+  visibility?: string;
+  createdAt?: number;
 }
 
 const load = (): Item[] => {
@@ -21,17 +30,31 @@ const load = (): Item[] => {
 };
 const save = (items: Item[]) => localStorage.setItem(KEY, JSON.stringify(items));
 
+const minutesOf = (it: Item) => Number(it.durationMinutes ?? it.durationMin ?? 0);
+const timeOf = (it: Item) => new Date(it.checkinAt ?? it.createdAt ?? Date.now());
+
 mock('post', /\/growth\/checkins$/, ({ data }) => {
   const body = data as Record<string, unknown>;
   const items = load();
+  const now = new Date();
+  const duration = Number(body.durationMinutes ?? body.durationMin ?? 0);
   const item: Item = {
     id: Date.now(),
-    style: body.style as string,
-    durationMin: Number(body.durationMin),
-    location: body.location as string,
-    feeling: (body.feeling as string) || '',
-    visibility: (body.visibility as string) || 'public',
-    createdAt: Date.now()
+    userId: 999,
+    danceStyleId: (body.danceStyleId as number | undefined) ?? null,
+    studioId: (body.studioId as number | undefined) ?? null,
+    courseScheduleId: (body.courseScheduleId as number | undefined) ?? null,
+    practicePostId: (body.practicePostId as number | undefined) ?? null,
+    durationMinutes: duration,
+    feelingText: ((body.feelingText ?? body.feeling) as string) || '',
+    isPublic: (body.isPublic as boolean | undefined) ?? body.visibility !== 'private',
+    checkinAt: (body.checkinAt as string | undefined) ?? now.toISOString(),
+    style: (body.style as string | undefined) ?? `舞种${body.danceStyleId ?? ''}`,
+    durationMin: duration,
+    location: (body.location as string | undefined) ?? '',
+    feeling: ((body.feelingText ?? body.feeling) as string) || '',
+    visibility: ((body.isPublic as boolean | undefined) ?? true) ? 'public' : 'private',
+    createdAt: now.getTime()
   };
   items.unshift(item);
   save(items);
@@ -42,24 +65,39 @@ mock('get', /\/growth\/checkins$/, () => load());
 
 mock('get', /\/growth\/stats$/, () => {
   const items = load();
-  const dates = new Set(items.map((it) => new Date(it.createdAt).toDateString()));
-  const totalMinutes = items.reduce((s, it) => s + it.durationMin, 0);
-  const styles = new Set(items.map((it) => it.style));
-  const recent = items.length ? items[0].createdAt : null;
-  // 简化的连续天数：基于已打卡日期集合，从今天起向前数
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const dates = new Set(items.map((it) => timeOf(it).toDateString()));
+  const totalMinutes = items.reduce((sum, it) => sum + minutesOf(it), 0);
+  const styles = new Set(items.map((it) => it.danceStyleId ?? it.style).filter(Boolean));
+  const courses = new Set(items.map((it) => it.courseScheduleId).filter(Boolean));
+  const inWeek = items.filter((it) => timeOf(it) >= weekStart && timeOf(it) <= now);
+  const inMonth = items.filter((it) => timeOf(it) >= monthStart && timeOf(it) <= now);
+
   let streak = 0;
-  const cur = new Date();
-  while (dates.has(cur.toDateString())) {
+  const cursor = new Date();
+  while (dates.has(cursor.toDateString())) {
     streak += 1;
-    cur.setDate(cur.getDate() - 1);
+    cursor.setDate(cursor.getDate() - 1);
   }
+
+  const recent = items.length ? timeOf(items[0]) : null;
   return {
-    totalDays: dates.size,
-    totalMinutes,
     totalSessions: items.length,
+    totalMinutes,
+    totalDays: dates.size,
     styleCount: styles.size,
     streakDays: streak,
-    recentAt: recent,
+    lastCheckinAt: recent ? recent.toISOString() : null,
+    courseCount: courses.size,
+    weekSessions: inWeek.length,
+    weekMinutes: inWeek.reduce((sum, it) => sum + minutesOf(it), 0),
+    monthSessions: inMonth.length,
+    monthMinutes: inMonth.reduce((sum, it) => sum + minutesOf(it), 0),
+    recentAt: recent ? recent.getTime() : null,
     goalProgress: Math.min(100, Math.round((items.length / 12) * 100))
   };
 });
@@ -113,16 +151,24 @@ mock('delete', /\/growth\/works\/\d+$/, ({ url }) => {
   return { deleted: items.length !== next.length };
 });
 
-mock('get', /\/growth\/goal$/, () => {
+const readGoal = () => {
   try {
     const raw = localStorage.getItem(GOAL_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
-});
+};
+
+mock('get', /\/growth\/goal$/, readGoal);
+mock('get', /\/growth\/goals\/active$/, readGoal);
 
 mock('put', /\/growth\/goal$/, ({ data }) => {
+  localStorage.setItem(GOAL_KEY, JSON.stringify(data));
+  return data;
+});
+
+mock('put', /\/growth\/goals\/active$/, ({ data }) => {
   localStorage.setItem(GOAL_KEY, JSON.stringify(data));
   return data;
 });
@@ -133,9 +179,9 @@ mock('get', /\/growth\/timeline$/, () => {
     out.push({
       id: `checkin-${c.id}`,
       type: 'checkin',
-      title: `打卡 ${c.style} ${c.durationMin}min`,
+      title: `打卡 ${c.style ?? ''} ${minutesOf(c)}min`,
       subtitle: c.location,
-      ts: c.createdAt
+      ts: timeOf(c).getTime()
     });
   });
   try {

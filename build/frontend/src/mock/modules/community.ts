@@ -251,3 +251,35 @@ mock('get', /\/community\/search$/, ({ params }) => {
   );
   return { list: items, page: 1, pageSize: items.length, total: items.length };
 });
+
+mock('get', /\/public\/users\/\d+\/community\/posts$/, ({ url, params }) => {
+  const userId = Number(url.split('/').slice(-3)[0]);
+  const p = (params ?? {}) as Record<string, unknown>;
+  const page = Number(p.page ?? 1);
+  const pageSize = Number(p.pageSize ?? 10);
+  let items = loadPosts().filter((it) => it.authorId === userId);
+  if (items.length === 0 && userId === 1) {
+    items = [
+      {
+        id: 9101,
+        authorId: 1,
+        authorName: '小李',
+        authorAvatar: '',
+        text: '今天试听了 Urban Flow 的韩舞课，老师会拆动作，零基础也跟得上。',
+        images: [],
+        topics: ['Urban Flow', '韩舞'],
+        style: '韩舞',
+        location: '北京海淀',
+        likeCount: 38,
+        commentCount: 6,
+        collectCount: 3,
+        liked: false,
+        collected: false,
+        createdAt: Date.now() - 3600_000
+      }
+    ];
+  }
+  items = items.slice().sort((a, b) => b.createdAt - a.createdAt);
+  const start = (page - 1) * pageSize;
+  return { list: items.slice(start, start + pageSize), page, pageSize, total: items.length };
+});

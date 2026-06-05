@@ -59,20 +59,184 @@ export interface PracticeCreateBody {
   idempotencyToken: string;
 }
 
+interface BackendPracticePost {
+  id: number;
+  creatorUserId: number;
+  danceStyleId: number;
+  studioId?: number;
+  cityId: number;
+  locationName: string;
+  locationAddress?: string;
+  longitude?: number;
+  latitude?: number;
+  skillLevel?: string;
+  expectedPeopleMin?: number;
+  expectedPeopleMax?: number;
+  currentPeopleCount?: number;
+  startAt: string;
+  endAt: string;
+  expiresAt?: string;
+  postStatus: string;
+  description?: string;
+  createdAt?: string;
+}
+
+interface BackendPracticeListResp {
+  list: BackendPracticePost[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+interface BackendJoinRequest {
+  id: number;
+  practicePostId: number;
+  applicantUserId: number;
+  joinStatus: string;
+}
+
+const styleIds: Record<string, number> = {
+  Hiphop: 1,
+  Jazz: 2,
+  Breaking: 3,
+  Locking: 4,
+  Popping: 5,
+  Kpop: 6,
+  Waacking: 7
+};
+
+const styleNames: Record<number, string> = Object.fromEntries(
+  Object.entries(styleIds).map(([name, id]) => [id, name])
+) as Record<number, string>;
+
+const cityIds: Record<string, number> = {
+  北京: 1,
+  上海: 2,
+  广州: 3,
+  深圳: 4,
+  杭州: 5
+};
+
+const cityNames: Record<number, string> = Object.fromEntries(
+  Object.entries(cityIds).map(([name, id]) => [id, name])
+) as Record<number, string>;
+
+const normalizeStatus = (status?: string): PracticePostStatus =>
+  ((status || 'published').toUpperCase() as PracticePostStatus);
+
+const parseRange = (time: string) => {
+  const matched = time.match(/(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})/);
+  return matched ? [matched[1], matched[2]] : ['15:00', '17:00'];
+};
+
+const toIsoAt = (date: string, time: string) => {
+  const [hour, minute] = time.split(':').map(Number);
+  const d = new Date(`${date}T00:00:00+08:00`);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+};
+
+const formatDate = (iso?: string) => iso ? iso.slice(0, 10) : '';
+
+const formatTime = (start?: string, end?: string) => {
+  if (!start || !end) return '';
+  return `${start.slice(11, 16)}-${end.slice(11, 16)}`;
+};
+
+const toPracticePost = (raw: BackendPracticePost | PracticePost): PracticePost => {
+  if ('postStatus' in raw) {
+    const capacity = raw.expectedPeopleMax ?? raw.expectedPeopleMin ?? 4;
+    const takenCount = raw.currentPeopleCount ?? 1;
+    const style = styleNames[raw.danceStyleId] ?? `舞种 #${raw.danceStyleId}`;
+    const city = cityNames[raw.cityId] ?? `城市 #${raw.cityId}`;
+    return {
+      id: Number(raw.id),
+      title: `${style} ${raw.skillLevel || ''}`.trim() || `约练 #${raw.id}`,
+      style,
+      level: raw.skillLevel || '不限',
+      date: formatDate(raw.startAt),
+      time: formatTime(raw.startAt, raw.endAt),
+      city,
+      area: raw.locationAddress || '',
+      location: raw.locationName,
+      capacity,
+      takenCount,
+      remark: raw.description,
+      status: normalizeStatus(raw.postStatus),
+      authorId: raw.creatorUserId,
+      authorName: `用户 ${raw.creatorUserId}`,
+      authorAvatar: '',
+      createdAt: raw.createdAt ? new Date(raw.createdAt).getTime() : Date.now()
+    };
+  }
+  return raw;
+};
+
+const resolveDate = (date: string) => {
+  const picked = new Date(`${date}T00:00:00+08:00`);
+  const today = new Date();
+  if (Number.isNaN(picked.getTime()) || picked <= today) {
+    const next = new Date();
+    next.setDate(next.getDate() + 3);
+    return next.toISOString().slice(0, 10);
+  }
+  return date;
+};
+
+const toCreatePayload = (body: PracticeCreateBody) => {
+  const date = resolveDate(body.date);
+  const [startTime, endTime] = parseRange(body.time);
+  return {
+    danceStyleId: styleIds[body.style] ?? 1,
+    cityId: cityIds[body.city] ?? 1,
+    locationName: body.location,
+    locationAddress: body.area,
+    skillLevel: body.level,
+    expectedPeopleMin: 2,
+    expectedPeopleMax: body.capacity,
+    startAt: toIsoAt(date, startTime),
+    endAt: toIsoAt(date, endTime),
+    description: body.remark || body.title
+  };
+};
+
+const toSquareParams = (q: PracticeListQuery) => ({
+  cityId: q.city ? cityIds[q.city] : undefined,
+  danceStyleId: q.style ? styleIds[q.style] : undefined,
+  skillLevel: q.level,
+  page: q.page,
+  pageSize: q.pageSize
+});
+
 export const fetchPractices = (q: PracticeListQuery) =>
-  request.get<unknown, PracticeListResp>('/practices', { params: q });
+  request
+    .get<unknown, BackendPracticeListResp | PracticeListResp>('/public/practices', { params: toSquareParams(q) })
+    .then((resp) => ({
+      ...resp,
+      list: resp.list.map((item) => toPracticePost(item as BackendPracticePost | PracticePost))
+    }));
 
 export const fetchPracticeDetail = (id: number) =>
-  request.get<unknown, PracticePost>(`/practices/${id}`);
+  request
+    .get<unknown, BackendPracticePost | PracticePost>(`/public/practices/${id}`)
+    .then(toPracticePost);
 
 export const createPractice = (body: PracticeCreateBody) =>
-  request.post<unknown, PracticePost>('/practices', body);
+  request
+    .post<unknown, BackendPracticePost | PracticePost>('/h5/practices', toCreatePayload(body))
+    .then(toPracticePost);
 
 export const joinPractice = (id: number) =>
-  request.post<unknown, { joined: boolean; takenCount: number }>(`/practices/${id}/join`);
+  request
+    .post<unknown, BackendJoinRequest | { joined: boolean; takenCount: number }>(`/h5/practices/${id}/join`, {})
+    .then((resp) => ('joinStatus' in resp
+      ? { joined: resp.joinStatus === 'pending' || resp.joinStatus === 'accepted', takenCount: 0 }
+      : resp));
 
 export const cancelJoin = (id: number) =>
-  request.post<unknown, { canceled: boolean; takenCount: number }>(`/practices/${id}/cancel`);
+  request
+    .post<unknown, BackendPracticePost | { canceled: boolean; takenCount: number }>(`/h5/practices/${id}/cancel`)
+    .then((resp) => ('postStatus' in resp ? { canceled: resp.postStatus === 'canceled', takenCount: 0 } : resp));
 
 export const confirmPractice = (id: number) =>
-  request.post<unknown, PracticePost>(`/practices/${id}/confirm`);
+  fetchPracticeDetail(id);

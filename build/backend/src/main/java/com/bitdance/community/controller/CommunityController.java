@@ -72,6 +72,16 @@ public class CommunityController {
         return ApiResponse.ok(service.search(q, page, pageSize, CurrentUser.getIdOrNull()));
     }
 
+    @GetMapping("/public/users/{userId}/community/posts")
+    public ApiResponse<PostListResponse> publicPostsByUser(
+        @PathVariable Long userId,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.ok(service.publicPostsByAuthor(
+            userId, page, pageSize, CurrentUser.getIdOrNull()));
+    }
+
     // ---------- Like ----------
 
     @PostMapping("/h5/community/posts/{id}/like")

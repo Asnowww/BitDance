@@ -53,4 +53,16 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
         order by p.publishedAt desc, p.id desc
         """)
     Page<ContentPost> search(@Param("q") String q, Pageable pageable);
+
+    @Query("""
+        select p from ContentPost p
+        where p.postStatus = 'published'
+          and p.visibility = 'public'
+          and p.authorUserId = :authorUserId
+        order by p.publishedAt desc, p.id desc
+        """)
+    Page<ContentPost> publicPostsByAuthor(
+        @Param("authorUserId") Long authorUserId,
+        Pageable pageable
+    );
 }

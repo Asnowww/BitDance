@@ -184,6 +184,18 @@ public class CommunityService {
             safePage, safeSize, p.getTotalElements());
     }
 
+    @Transactional(readOnly = true)
+    public PostListResponse publicPostsByAuthor(
+        Long authorUserId, int page, int pageSize, Long currentUserId
+    ) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 100);
+        Page<ContentPost> p = postRepo.publicPostsByAuthor(
+            authorUserId, PageRequest.of(safePage - 1, safeSize));
+        return new PostListResponse(enrichBatch(p.getContent(), currentUserId),
+            safePage, safeSize, p.getTotalElements());
+    }
+
     // ============ Like ============
 
     @Transactional

@@ -28,6 +28,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         Long userId, String targetType, Long targetId, OffsetDateTime since
     );
 
+    Page<Review> findByUserIdAndReviewStatusOrderByPublishedAtDesc(
+        Long userId, String status, Pageable pageable
+    );
+
     @Query("""
         select r from Review r
         where r.targetType = :targetType and r.targetId = :targetId

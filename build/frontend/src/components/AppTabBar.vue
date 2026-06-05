@@ -14,10 +14,11 @@ interface TabItem {
 
 const route = useRoute();
 const router = useRouter();
+
 const activeTab = computed(() => {
   if (route.meta?.tab) return route.meta.tab as string;
   if (route.path.startsWith('/practice')) return 'practice';
-  if (route.path.startsWith('/workshop')) return 'activity';
+  if (route.path.startsWith('/workshop') || route.path.startsWith('/community')) return 'activity';
   if (route.path.startsWith('/growth') || route.path.startsWith('/me/works') || route.path.startsWith('/me/goal')) {
     return 'growth';
   }
