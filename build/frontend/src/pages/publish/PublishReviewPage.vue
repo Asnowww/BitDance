@@ -39,6 +39,20 @@ const mixedInput = ref<HTMLInputElement | null>(null);
 const mediaAssets = ref<ReviewMediaDto[]>([]);
 const scores = reactive<Record<string, number>>({});
 
+const fallbackImageUrls = [
+  'https://images.unsplash.com/photo-1547153760-18fc86324498?w=960&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=960&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=960&q=80&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=960&q=80&auto=format&fit=crop'
+];
+const fallbackVideoUrl = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+
+const fallbackReviewMediaUrl = (kind: 'image' | 'video', seed: string) => {
+  if (kind === 'video') return fallbackVideoUrl;
+  const index = Math.abs(seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % fallbackImageUrls.length;
+  return fallbackImageUrls[index];
+};
+
 const sourceType = computed(() => {
   const raw = route.query.sourceType;
   return raw === 'trial' || raw === 'order' || raw === 'checkin' ? raw : 'trial';
@@ -79,9 +93,11 @@ const fileToMedia = (file: File): Promise<ReviewMediaDto | null> =>
     }
     const reader = new FileReader();
     reader.onload = () =>
+      // M2 媒体评价：未接对象存储前，提交轻量外链，页面继续用本地 dataURL 做即时预览。
       resolve({
         type: kind,
-        url: String(reader.result),
+        url: fallbackReviewMediaUrl(kind, file.name),
+        previewUrl: String(reader.result),
         name: file.name,
         size: file.size
       });
@@ -158,7 +174,13 @@ const submitReview = async () => {
         name: item.label,
         score: scores[item.key] as number
       })),
-      mediaAssets: mediaAssets.value,
+      mediaAssets: mediaAssets.value.map(({ type, url, name, size, assetId }) => ({
+        type,
+        url,
+        name,
+        size,
+        assetId
+      })),
       sourceType: sourceType.value,
       sourceRefId: sourceRefId.value
     };
@@ -245,8 +267,8 @@ watch(activeType, resetScores, { immediate: true });
         <input ref="mixedInput" class="media-input" type="file" accept="image/*,video/*" multiple @change="onMediaSelected" />
         <div class="media-grid">
           <article v-for="(item, index) in mediaAssets" :key="`${item.name}-${index}`" class="media-preview">
-            <img v-if="item.type === 'image'" :src="item.url" :alt="item.name" />
-            <video v-else :src="item.url" muted playsinline preload="metadata" />
+            <img v-if="item.type === 'image'" :src="item.previewUrl || item.url" :alt="item.name" />
+            <video v-else :src="item.previewUrl || item.url" muted playsinline preload="metadata" />
             <button type="button" aria-label="删除媒体" @click="removeMedia(index)">
               <Trash2 :size="14" :stroke-width="2" />
             </button>

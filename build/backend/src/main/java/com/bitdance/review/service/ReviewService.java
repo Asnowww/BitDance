@@ -39,6 +39,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepo;
     private final ReviewDimensionScoreRepository dimRepo;
     private final ReviewRiskService riskService;
+    private final ReviewMediaService mediaService;
     private final TrialBookingRepository trialRepo;
     private final AppUserRepository userRepo;
     private final BadgeRuleEngine badgeRuleEngine;
@@ -47,6 +48,7 @@ public class ReviewService {
         ReviewRepository reviewRepo,
         ReviewDimensionScoreRepository dimRepo,
         ReviewRiskService riskService,
+        ReviewMediaService mediaService,
         TrialBookingRepository trialRepo,
         AppUserRepository userRepo,
         BadgeRuleEngine badgeRuleEngine
@@ -54,6 +56,7 @@ public class ReviewService {
         this.reviewRepo = reviewRepo;
         this.dimRepo = dimRepo;
         this.riskService = riskService;
+        this.mediaService = mediaService;
         this.trialRepo = trialRepo;
         this.userRepo = userRepo;
         this.badgeRuleEngine = badgeRuleEngine;
@@ -115,7 +118,8 @@ public class ReviewService {
             java.util.Map.of("totalCount", totalReviews),
             "review", saved.getId());
 
-        return toDto(saved, dims);
+        // 评价主体先落库，再把前端提交的外链/模拟媒体绑定到 review 目标。
+        return toDto(saved, dims, mediaService.attachReviewMedia(saved.getId(), userId, req.mediaAssets()));
     }
 
     @Transactional
@@ -154,9 +158,16 @@ public class ReviewService {
             ? Map.of()
             : dimRepo.findByReviewIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+        // 评价媒体按本页 reviewId 一次性取回，避免列表每条评价重复查附件。
+        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
+            mediaService.mediaForReviews(ids);
 
         List<ReviewDto> items = p.getContent().stream()
-            .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                mediaByReview.getOrDefault(r.getId(), List.of())
+            ))
             .toList();
 
         return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
@@ -174,9 +185,16 @@ public class ReviewService {
             ? Map.of()
             : dimRepo.findByReviewIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+        // 用户主页评价同样批量取媒体，保持公开主页与详情页附件展示一致。
+        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
+            mediaService.mediaForReviews(ids);
 
         List<ReviewDto> items = p.getContent().stream()
-            .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                mediaByReview.getOrDefault(r.getId(), List.of())
+            ))
             .toList();
 
         return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
@@ -261,7 +279,11 @@ public class ReviewService {
         return status;
     }
 
-    private ReviewDto toDto(Review r, List<ReviewDimensionScore> dims) {
+    private ReviewDto toDto(
+        Review r,
+        List<ReviewDimensionScore> dims,
+        List<com.bitdance.review.dto.ReviewMediaDto> mediaAssets
+    ) {
         List<DimensionScoreDto> dimDtos = dims.stream()
             .map(d -> new DimensionScoreDto(d.getDimensionCode(), d.getDimensionName(), d.getScore()))
             .toList();
@@ -271,7 +293,7 @@ public class ReviewService {
             r.getIsVerified(), r.getVerifiedSourceType(),
             r.getWeightFactor(), r.getReviewStatus(), r.getRiskLevel(),
             r.getHelpfulCount(), r.getIsPinned(),
-            r.getPublishedAt(), dimDtos
+            r.getPublishedAt(), dimDtos, mediaAssets
         );
     }
 }

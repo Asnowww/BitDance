@@ -35,10 +35,12 @@ export interface DimensionScoreDto {
 }
 
 export interface ReviewMediaDto {
+  assetId?: number;
   type: 'image' | 'video';
   url: string;
   name: string;
   size: number;
+  previewUrl?: string;
 }
 
 export interface ReviewItem {

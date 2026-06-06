@@ -1,20 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
+import { showFailToast, showSuccessToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
-import PenFieldRow from '@/components/pen/PenFieldRow.vue';
+import { fetchCourseDetail, type CourseDetail } from '@/api/course';
+import { toggleFavorite } from '@/api/favorite';
 import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
 import { createTrialBooking, fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
+import { useUserStore } from '@/stores/user';
 
 const route = useRoute();
 const router = useRouter();
+const user = useUserStore();
 const studioId = Number(route.params.id) || 1;
 const requestedCourseId = Number(route.query.courseId) || undefined;
+const requestedScheduleId = Number(route.query.courseScheduleId) || undefined;
 const detail = ref<StudioDetail | null>(null);
 const schedule = ref<ScheduleSlot[]>([]);
+const selectedCourse = ref<CourseDetail | null>(null);
+const contactName = ref('');
+const contactPhone = ref('');
+const danceLevel = ref(user.preferences.level || '零基础');
+const bookingNote = ref('');
 
 const today = new Date();
 const days = Array.from({ length: 7 }, (_, index) => {
@@ -26,28 +35,46 @@ const activeDay = ref(days[0].date);
 const availableSlots = computed(() =>
   schedule.value.filter((slot) => slot.startAt.slice(0, 10) === activeDay.value)
 );
-const slots = computed(() =>
-  availableSlots.value.map((slot) =>
-    new Date(slot.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  )
+const activeScheduleId = ref<number | undefined>(requestedScheduleId);
+const selectedSlot = computed(
+  () => availableSlots.value.find((slot) => slot.id === activeScheduleId.value) ?? availableSlots.value[0] ?? schedule.value[0]
 );
-const activeSlot = ref('');
 
-const fields = [
-  { label: '姓名', value: '请输入称呼' },
-  { label: '手机号', value: '138••••6789' },
-  { label: '舞蹈基础', value: '零基础' }
-];
+const studioTitle = computed(() => detail.value?.name || `舞室 #${studioId}`);
+const studioMeta = computed(() =>
+  [detail.value?.address, detail.value?.transportInfo].filter(Boolean).join(' · ') || '地址与交通信息待完善'
+);
+const courseTitle = computed(() => selectedCourse.value?.courseName || (selectedSlot.value ? `课程 #${selectedSlot.value.courseId}` : '待选课程'));
+const priceText = computed(() =>
+  selectedCourse.value?.priceAmount ? `¥${selectedCourse.value.priceAmount} 体验课` : '价格待确认'
+);
+
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+const setActiveDay = (date: string) => {
+  activeDay.value = date;
+  activeScheduleId.value = availableSlots.value[0]?.id;
+};
+
+const favoriteStudio = async () => {
+  const result = await toggleFavorite('studio', studioId);
+  showSuccessToast(result.favored ? '已收藏' : '已取消收藏');
+};
 
 const onConfirm = async () => {
-  const selectedIndex = slots.value.indexOf(activeSlot.value);
-  const selected = availableSlots.value[selectedIndex] ?? availableSlots.value[0] ?? schedule.value[0];
+  const selected = selectedSlot.value;
   if (!selected) return;
+  if (!contactPhone.value.trim()) {
+    showFailToast('请填写联系电话');
+    return;
+  }
   await createTrialBooking({
     courseId: requestedCourseId ?? selected.courseId,
     courseScheduleId: selected.id,
-    contactPhone: '13800000789',
-    bookingNote: '试听预约'
+    contactPhone: contactPhone.value.trim(),
+    // M1 预约流程：把报名人、基础和备注写入 bookingNote，后端暂无独立字段时仍可追踪。
+    bookingNote: [contactName.value.trim(), danceLevel.value.trim(), bookingNote.value.trim()].filter(Boolean).join(' / ')
   });
   showSuccessToast('已提交，等待舞室确认');
   router.push('/me/trials');
@@ -58,8 +85,18 @@ onMounted(async () => {
     fetchStudioDetail(studioId),
     fetchStudioSchedule(studioId)
   ]);
-  activeSlot.value = slots.value[0] ?? '';
+  contactName.value = user.profile?.nickname || '';
+  contactPhone.value = user.profile?.phone || '';
+  if (!activeScheduleId.value) activeScheduleId.value = availableSlots.value[0]?.id ?? schedule.value[0]?.id;
 });
+
+watch(
+  selectedSlot,
+  async (slot) => {
+    selectedCourse.value = slot ? await fetchCourseDetail(slot.courseId).catch(() => null) : null;
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -70,9 +107,9 @@ onMounted(async () => {
       <div class="studio">
         <div class="studio__cover" aria-hidden="true"><Music :size="26" :stroke-width="2" /></div>
         <div class="studio__copy">
-          <strong class="studio__name">Urban Flow 舞室</strong>
-          <span class="studio__meta">五道口地铁站 320m · 韩舞强</span>
-          <strong class="studio__price">¥79 体验课</strong>
+          <strong class="studio__name">{{ studioTitle }}</strong>
+          <span class="studio__meta">{{ studioMeta }}</span>
+          <strong class="studio__price">{{ courseTitle }} · {{ priceText }}</strong>
         </div>
       </div>
 
@@ -84,7 +121,7 @@ onMounted(async () => {
           class="day"
           :class="{ 'day--on': activeDay === d.date }"
           type="button"
-          @click="activeDay = d.date; activeSlot = slots[0] ?? ''"
+          @click="setActiveDay(d.date)"
         >
           <span class="day__w">{{ d.w }}</span>
           <span class="day__d">{{ d.d }}</span>
@@ -94,29 +131,44 @@ onMounted(async () => {
       <h2 class="block-title">选择时段</h2>
       <div class="chip-row">
         <button
-          v-for="s in slots"
-          :key="s"
+          v-for="slot in availableSlots"
+          :key="slot.id"
           class="chip"
-          :class="activeSlot === s ? 'chip--active' : 'chip--inactive'"
+          :class="activeScheduleId === slot.id ? 'chip--active' : 'chip--inactive'"
           type="button"
-          @click="activeSlot = s"
+          @click="activeScheduleId = slot.id"
         >
-          {{ s }}
+          {{ formatTime(slot.startAt) }} · 余 {{ Math.max(slot.capacity - slot.bookedCount, 0) }}
         </button>
       </div>
+      <p v-if="!availableSlots.length" class="empty-hint">当天暂无可预约场次，请切换日期。</p>
 
       <h2 class="block-title">报名信息</h2>
       <div class="rows">
-        <PenFieldRow v-for="f in fields" :key="f.label" :label="f.label" :value="f.value" />
+        <label class="form-row">
+          <span>姓名</span>
+          <input v-model="contactName" type="text" placeholder="请输入称呼" />
+        </label>
+        <label class="form-row">
+          <span>手机号</span>
+          <input v-model="contactPhone" type="tel" placeholder="请输入联系电话" />
+        </label>
+        <label class="form-row">
+          <span>舞蹈基础</span>
+          <input v-model="danceLevel" type="text" placeholder="例如：零基础 / Jazz 初级" />
+        </label>
       </div>
 
-      <div class="remark">备注：想了解的内容、目标舞种…</div>
+      <label class="remark">
+        <span>备注</span>
+        <textarea v-model="bookingNote" rows="3" placeholder="想了解的内容、目标舞种…" />
+      </label>
     </section>
 
     <PenActionBar
       soft-label="收藏"
       dark-label="确认预约"
-      @soft="showSuccessToast('已收藏')"
+      @soft="favoriteStudio"
       @dark="onConfirm"
     />
   </main>
@@ -180,9 +232,50 @@ onMounted(async () => {
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { @include pen-chip; }
 
-.rows { display: flex; flex-direction: column; }
+.empty-hint {
+  margin: 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid $pen-hairline;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  min-height: 54px;
+  border-bottom: 1px solid $pen-hairline;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: $pen-lh;
+
+  span {
+    color: $pen-ink;
+  }
+
+  input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $pen-ink;
+    font: inherit;
+    text-align: right;
+  }
+}
 
 .remark {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-height: 80px;
   padding: 14px;
   border-radius: 16px;
@@ -191,5 +284,21 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.4;
+
+  span {
+    color: $pen-ink;
+    font-weight: 900;
+  }
+
+  textarea {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    resize: vertical;
+    background: transparent;
+    color: $pen-ink;
+    font: inherit;
+  }
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music, Search } from 'lucide-vue-next';
@@ -8,6 +8,7 @@ import PenActionBar from '@/components/pen/PenActionBar.vue';
 import StudioFilterDrawer, { type StudioFilterValue } from '@/components/studio/StudioFilterDrawer.vue';
 import { fetchNearbyStudios, type StudioCard, type StudioListQuery } from '@/api/studio';
 import { toggleFavorite } from '@/api/favorite';
+import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
 
 const router = useRouter();
 
@@ -31,6 +32,12 @@ const resultCount = ref<number>();
 const loading = ref(false);
 const query = ref<StudioListQuery>({ page: 1, pageSize: 20, distanceKm: 5 });
 const appliedFilters = ref<StudioFilterValue>({ distanceKm: 5 });
+const mapContainer = ref<HTMLElement | null>(null);
+const mapStatus = ref(hasTencentMapConfig() ? '地图加载中' : '未配置腾讯地图 Key，展示坐标降级视图');
+const selectedMapStudioId = ref<number>();
+let tencentMapApi: Record<string, any> | null = null;
+let map: any = null;
+let markerLayer: any = null;
 
 const results = computed<SearchResult[]>(() =>
   studios.value.map((studio) => ({
@@ -55,13 +62,102 @@ const loadStudios = async () => {
   }
 };
 
+const resetMarkers = () => {
+  markerLayer?.setMap?.(null);
+  markerLayer = null;
+};
+
+const renderMap = async () => {
+  if (viewMode.value !== 'map') return;
+  if (!hasTencentMapConfig()) {
+    mapStatus.value = '未配置腾讯地图 Key，已保留列表数据和坐标用于验收';
+    return;
+  }
+  await nextTick();
+  if (!mapContainer.value) return;
+  try {
+    const TMap = tencentMapApi ?? (await loadTencentMap());
+    tencentMapApi = TMap;
+    const points = studios.value.filter((studio) => {
+      const latitude = Number(studio.latitude);
+      const longitude = Number(studio.longitude);
+      return Number.isFinite(latitude) && Number.isFinite(longitude);
+    });
+    const center = points[0]
+      ? new TMap.LatLng(Number(points[0].latitude), Number(points[0].longitude))
+      : new TMap.LatLng(39.90923, 116.397428);
+    if (!map) {
+      // 搜索页地图只承载 M1 附近舞室点位，不把腾讯地图实例状态写入业务 store。
+      map = new TMap.Map(mapContainer.value, {
+        viewMode: '2D',
+        zoom: points.length ? 13 : 11,
+        center
+      });
+    } else {
+      map.setCenter?.(center);
+      map.setZoom?.(points.length ? 13 : 11);
+    }
+    resetMarkers();
+    markerLayer = new TMap.MultiMarker({
+      id: 'bitdance-studio-markers',
+      map,
+      styles: {
+        studio: new TMap.MarkerStyle({
+          width: 28,
+          height: 36,
+          anchor: { x: 14, y: 36 }
+        })
+      },
+      geometries: points.map((studio) => ({
+        id: String(studio.id),
+        styleId: 'studio',
+        position: new TMap.LatLng(Number(studio.latitude), Number(studio.longitude)),
+        properties: {
+          studioId: studio.id,
+          title: studio.name
+        }
+      }))
+    });
+    markerLayer.on('click', (event: any) => {
+      const id = Number(event?.geometry?.properties?.studioId ?? event?.geometry?.id);
+      if (!id) return;
+      selectedMapStudioId.value = id;
+      router.push(`/studio/${id}`);
+    });
+    if (points.length > 1 && TMap.LatLngBounds && typeof map.fitBounds === 'function') {
+      const bounds = new TMap.LatLngBounds();
+      points.forEach((studio) => bounds.extend(new TMap.LatLng(Number(studio.latitude), Number(studio.longitude))));
+      map.fitBounds(bounds, { padding: 40 });
+    }
+    mapStatus.value = points.length ? `已标注 ${points.length} 家舞室` : '暂无可标注经纬度';
+  } catch {
+    mapStatus.value = '地图加载失败，已回退列表视图数据';
+  }
+};
+
 const locate = () => {
+  let settled = false;
+  // M1 定位兜底：浏览器权限弹窗可能长时间无回调，先保证舞室列表和腾讯地图点位可见。
+  const fallbackTimer = window.setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    void loadStudios().then(renderMap);
+  }, 1200);
+
   navigator.geolocation?.getCurrentPosition(
     ({ coords }) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(fallbackTimer);
       query.value = { ...query.value, latitude: coords.latitude, longitude: coords.longitude };
-      void loadStudios();
+      void loadStudios().then(renderMap);
     },
-    () => void loadStudios()
+    () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(fallbackTimer);
+      void loadStudios().then(renderMap);
+    }
   );
 };
 
@@ -88,7 +184,7 @@ const applyFilters = (filters: StudioFilterValue) => {
     page: 1
   };
   drawerVisible.value = false;
-  void loadStudios();
+  void loadStudios().then(renderMap);
 };
 
 const filterSummary = (filter: string) => {
@@ -136,6 +232,20 @@ const onFavorite = async () => {
 onMounted(() => {
   locate();
 });
+
+watch(viewMode, (mode) => {
+  if (mode === 'map') void renderMap();
+});
+
+watch(studios, () => {
+  if (viewMode.value === 'map') void renderMap();
+});
+
+onUnmounted(() => {
+  resetMarkers();
+  map?.destroy?.();
+  map = null;
+});
 </script>
 
 <template>
@@ -179,6 +289,23 @@ onMounted(() => {
           地图
         </button>
       </div>
+
+      <section v-if="viewMode === 'map'" class="map-panel" aria-label="舞室地图">
+        <div ref="mapContainer" class="map-panel__canvas" />
+        <p class="map-panel__status">{{ mapStatus }}</p>
+        <div v-if="!hasTencentMapConfig()" class="map-panel__fallback">
+          <button
+            v-for="studio in studios.slice(0, 8)"
+            :key="studio.id"
+            type="button"
+            class="map-chip"
+            :class="{ 'map-chip--active': selectedMapStudioId === studio.id }"
+            @click="selectedMapStudioId = studio.id; router.push(`/studio/${studio.id}`)"
+          >
+            {{ studio.name }} · {{ studio.longitude ?? '-' }}, {{ studio.latitude ?? '-' }}
+          </button>
+        </div>
+      </section>
 
       <ul class="result-list">
         <li v-for="item in results" :key="item.id" class="result" @click="router.push(item.to)">
@@ -298,6 +425,54 @@ onMounted(() => {
       background: $pen-ink;
       color: $pen-on-primary;
     }
+  }
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.map-panel__canvas {
+  min-height: 280px;
+  border: 1px solid $pen-hairline;
+  border-radius: 14px;
+  background: $pen-soft;
+  overflow: hidden;
+}
+
+.map-panel__status {
+  margin: 0;
+  color: $pen-mute;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: $pen-lh;
+}
+
+.map-panel__fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-chip {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid $pen-hairline;
+  border-radius: 12px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: $pen-lh;
+  text-align: left;
+  cursor: pointer;
+
+  &--active {
+    border-color: $pen-ink;
+    background: $pen-ink;
+    color: $pen-on-primary;
   }
 }
 

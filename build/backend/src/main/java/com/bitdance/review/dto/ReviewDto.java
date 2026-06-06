@@ -19,5 +19,7 @@ public record ReviewDto(
     Integer helpfulCount,
     Boolean isPinned,
     OffsetDateTime publishedAt,
-    List<DimensionScoreDto> dimensions
+    List<DimensionScoreDto> dimensions,
+    // 前端评价聚合面板直接读取该字段展示图文/视频附件。
+    List<ReviewMediaDto> mediaAssets
 ) {}

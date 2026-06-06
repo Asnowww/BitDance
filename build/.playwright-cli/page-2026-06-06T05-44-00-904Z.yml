@@ -1,0 +1,145 @@
+- generic [ref=e4]:
+  - main [ref=e5]:
+    - main [ref=e6]:
+      - generic [ref=e7]:
+        - button "返回" [ref=e8] [cursor=pointer]:
+          - img [ref=e9]
+        - heading "搜索结果" [level=1] [ref=e11]
+      - generic [ref=e13]:
+        - button "韩舞 零基础 5km 内" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - generic [ref=e18]: 韩舞 零基础 5km 内
+        - generic "筛选条件" [ref=e19]:
+          - button "舞种" [ref=e20] [cursor=pointer]
+          - button "5km" [ref=e21] [cursor=pointer]
+          - button "价格" [ref=e22] [cursor=pointer]
+          - button "时段" [ref=e23] [cursor=pointer]
+          - button "舞室" [ref=e24] [cursor=pointer]
+        - generic [ref=e25]:
+          - button "列表" [ref=e26] [cursor=pointer]
+          - button "地图" [active] [ref=e27] [cursor=pointer]
+        - region "舞室地图" [ref=e188]:
+          - generic [ref=e191]:
+            - generic:
+              - generic [ref=e192]:
+                - generic [ref=e194]:
+                  - generic:
+                    - generic [ref=e197]: 5 公里
+                    - generic [ref=e203]: 2 英里
+                - generic [ref=e206]:
+                  - link [ref=e207] [cursor=pointer]:
+                    - /url: http://map.qq.com?ref=jsapi_v3
+                    - img [ref=e208]
+                  - generic [ref=e209]: ©2026 Tencent - GS(2026)1190号
+              - generic [ref=e210]:
+                - generic [ref=e212]:
+                  - img [ref=e215]
+                  - generic:
+                    - img [ref=e217]
+                    - img [ref=e219]
+                    - img [ref=e221]
+                    - img [ref=e223]
+                - generic [ref=e226]:
+                  - img [ref=e228]
+                  - img [ref=e231]
+          - paragraph [ref=e232]: 已标注 10 家舞室
+        - list [ref=e57]:
+          - listitem [ref=e58] [cursor=pointer]:
+            - img [ref=e60]
+            - generic [ref=e64]:
+              - strong [ref=e65]: BitDance 模拟舞室 10
+              - paragraph [ref=e66]: "-km · 北京市朝阳区舞蹈街 10 号"
+              - generic [ref=e68]: 附近舞室
+              - generic [ref=e69]: 查看详情
+            - button "选择 BitDance 模拟舞室 10" [ref=e70]
+          - listitem [ref=e71] [cursor=pointer]:
+            - img [ref=e73]
+            - generic [ref=e77]:
+              - strong [ref=e78]: BitDance 模拟舞室 9
+              - paragraph [ref=e79]: "-km · 北京市朝阳区舞蹈街 9 号"
+              - generic [ref=e81]: 附近舞室
+              - generic [ref=e82]: 查看详情
+            - button "选择 BitDance 模拟舞室 9" [ref=e83]
+          - listitem [ref=e84] [cursor=pointer]:
+            - img [ref=e86]
+            - generic [ref=e90]:
+              - strong [ref=e91]: BitDance 模拟舞室 8
+              - paragraph [ref=e92]: "-km · 北京市朝阳区舞蹈街 8 号"
+              - generic [ref=e94]: 附近舞室
+              - generic [ref=e95]: 查看详情
+            - button "选择 BitDance 模拟舞室 8" [ref=e96]
+          - listitem [ref=e97] [cursor=pointer]:
+            - img [ref=e99]
+            - generic [ref=e103]:
+              - strong [ref=e104]: BitDance 模拟舞室 7
+              - paragraph [ref=e105]: "-km · 北京市朝阳区舞蹈街 7 号"
+              - generic [ref=e107]: 附近舞室
+              - generic [ref=e108]: 查看详情
+            - button "选择 BitDance 模拟舞室 7" [ref=e109]
+          - listitem [ref=e110] [cursor=pointer]:
+            - img [ref=e112]
+            - generic [ref=e116]:
+              - strong [ref=e117]: BitDance 模拟舞室 6
+              - paragraph [ref=e118]: "-km · 北京市朝阳区舞蹈街 6 号"
+              - generic [ref=e120]: 附近舞室
+              - generic [ref=e121]: 查看详情
+            - button "选择 BitDance 模拟舞室 6" [ref=e122]
+          - listitem [ref=e123] [cursor=pointer]:
+            - img [ref=e125]
+            - generic [ref=e129]:
+              - strong [ref=e130]: BitDance 模拟舞室 5
+              - paragraph [ref=e131]: "-km · 北京市朝阳区舞蹈街 5 号"
+              - generic [ref=e133]: 附近舞室
+              - generic [ref=e134]: 查看详情
+            - button "选择 BitDance 模拟舞室 5" [ref=e135]
+          - listitem [ref=e136] [cursor=pointer]:
+            - img [ref=e138]
+            - generic [ref=e142]:
+              - strong [ref=e143]: BitDance 模拟舞室 4
+              - paragraph [ref=e144]: "-km · 北京市朝阳区舞蹈街 4 号"
+              - generic [ref=e146]: 附近舞室
+              - generic [ref=e147]: 查看详情
+            - button "选择 BitDance 模拟舞室 4" [ref=e148]
+          - listitem [ref=e149] [cursor=pointer]:
+            - img [ref=e151]
+            - generic [ref=e155]:
+              - strong [ref=e156]: BitDance 模拟舞室 3
+              - paragraph [ref=e157]: "-km · 北京市朝阳区舞蹈街 3 号"
+              - generic [ref=e159]: 附近舞室
+              - generic [ref=e160]: 查看详情
+            - button "选择 BitDance 模拟舞室 3" [ref=e161]
+          - listitem [ref=e162] [cursor=pointer]:
+            - img [ref=e164]
+            - generic [ref=e168]:
+              - strong [ref=e169]: BitDance 模拟舞室 2
+              - paragraph [ref=e170]: "-km · 北京市朝阳区舞蹈街 2 号"
+              - generic [ref=e172]: 附近舞室
+              - generic [ref=e173]: 查看详情
+            - button "选择 BitDance 模拟舞室 2" [ref=e174]
+          - listitem [ref=e175] [cursor=pointer]:
+            - img [ref=e177]
+            - generic [ref=e181]:
+              - strong [ref=e182]: BitDance 模拟舞室 1
+              - paragraph [ref=e183]: "-km · 北京市朝阳区舞蹈街 1 号"
+              - generic [ref=e185]: 附近舞室
+              - generic [ref=e186]: 查看详情
+            - button "选择 BitDance 模拟舞室 1" [ref=e187]
+      - generic [ref=e28]:
+        - button "收藏" [ref=e29] [cursor=pointer]
+        - button "加入对比" [ref=e30] [cursor=pointer]
+  - navigation "底部导航" [ref=e31]:
+    - button "发现" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+      - generic [ref=e36]: 发现
+    - button "约练" [ref=e37] [cursor=pointer]:
+      - img [ref=e38]
+      - generic [ref=e43]: 约练
+    - button "活动" [ref=e44] [cursor=pointer]:
+      - img [ref=e45]
+      - generic [ref=e47]: 活动
+    - button "成长" [ref=e48] [cursor=pointer]:
+      - img [ref=e49]
+      - generic [ref=e51]: 成长
+    - button "我的" [ref=e52] [cursor=pointer]:
+      - img [ref=e53]
+      - generic [ref=e56]: 我的
