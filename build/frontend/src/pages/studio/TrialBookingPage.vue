@@ -87,7 +87,10 @@ onMounted(async () => {
   ]);
   contactName.value = user.profile?.nickname || '';
   contactPhone.value = user.profile?.phone || '';
-  if (!activeScheduleId.value) activeScheduleId.value = availableSlots.value[0]?.id ?? schedule.value[0]?.id;
+  const preferred = schedule.value.find((slot) => slot.id === activeScheduleId.value) ?? schedule.value[0];
+  // M1 试听预约：远端排期可能不在今天，进入页面后自动定位到有课日期，避免用户误判为无可预约场次。
+  if (preferred) activeDay.value = preferred.startAt.slice(0, 10);
+  if (!activeScheduleId.value) activeScheduleId.value = preferred?.id;
 });
 
 watch(

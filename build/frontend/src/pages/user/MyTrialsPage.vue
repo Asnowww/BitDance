@@ -4,21 +4,35 @@ import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import { cancelTrialBooking, fetchMyTrialBookings, type TrialBooking } from '@/api/trial';
+import { fetchCourseDetail, type CourseDetail } from '@/api/course';
+import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
+import { cancelTrialBooking, fetchMyTrialBookings, fetchStudioSchedule, type ScheduleSlot, type TrialBooking } from '@/api/trial';
 
 const router = useRouter();
 const cats = ['全部', '待确认', '已确认', '已完成'];
 const activeCat = ref('待确认');
 
 const bookings = ref<TrialBooking[]>([]);
+const courseMap = ref<Record<number, CourseDetail>>({});
+const studioMap = ref<Record<number, StudioDetail>>({});
+const scheduleMap = ref<Record<number, ScheduleSlot>>({});
 const statusText: Record<string, string> = {
-  pending: '待舞室确认', confirmed: '已确认 · 待上课', arrived: '已完成',
+  pending: '待舞室确认', confirmed: '已确认 · 待上课', attended: '已完成', arrived: '已完成',
   noshow: '未到场', rejected: '已拒绝', canceled: '已取消'
 };
+
+const formatTime = (value?: string) => {
+  if (!value) return '时间待舞室确认';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1970) return '时间待舞室确认';
+  return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
 const records = computed(() => bookings.value.map((item) => ({
   id: String(item.id),
-  title: `舞室 #${item.studioId}`,
-  meta: `课程 #${item.courseId} · ${new Date(item.createdAt).toLocaleString()}`,
+  title: studioMap.value[item.studioId]?.name || `舞室 #${item.studioId}`,
+  // M1 试听预约：旧数据 createdAt 可能为空，优先展示课表 startAt，再用创建时间兜底，避免 1970 日期。
+  meta: `${courseMap.value[item.courseId]?.courseName || `课程 #${item.courseId}`} · ${formatTime(scheduleMap.value[item.courseScheduleId ?? 0]?.startAt || item.createdAt)}`,
   status: statusText[item.bookingStatus] ?? item.bookingStatus,
   tone: item.bookingStatus === 'confirmed' ? 'success' : item.bookingStatus === 'pending' ? 'ink' : 'mute',
   action: item.bookingStatus === 'pending' ? '取消预约' : '查看详情'
@@ -26,11 +40,38 @@ const records = computed(() => bookings.value.map((item) => ({
 const onAction = async (id: string, action: string) => {
   if (action !== '取消预约') return showToast(action);
   await cancelTrialBooking(Number(id));
-  bookings.value = await fetchMyTrialBookings();
+  await loadBookings();
 };
-onMounted(async () => {
+
+const loadBookings = async () => {
   bookings.value = await fetchMyTrialBookings();
-});
+  const courseIds = Array.from(new Set(bookings.value.map((item) => item.courseId)));
+  const studioIds = Array.from(new Set(bookings.value.map((item) => item.studioId)));
+  const [courseResults, studioResults, scheduleResults] = await Promise.all([
+    Promise.allSettled(courseIds.map((id) => fetchCourseDetail(id))),
+    Promise.allSettled(studioIds.map((id) => fetchStudioDetail(id))),
+    // M1 试听预约：预约 DTO 只有 scheduleId，这里按舞室批量拉课表补出真实上课时间。
+    Promise.allSettled(studioIds.map((id) => fetchStudioSchedule(id)))
+  ]);
+  courseMap.value = Object.fromEntries(
+    courseResults
+      .filter((item): item is PromiseFulfilledResult<CourseDetail> => item.status === 'fulfilled')
+      .map((item) => [item.value.id, item.value])
+  );
+  studioMap.value = Object.fromEntries(
+    studioResults
+      .filter((item): item is PromiseFulfilledResult<StudioDetail> => item.status === 'fulfilled')
+      .map((item) => [item.value.id, item.value])
+  );
+  scheduleMap.value = Object.fromEntries(
+    scheduleResults
+      .filter((item): item is PromiseFulfilledResult<ScheduleSlot[]> => item.status === 'fulfilled')
+      .flatMap((item) => item.value)
+      .map((item) => [item.id, item])
+  );
+};
+
+onMounted(loadBookings);
 </script>
 
 <template>

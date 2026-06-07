@@ -201,6 +201,33 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
+    public ReviewListResponse listMine(Long userId, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 100);
+        // M2 风控验收：本人列表展示 pending/folded/hidden 等审核状态，方便用户侧观察异常评价处理结果。
+        Page<Review> p = reviewRepo.findByUserIdOrderByPublishedAtDesc(
+            userId, PageRequest.of(safePage - 1, safeSize));
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
+            mediaService.mediaForReviews(ids);
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                mediaByReview.getOrDefault(r.getId(), List.of())
+            ))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "review:summary", key = "#targetType + ':' + #targetId")
     public ReviewSummary summary(String targetType, Long targetId) {
         validateTargetType(targetType);

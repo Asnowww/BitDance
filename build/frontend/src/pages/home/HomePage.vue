@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Bell, Search, MapPin, Sparkles, CalendarDays, Star, Ticket } from 'lucide-vue-next';
+import { fetchCourseDetail } from '@/api/course';
+import { fetchNearbyStudios } from '@/api/studio';
+import { fetchStudioSchedule } from '@/api/trial';
 
 const router = useRouter();
 
@@ -20,13 +24,43 @@ interface RecommendCard {
   to: string;
 }
 
-const recommends: RecommendCard[] = [
-  { id: 'urban-flow', title: 'Urban Flow 舞室', meta: '1.2km · 4.8 · 韩舞强', action: '试听', to: '/studio/urban-flow' },
-  { id: 'beatlab', title: 'BeatLab 新手课', meta: '今晚 19:30 · ¥79/节', action: '试听', to: '/course/beatlab-newbie' }
-];
+const recommends = ref<RecommendCard[]>([]);
+
+const loadRecommendations = async () => {
+  const nearby = await fetchNearbyStudios({ page: 1, pageSize: 3, distanceKm: 5 });
+  const firstStudio = nearby.list[0];
+  const cards: RecommendCard[] = nearby.list.slice(0, 1).map((studio) => ({
+    id: `studio-${studio.id}`,
+    title: studio.name,
+    meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
+    action: '试听',
+    to: `/studio/${studio.id}`
+  }));
+  if (firstStudio) {
+    // M1 智能推荐：基于后端附近舞室的第一场排期补一张课程推荐卡，避免首页推荐跳到不存在的静态路由。
+    const slot = (await fetchStudioSchedule(firstStudio.id).catch(() => []))[0];
+    if (slot) {
+      const course = await fetchCourseDetail(slot.courseId).catch(() => null);
+      if (course) {
+        cards.push({
+          id: `course-${course.id}`,
+          title: course.courseName,
+          meta: `${course.difficultyLevel} · ¥${course.priceAmount}/节 · ${course.zeroBasicFriendly ? '零基础友好' : '进阶'}`,
+          action: '预约',
+          to: `/course/${course.id}`
+        });
+      }
+    }
+  }
+  recommends.value = cards;
+};
 
 const heroImage =
   'https://images.unsplash.com/photo-1667384447307-9ae9cd6ff1d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3Nzk3ODEzMzZ8&ixlib=rb-4.1.0&q=80&w=1080';
+
+onMounted(() => {
+  void loadRecommendations();
+});
 </script>
 
 <template>

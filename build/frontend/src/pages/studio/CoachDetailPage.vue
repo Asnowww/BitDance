@@ -6,16 +6,26 @@ import { Heart, Music, UserRound } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import ReviewAggregatePanel from '@/components/review/ReviewAggregatePanel.vue';
-import { fetchCoachDetail, type CoachDetail } from '@/api/course';
+import { fetchCoachCourses, fetchCoachDetail, type CoachDetail, type CourseCard } from '@/api/course';
 import { toggleFavorite } from '@/api/favorite';
 
 const route = useRoute();
 const router = useRouter();
 const coachId = computed(() => Number(route.params.id) || 1);
 const detail = ref<CoachDetail | null>(null);
+const courses = ref<CourseCard[]>([]);
 const favored = computed(() => detail.value?.favored ?? false);
 
 const styleNames = ['Hip-hop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'K-pop', 'Waacking', 'Urban'];
+const weekdayLabels: Record<string, string> = {
+  Mon: '周一',
+  Tue: '周二',
+  Wed: '周三',
+  Thu: '周四',
+  Fri: '周五',
+  Sat: '周六',
+  Sun: '周日'
+};
 
 const styleText = computed(() => {
   const styles = detail.value?.styles ?? [];
@@ -23,15 +33,38 @@ const styleText = computed(() => {
   return styles.map((item) => styleNames[(item.danceStyleId - 1) % styleNames.length]).join(' / ');
 });
 
-const course = {
-  id: 3,
-  title: 'Mira Locking Workshop',
-  meta: '明天 20:00 · Urban Flow',
-  tag: '初级',
-  price: '¥99 / 节'
-};
+const courseMeta = (course: CourseCard) =>
+  [
+    course.difficultyLevel || '难度待定',
+    course.zeroBasicFriendly ? '零基础友好' : '',
+    course.durationMinutes ? `${course.durationMinutes}min` : ''
+  ].filter(Boolean).join(' · ');
 
-const onBook = () => router.push(`/course/${course.id}`);
+const formatAvailableSlots = computed(() => {
+  const raw = detail.value?.availableTimeSlots;
+  if (!raw) return '周一 / 周三 19:00-20:30，周六 14:00-16:00';
+  try {
+    const slots = JSON.parse(raw) as Array<{ weekday?: string; time?: string }>;
+    if (Array.isArray(slots) && slots.length) {
+      // M1 老师详情：后端保存可约时间为 JSON 枚举，页面展示前转成自然语言，避免露出原始结构。
+      return slots
+        .map((slot) => `${weekdayLabels[slot.weekday ?? ''] ?? slot.weekday ?? '待定'} ${slot.time ?? ''}`.trim())
+        .join('，');
+    }
+  } catch {
+    // 非 JSON 历史数据直接展示，兼容手动录入的自然语言时间段。
+  }
+  return raw;
+});
+
+const onBook = () => {
+  const firstCourse = courses.value[0];
+  if (!firstCourse) {
+    showToast('该老师暂无可预约课程');
+    return;
+  }
+  router.push(`/course/${firstCourse.id}`);
+};
 
 const toggleCoachFavorite = async () => {
   const result = await toggleFavorite('coach', coachId.value);
@@ -40,7 +73,13 @@ const toggleCoachFavorite = async () => {
 };
 
 onMounted(async () => {
-  detail.value = await fetchCoachDetail(coachId.value);
+  // M1 老师详情：并行读取老师主档和该老师课程列表，确保“可预约课程”不是静态样例。
+  const [coachDetail, coachCourses] = await Promise.all([
+    fetchCoachDetail(coachId.value),
+    fetchCoachCourses(coachId.value).catch(() => [])
+  ]);
+  detail.value = coachDetail;
+  courses.value = coachCourses;
 });
 </script>
 
@@ -66,7 +105,7 @@ onMounted(async () => {
         <section class="intro-card">
           <h2>教学风格</h2>
           <p>{{ detail?.intro || '注重基础律动与节奏感，会把动作拆成小节，适合零基础和进阶练习。' }}</p>
-          <span>{{ detail?.availableTimeSlots || '周一 / 周三 19:00-20:30，周六 14:00-16:00' }}</span>
+          <span>{{ formatAvailableSlots }}</span>
         </section>
 
         <ReviewAggregatePanel target-type="coach" :target-id="coachId" />
@@ -76,17 +115,18 @@ onMounted(async () => {
           <button type="button" class="section-head__more" @click="showToast('查看全部课程')">全部</button>
         </header>
 
-        <article class="course" @click="router.push(`/course/${course.id}`)">
+        <article v-for="course in courses" :key="course.id" class="course" @click="router.push(`/course/${course.id}`)">
           <div class="course__cover" aria-hidden="true">
             <Music :size="28" :stroke-width="2" />
           </div>
           <div class="course__body">
-            <strong class="course__title">{{ course.title }}</strong>
-            <p class="course__meta">{{ course.meta }}</p>
-            <span class="tag">{{ course.tag }}</span>
-            <span class="course__price">{{ course.price }}</span>
+            <strong class="course__title">{{ course.courseName }}</strong>
+            <p class="course__meta">{{ courseMeta(course) }}</p>
+            <span class="tag">{{ course.zeroBasicFriendly ? '零基础' : course.difficultyLevel }}</span>
+            <span class="course__price">¥{{ course.priceAmount }} / 节</span>
           </div>
         </article>
+        <p v-if="!courses.length" class="empty">暂无可预约课程</p>
       </section>
     </section>
 
@@ -286,6 +326,15 @@ onMounted(async () => {
   color: $pen-ink;
   font-size: 12px;
   font-weight: 800;
+  line-height: $pen-lh;
+}
+
+.empty {
+  // M1 老师课程空态：接口没有课程时保留明确反馈，避免用户误以为页面没有加载完。
+  margin: 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
   line-height: $pen-lh;
 }
 </style>

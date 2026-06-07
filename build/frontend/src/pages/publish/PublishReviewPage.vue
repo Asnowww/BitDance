@@ -27,8 +27,12 @@ const targetNames: Record<ReviewTargetType, string> = {
   course: 'K-pop 入门课'
 };
 
+const normalizeTargetType = (raw: unknown): ReviewTargetType =>
+  raw === 'coach' || raw === 'course' || raw === 'studio' ? raw : 'studio';
+
 const draftKey = 'bitdance_review_draft';
-const activeType = ref<ReviewTargetType>('studio');
+const routeTargetType = computed(() => normalizeTargetType(route.query.targetType));
+const activeType = ref<ReviewTargetType>(routeTargetType.value);
 const content = ref('');
 const anonymous = ref(false);
 const allowReply = ref(true);
@@ -59,9 +63,17 @@ const sourceType = computed(() => {
 });
 const sourceRefId = computed(() => Number(route.query.sourceRefId) || undefined);
 const targetId = computed(() => Number(route.query.targetId) || 1);
-const targetName = computed(
-  () => String(route.query.targetName || targetNames[activeType.value])
+const targetName = computed(() =>
+  // M2 评价入口：仅当当前对象类型与路由 targetType 一致时使用路由名称，防止切换分段后仍展示旧对象名。
+  activeType.value === routeTargetType.value
+    ? String(route.query.targetName || targetNames[activeType.value])
+    : targetNames[activeType.value]
 );
+const sourceLabel = computed(() => {
+  if (sourceType.value === 'order') return '订单来源待核验';
+  if (sourceType.value === 'checkin') return '签到来源待核验';
+  return '已完成试听';
+});
 const currentDimensions = computed(() => REVIEW_DIMENSIONS[activeType.value]);
 const averageScore = computed(() => {
   const values = currentDimensions.value
@@ -207,7 +219,7 @@ watch(activeType, resetScores, { immediate: true });
         </div>
         <div class="target-card__copy">
           <strong>{{ targetName }}</strong>
-          <span>已完成试听 · 权重 1.5x</span>
+          <span>{{ sourceLabel }} · 权重按后端风控计算</span>
         </div>
       </section>
 

@@ -160,6 +160,19 @@ const openPublishReview = () => {
   });
 };
 
+const openAppeal = (review: ReviewItem) => {
+  // M2 商家/教练申诉：从真实评价卡带入 reviewId 和摘要，进入后端 review_appeal 提交流。
+  router.push({
+    path: '/coach/appeal',
+    query: {
+      reviewId: String(review.id),
+      score: String(review.overallScore ?? 0),
+      author: reviewName(review),
+      content: reviewBody(review).slice(0, 160)
+    }
+  });
+};
+
 watch(() => [props.targetType, props.targetId], load);
 onMounted(load);
 </script>
@@ -254,6 +267,7 @@ onMounted(load);
         </div>
         <footer>
           <span>{{ dimLine(review) }}</span>
+          <button type="button" class="review-card__appeal" @click="openAppeal(review)">申诉</button>
           <span class="review-card__helpful"><ThumbsUp :size="12" /> {{ review.helpfulCount ?? 0 }}</span>
         </footer>
       </article>
@@ -584,6 +598,16 @@ onMounted(load);
     align-items: center;
     gap: 3px;
     white-space: nowrap;
+  }
+
+  &__appeal {
+    // M2 申诉入口：保持为低干扰文本按钮，不抢占普通用户阅读评价的主视觉。
+    flex: none;
+    border: 0;
+    background: transparent;
+    color: $pen-ink;
+    font: inherit;
+    cursor: pointer;
   }
 }
 

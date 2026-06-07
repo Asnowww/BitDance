@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
-import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
+import { fetchNearbyStudios, fetchStudioDetail, type StudioDetail } from '@/api/studio';
 import { fetchCourseDetail, type CourseDetail } from '@/api/course';
 import { fetchReviewSummary, type ReviewSummary } from '@/api/review';
 import { toggleFavorite } from '@/api/favorite';
@@ -87,10 +87,20 @@ const loadCompareStudio = async (id: number): Promise<CompareStudio> => {
   };
 };
 
-onMounted(async () => {
+const resolveCompareIds = async () => {
   const stored = JSON.parse(sessionStorage.getItem('bitdance_compare_studio_ids') ?? '[]') as number[];
-  const ids = (stored.length >= 2 ? stored : [1, 2, 3]).slice(0, 3);
-  studios.value = await Promise.all(ids.map(loadCompareStudio));
+  if (stored.length >= 2) return stored.slice(0, 3);
+  // M1 舞室对比：没有用户选择时从后端附近舞室取前 3 家，避免旧的静态 [1,2,3] 在远端数据库中不存在。
+  const nearby = await fetchNearbyStudios({ page: 1, pageSize: 3, distanceKm: 5 });
+  return nearby.list.map((studio) => studio.id).slice(0, 3);
+};
+
+onMounted(async () => {
+  const ids = await resolveCompareIds();
+  const results = await Promise.allSettled(ids.map(loadCompareStudio));
+  studios.value = results
+    .filter((item): item is PromiseFulfilledResult<CompareStudio> => item.status === 'fulfilled')
+    .map((item) => item.value);
 });
 </script>
 
