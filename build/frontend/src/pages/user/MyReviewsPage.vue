@@ -3,7 +3,9 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { EyeOff, Image, ShieldCheck, Star } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { fetchCourseDetail, fetchCoachDetail } from '@/api/course';
 import { fetchMyReviews, type ReviewItem, type ReviewTargetType } from '@/api/review';
+import { fetchStudioDetail } from '@/api/studio';
 
 const router = useRouter();
 
@@ -12,6 +14,7 @@ const activeCat = ref<(typeof cats)[number]>('全部');
 const reviews = ref<ReviewItem[]>([]);
 const loading = ref(false);
 const loadError = ref('');
+const targetNameMap = ref<Record<string, string>>({});
 
 const typeLabel: Record<ReviewTargetType, string> = {
   studio: '舞室',
@@ -38,6 +41,20 @@ const statusTone = (status: string) => {
   return 'danger';
 };
 
+const reviewTargetKey = (targetType: ReviewTargetType, targetId: number) => `${targetType}:${targetId}`;
+
+const reviewTargetName = (review: ReviewItem) =>
+  targetNameMap.value[reviewTargetKey(review.targetType, review.targetId)]
+  || `${typeLabel[review.targetType]} #${review.targetId}`;
+
+const reviewStatusGuide = (review: ReviewItem) => {
+  if (review.reviewStatus === 'pending') return '系统已收到评价，正在核验来源和异常波动。';
+  if (review.reviewStatus === 'folded') return '该评价因低权重或异常特征被折叠，复核后可能恢复展示。';
+  if (review.reviewStatus === 'hidden') return '该评价当前对外隐藏，请等待平台处理结果。';
+  if (review.isVerified) return '已验证来源，展示权重更高。';
+  return review.riskLevel > 0 ? '当前以普通权重展示，风险升高时可能进入复核。' : '当前以普通权重展示。';
+};
+
 const dimLine = (review: ReviewItem) =>
   (review.dimensions ?? [])
     .slice(0, 4)
@@ -52,6 +69,31 @@ const openTarget = (review: ReviewItem) => {
   else router.push(`/${review.targetType}/${review.targetId}`);
 };
 
+const loadTargetNames = async (list: ReviewItem[]) => {
+  const nextMap: Record<string, string> = {};
+  const studioIds = Array.from(new Set(list.filter((item) => item.targetType === 'studio').map((item) => item.targetId)));
+  const coachIds = Array.from(new Set(list.filter((item) => item.targetType === 'coach').map((item) => item.targetId)));
+  const courseIds = Array.from(new Set(list.filter((item) => item.targetType === 'course').map((item) => item.targetId)));
+
+  const [studios, coaches, courses] = await Promise.all([
+    Promise.allSettled(studioIds.map((id) => fetchStudioDetail(id))),
+    Promise.allSettled(coachIds.map((id) => fetchCoachDetail(id))),
+    Promise.allSettled(courseIds.map((id) => fetchCourseDetail(id)))
+  ]);
+
+  studios.forEach((item, index) => {
+    if (item.status === 'fulfilled') nextMap[reviewTargetKey('studio', studioIds[index])] = item.value.name;
+  });
+  coaches.forEach((item, index) => {
+    if (item.status === 'fulfilled') nextMap[reviewTargetKey('coach', coachIds[index])] = item.value.displayName;
+  });
+  courses.forEach((item, index) => {
+    if (item.status === 'fulfilled') nextMap[reviewTargetKey('course', courseIds[index])] = item.value.courseName;
+  });
+
+  targetNameMap.value = nextMap;
+};
+
 const loadReviews = async () => {
   loading.value = true;
   loadError.value = '';
@@ -59,8 +101,11 @@ const loadReviews = async () => {
     // M2 风控验收：读取真实 h5 本人评价列表，包含 pending 状态用于展示“待审核”。
     const resp = await fetchMyReviews({ page: 1, pageSize: 50 });
     reviews.value = resp.list ?? [];
+    // M2 我的评价：真实对象名要和评价状态一起出现，不能继续只给用户看“课程 #100010”。
+    await loadTargetNames(reviews.value);
   } catch {
     reviews.value = [];
+    targetNameMap.value = {};
     loadError.value = '评价接口暂不可用，请检查登录态或后端服务';
   } finally {
     loading.value = false;
@@ -95,12 +140,14 @@ onMounted(loadReviews);
       <article v-for="review in filteredReviews" :key="review.id" class="rev" @click="openTarget(review)">
         <header class="rev__top">
           <strong class="rev__target">
-            {{ typeLabel[review.targetType] }} #{{ review.targetId }}
+            {{ reviewTargetName(review) }}
           </strong>
           <span class="rev__status" :class="`rev__status--${statusTone(review.reviewStatus)}`">
             {{ statusLabel[review.reviewStatus] ?? review.reviewStatus }}
           </span>
         </header>
+
+        <p class="rev__context">{{ typeLabel[review.targetType] }} · {{ dateLabel(review.publishedAt) }}</p>
 
         <div class="rev__score">
           <span class="rev__stars">
@@ -133,7 +180,7 @@ onMounted(loadReviews);
           <span class="rev__pill">风险 {{ review.riskLevel ?? 0 }}</span>
         </div>
 
-        <span class="rev__date">{{ dateLabel(review.publishedAt) }}</span>
+        <p class="rev__explain">{{ reviewStatusGuide(review) }}</p>
       </article>
     </section>
   </main>
@@ -264,11 +311,17 @@ onMounted(loadReviews);
     flex-wrap: wrap;
   }
 
-  &__date {
+  &__context,
+  &__explain {
+    margin: 0;
     color: $pen-mute;
     font-size: 12px;
     font-weight: 600;
     line-height: $pen-lh;
+  }
+
+  &__explain {
+    line-height: 1.45;
   }
 }
 </style>

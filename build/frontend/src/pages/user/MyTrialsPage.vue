@@ -10,7 +10,7 @@ import { cancelTrialBooking, fetchMyTrialBookings, fetchStudioSchedule, type Sch
 
 const router = useRouter();
 const cats = ['全部', '待确认', '已确认', '已完成'];
-const activeCat = ref('待确认');
+const activeCat = ref('全部');
 
 const bookings = ref<TrialBooking[]>([]);
 const courseMap = ref<Record<number, CourseDetail>>({});
@@ -20,6 +20,12 @@ const statusText: Record<string, string> = {
   pending: '待舞室确认', confirmed: '已确认 · 待上课', attended: '已完成', arrived: '已完成',
   noshow: '未到场', rejected: '已拒绝', canceled: '已取消'
 };
+const statusFilters: Record<string, string[]> = {
+  全部: [],
+  待确认: ['pending'],
+  已确认: ['confirmed'],
+  已完成: ['attended', 'arrived']
+};
 
 const formatTime = (value?: string) => {
   if (!value) return '时间待舞室确认';
@@ -28,15 +34,26 @@ const formatTime = (value?: string) => {
   return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-const records = computed(() => bookings.value.map((item) => ({
-  id: String(item.id),
-  title: studioMap.value[item.studioId]?.name || `舞室 #${item.studioId}`,
-  // M1 试听预约：旧数据 createdAt 可能为空，优先展示课表 startAt，再用创建时间兜底，避免 1970 日期。
-  meta: `${courseMap.value[item.courseId]?.courseName || `课程 #${item.courseId}`} · ${formatTime(scheduleMap.value[item.courseScheduleId ?? 0]?.startAt || item.createdAt)}`,
-  status: statusText[item.bookingStatus] ?? item.bookingStatus,
-  tone: item.bookingStatus === 'confirmed' ? 'success' : item.bookingStatus === 'pending' ? 'ink' : 'mute',
-  action: item.bookingStatus === 'pending' ? '取消预约' : '查看详情'
-})));
+const records = computed(() => {
+  // M1 我的试听：状态 chip 必须真实驱动列表筛选，不能只切换高亮却继续展示全部记录。
+  const allowedStatuses = statusFilters[activeCat.value] ?? [];
+  const visibleBookings = allowedStatuses.length
+    ? bookings.value.filter((item) => allowedStatuses.includes(item.bookingStatus))
+    : bookings.value;
+  return visibleBookings.map((item) => ({
+    id: String(item.id),
+    title: studioMap.value[item.studioId]?.name || `舞室 #${item.studioId}`,
+    // M1 试听预约：旧数据 createdAt 可能为空，优先展示课表 startAt，再用创建时间兜底，避免 1970 日期。
+    meta: `${courseMap.value[item.courseId]?.courseName || `课程 #${item.courseId}`} · ${formatTime(scheduleMap.value[item.courseScheduleId ?? 0]?.startAt || item.createdAt)}`,
+    status: statusText[item.bookingStatus] ?? item.bookingStatus,
+    tone: item.bookingStatus === 'confirmed' ? 'success' : item.bookingStatus === 'pending' ? 'ink' : 'mute',
+    action: item.bookingStatus === 'pending' ? '取消预约' : '查看详情'
+  }));
+});
+const emptyText = computed(() => {
+  if (activeCat.value === '全部') return '暂无试听记录，可先去舞室详情预约试听';
+  return `当前没有${activeCat.value}的试听记录`;
+});
 const onAction = async (id: string, action: string) => {
   if (action !== '取消预约') return showToast(action);
   await cancelTrialBooking(Number(id));
@@ -103,6 +120,7 @@ onMounted(loadBookings);
           </div>
         </div>
       </article>
+      <p v-if="!records.length" class="empty">{{ emptyText }}</p>
     </section>
   </main>
 </template>
@@ -121,6 +139,16 @@ onMounted(loadBookings);
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { @include pen-chip; }
+
+.empty {
+  margin: 0;
+  padding: 20px 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+  text-align: center;
+}
 
 .rec {
   display: flex;

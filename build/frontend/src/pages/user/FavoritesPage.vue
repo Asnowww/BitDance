@@ -142,7 +142,8 @@ onMounted(loadFavorites);
 
 <template>
   <main class="pen-page">
-    <PenTopBar title="学习数据" @share="showToast('学习数据链接已复制')" />
+    <!-- M1 收藏页：页头必须先告诉用户这里是收藏管理，再把训练概览作为次级信息展示。 -->
+    <PenTopBar title="收藏管理" @share="showToast('收藏清单链接已复制')" />
 
     <section class="pen-scroll">
       <div class="stats">
@@ -153,7 +154,7 @@ onMounted(loadFavorites);
       </div>
 
       <section class="trend">
-        <h3 class="trend__title">训练趋势</h3>
+        <h3 class="trend__title">训练概览</h3>
         <div class="trend__rows">
           <div v-for="item in trend" :key="item.day" class="trend-row">
             <span class="trend-row__day">{{ item.day }}</span>

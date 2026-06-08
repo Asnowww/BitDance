@@ -63,6 +63,7 @@ const onBook = () => {
     showToast('该老师暂无可预约课程');
     return;
   }
+  // M1 老师详情当前先落到具体课程，再由课程页承接预约；按钮文案同步改成“查看课程”，避免用户误以为会直接下单。
   router.push(`/course/${firstCourse.id}`);
 };
 
@@ -132,7 +133,7 @@ onMounted(async () => {
 
     <PenActionBar
       :soft-label="favored ? '已收藏' : '收藏'"
-      dark-label="预约课程"
+      dark-label="查看课程"
       @soft="toggleCoachFavorite"
       @dark="onBook"
     />

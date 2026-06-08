@@ -205,7 +205,7 @@ public class ReviewService {
         int safePage = Math.max(1, page);
         int safeSize = Math.min(Math.max(1, pageSize), 100);
         // M2 风控验收：本人列表展示 pending/folded/hidden 等审核状态，方便用户侧观察异常评价处理结果。
-        Page<Review> p = reviewRepo.findByUserIdOrderByPublishedAtDesc(
+        Page<Review> p = reviewRepo.findMineByUserId(
             userId, PageRequest.of(safePage - 1, safeSize));
 
         List<Long> ids = p.getContent().stream().map(Review::getId).toList();

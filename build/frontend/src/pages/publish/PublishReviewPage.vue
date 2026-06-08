@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast, showToast } from 'vant';
 import { Image, Music, Plus, ShieldCheck, Trash2, Video } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { fetchCourseDetail, fetchCoachDetail } from '@/api/course';
+import { fetchStudioDetail } from '@/api/studio';
 import {
   createReview,
   REVIEW_DIMENSIONS,
@@ -33,10 +35,14 @@ const normalizeTargetType = (raw: unknown): ReviewTargetType =>
 const draftKey = 'bitdance_review_draft';
 const routeTargetType = computed(() => normalizeTargetType(route.query.targetType));
 const activeType = ref<ReviewTargetType>(routeTargetType.value);
+const routeTargetId = computed(() => Number(route.query.targetId) || 0);
+const hasFixedTarget = computed(() => routeTargetId.value > 0);
 const content = ref('');
 const anonymous = ref(false);
 const allowReply = ref(true);
 const submitting = ref(false);
+const targetNameState = ref(String(route.query.targetName || targetNames[routeTargetType.value]));
+const targetMetaState = ref('请从对应详情页进入写评价，避免把评价发给错误对象。');
 const imageInput = ref<HTMLInputElement | null>(null);
 const videoInput = ref<HTMLInputElement | null>(null);
 const mixedInput = ref<HTMLInputElement | null>(null);
@@ -62,18 +68,24 @@ const sourceType = computed(() => {
   return raw === 'trial' || raw === 'order' || raw === 'checkin' ? raw : 'trial';
 });
 const sourceRefId = computed(() => Number(route.query.sourceRefId) || undefined);
-const targetId = computed(() => Number(route.query.targetId) || 1);
-const targetName = computed(() =>
-  // M2 评价入口：仅当当前对象类型与路由 targetType 一致时使用路由名称，防止切换分段后仍展示旧对象名。
-  activeType.value === routeTargetType.value
-    ? String(route.query.targetName || targetNames[activeType.value])
-    : targetNames[activeType.value]
-);
+const targetId = computed(() => (activeType.value === routeTargetType.value ? routeTargetId.value : 0));
+const targetName = computed(() => targetNameState.value || targetNames[activeType.value]);
 const sourceLabel = computed(() => {
   if (sourceType.value === 'order') return '订单来源待核验';
   if (sourceType.value === 'checkin') return '签到来源待核验';
   return '已完成试听';
 });
+const sourceGuide = computed(() => {
+  if (!hasFixedTarget.value) return '请先从舞室、老师或课程详情页进入，再提交评价。';
+  if (sourceType.value === 'order') return '订单来源会在后端核验完成后决定是否提升权重。';
+  if (sourceType.value === 'checkin') return '签到来源会在后端核验完成后决定是否提升权重。';
+  return '试听来源已带入，提交后会按真实风控状态展示。';
+});
+const lockedTargetNote = computed(() =>
+  hasFixedTarget.value
+    ? `当前入口已绑定${targetTypes.find((item) => item.type === routeTargetType.value)?.label ?? '评价对象'}，如需评价其他对象，请从对应详情页进入。`
+    : '当前未绑定具体对象，暂不能直接提交评价。'
+);
 const currentDimensions = computed(() => REVIEW_DIMENSIONS[activeType.value]);
 const averageScore = computed(() => {
   const values = currentDimensions.value
@@ -89,6 +101,10 @@ const resetScores = () => {
 };
 
 const setActiveType = (type: ReviewTargetType) => {
+  if (hasFixedTarget.value && type !== routeTargetType.value) {
+    showToast('请从对应详情页进入，再评价其他对象');
+    return;
+  }
   activeType.value = type;
 };
 
@@ -165,7 +181,42 @@ const saveDraft = () => {
   showSuccessToast('草稿已保存');
 };
 
+const loadTargetContext = async () => {
+  if (!hasFixedTarget.value) {
+    targetNameState.value = targetNames[activeType.value];
+    targetMetaState.value = '请从对应详情页进入写评价，避免把评价发给错误对象。';
+    return;
+  }
+
+  // M2 写评价：真实详情页入口要把对象名称和来源说清，不能再靠硬编码占位名撑场面。
+  targetNameState.value = String(route.query.targetName || targetNames[routeTargetType.value]);
+  targetMetaState.value = `${targetTypes.find((item) => item.type === routeTargetType.value)?.label ?? '评价对象'} · ${sourceLabel.value}`;
+  try {
+    if (routeTargetType.value === 'studio') {
+      const detail = await fetchStudioDetail(routeTargetId.value);
+      targetNameState.value = detail.name;
+      targetMetaState.value = `舞室 · ${detail.address || sourceLabel.value}`;
+      return;
+    }
+    if (routeTargetType.value === 'course') {
+      const detail = await fetchCourseDetail(routeTargetId.value);
+      targetNameState.value = detail.courseName;
+      targetMetaState.value = `课程 · ¥${detail.priceAmount} · ${detail.difficultyLevel || sourceLabel.value}`;
+      return;
+    }
+    const detail = await fetchCoachDetail(routeTargetId.value);
+    targetNameState.value = detail.displayName;
+    targetMetaState.value = `老师 · ${detail.teachingStyle || sourceLabel.value}`;
+  } catch {
+    targetMetaState.value = `${targetTypes.find((item) => item.type === routeTargetType.value)?.label ?? '评价对象'} · ${sourceLabel.value}`;
+  }
+};
+
 const submitReview = async () => {
+  if (!targetId.value) {
+    showFailToast('请从具体舞室、老师或课程详情页进入写评价');
+    return;
+  }
   if (currentDimensions.value.some((item) => scores[item.key] === undefined)) {
     showFailToast('请完成所有维度评分');
     return;
@@ -199,13 +250,25 @@ const submitReview = async () => {
     await createReview(body);
     localStorage.removeItem(draftKey);
     showSuccessToast('评价已提交');
-    router.back();
+    router.replace('/me/reviews');
   } finally {
     submitting.value = false;
   }
 };
 
-watch(activeType, resetScores, { immediate: true });
+watch(
+  routeTargetType,
+  (next) => {
+    // M2 评价对象直达：同一写评价页面复用时，同步路由 targetType，避免老师/课程入口仍停留在舞室维度。
+    activeType.value = next;
+  },
+  { immediate: true }
+);
+watch([routeTargetType, routeTargetId], loadTargetContext, { immediate: true });
+watch(activeType, () => {
+  resetScores();
+  void loadTargetContext();
+}, { immediate: true });
 </script>
 
 <template>
@@ -219,7 +282,8 @@ watch(activeType, resetScores, { immediate: true });
         </div>
         <div class="target-card__copy">
           <strong>{{ targetName }}</strong>
-          <span>{{ sourceLabel }} · 权重按后端风控计算</span>
+          <span>{{ targetMetaState }}</span>
+          <em>{{ sourceGuide }}</em>
         </div>
       </section>
 
@@ -230,11 +294,14 @@ watch(activeType, resetScores, { immediate: true });
           class="segment__btn"
           :class="{ 'segment__btn--active': activeType === item.type }"
           type="button"
+          :disabled="hasFixedTarget && item.type !== routeTargetType"
           @click="setActiveType(item.type)"
         >
           {{ item.label }}
         </button>
       </nav>
+
+      <p class="target-note">{{ lockedTargetNote }}</p>
 
       <section class="block">
         <h2 class="block__title">结构化评分</h2>
@@ -259,7 +326,7 @@ watch(activeType, resetScores, { immediate: true });
 
       <section class="verify-card">
         <ShieldCheck :size="17" :stroke-width="2" />
-        <span>{{ averageScore ? `综合 ${averageScore}` : '待评分' }}，将按已验证试听评价计入聚合</span>
+        <span>{{ averageScore ? `综合 ${averageScore}` : '待评分' }}，{{ sourceGuide }}</span>
       </section>
 
       <label class="content-box">
@@ -324,10 +391,10 @@ watch(activeType, resetScores, { immediate: true });
       <button
         class="submit-bar__submit"
         type="button"
-        :disabled="submitting"
+        :disabled="submitting || !targetId"
         @click="submitReview"
       >
-        {{ submitting ? '提交中' : '提交评价' }}
+        {{ submitting ? '提交中' : targetId ? '提交评价' : '请从详情页进入' }}
       </button>
     </footer>
   </main>
@@ -388,6 +455,14 @@ watch(activeType, resetScores, { immediate: true });
     font-weight: 700;
     line-height: $pen-lh;
   }
+
+  em {
+    color: $pen-mute;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 1.4;
+  }
 }
 
 .segment {
@@ -410,7 +485,20 @@ watch(activeType, resetScores, { immediate: true });
       background: $pen-ink;
       color: $pen-on-primary;
     }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
   }
+}
+
+.target-note {
+  margin: 0;
+  color: $pen-mute;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .block {

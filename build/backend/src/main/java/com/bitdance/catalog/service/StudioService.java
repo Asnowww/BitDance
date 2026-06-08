@@ -60,6 +60,7 @@ public class StudioService {
             safePage, safeSize
         );
         List<StudioNearbyRow> rows = searchRepo.searchNearby(p);
+        long total = searchRepo.countNearby(p);
 
         Set<Long> favored = currentUserId == null
             ? Set.of()
@@ -71,7 +72,7 @@ public class StudioService {
             r.coverAssetId(), r.distanceKm(), r.latitude(), r.longitude(),
             favored.contains(r.id())
         )).toList();
-        return new StudioListResponse(list, safePage, safeSize);
+        return new StudioListResponse(list, safePage, safeSize, total);
     }
 
     @Transactional

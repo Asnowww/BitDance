@@ -212,6 +212,12 @@ onMounted(load);
       </div>
     </div>
 
+    <!-- M2 评分阅读顺序：先强调这是聚合总览，再进入单条评价，避免用户把总分卡误读成某一条评论。 -->
+    <section class="review-guide" aria-label="评价阅读说明">
+      <strong>先看总分，再看单条评价</strong>
+      <p>上方是当前公开评价的加权汇总，下方展示最近发布的具体反馈、维度分数和媒体内容。</p>
+    </section>
+
     <nav class="review-filters" aria-label="评价筛选">
       <button
         v-for="filter in filters"
@@ -401,6 +407,26 @@ onMounted(load);
   flex-direction: column;
   gap: 8px;
   padding: 0 4px;
+}
+
+.review-guide {
+  display: grid;
+  gap: 4px;
+  padding: 0 4px;
+
+  strong {
+    color: $pen-ink;
+    font-size: 13px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  p {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 12px;
+    line-height: 1.5;
+  }
 }
 
 .dimension-row {
