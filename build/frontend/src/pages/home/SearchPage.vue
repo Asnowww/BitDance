@@ -15,6 +15,13 @@ import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
 const route = useRoute();
 const router = useRouter();
 
+type SearchPreset = 'zero-basic' | 'trial';
+
+const parseRoutePreset = (): SearchPreset | undefined => {
+  const preset = typeof route.query.preset === 'string' ? route.query.preset : '';
+  return preset === 'zero-basic' || preset === 'trial' ? preset : undefined;
+};
+
 const parseRouteSearch = (): StudioSearchEditorValue => {
   const keyword = typeof route.query.keyword === 'string' ? route.query.keyword.trim() : '';
   const rawCityId = typeof route.query.cityId === 'string' ? Number(route.query.cityId) : NaN;
@@ -24,6 +31,13 @@ const parseRouteSearch = (): StudioSearchEditorValue => {
     cityId,
     useNearby: !cityId
   };
+};
+
+const buildPresetFilters = (preset?: SearchPreset): StudioFilterValue => {
+  const base: StudioFilterValue = { distanceKm: 5 };
+  if (preset === 'zero-basic') base.zeroBasicFriendly = true;
+  if (preset === 'trial') base.trialAvailable = true;
+  return base;
 };
 
 const drawerVisible = ref(false);
@@ -45,7 +59,7 @@ const studios = ref<StudioCard[]>([]);
 const resultCount = ref<number>();
 const loading = ref(false);
 const query = ref<StudioListQuery>({ page: 1, pageSize: 20 });
-const appliedFilters = ref<StudioFilterValue>({ distanceKm: 5 });
+const appliedFilters = ref<StudioFilterValue>(buildPresetFilters(parseRoutePreset()));
 const mapContainer = ref<HTMLElement | null>(null);
 const mapStatus = ref(hasTencentMapConfig() ? '地图加载中' : '未配置腾讯地图 Key，展示坐标降级视图');
 const selectedMapStudioId = ref<number>();

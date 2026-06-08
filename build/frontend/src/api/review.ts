@@ -60,6 +60,7 @@ export interface ReviewItem {
   publishedAt: string;
   dimensions: DimensionScoreDto[];
   mediaAssets?: ReviewMediaDto[];
+  latestAppeal?: ReviewAppealDto;
 }
 
 export interface ReviewListQuery {

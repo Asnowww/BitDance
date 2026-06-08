@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, type RouteLocationRaw } from 'vue-router';
 import { Bell, Search, MapPin, Sparkles, CalendarDays, Star, Ticket } from 'lucide-vue-next';
 import { fetchCourseDetail } from '@/api/course';
 import { fetchNearbyStudios } from '@/api/studio';
@@ -8,12 +8,34 @@ import { fetchStudioSchedule } from '@/api/trial';
 
 const router = useRouter();
 
-const quickEntries = [
-  { icon: MapPin, label: '附近', to: '/search' },
-  { icon: Sparkles, label: '零基础', to: '/search' },
-  { icon: CalendarDays, label: '今日课', to: '/search' },
-  { icon: Star, label: '热门老师', to: '/search' },
-  { icon: Ticket, label: 'Workshop', to: '/workshops' }
+interface QuickEntry {
+  icon: typeof MapPin;
+  label: string;
+  meta: string;
+  to: RouteLocationRaw;
+}
+
+const quickEntries: QuickEntry[] = [
+  { icon: MapPin, label: '附近', meta: '搜附近结果', to: { name: 'search' } },
+  {
+    icon: Sparkles,
+    label: '新手',
+    meta: '搜零基础结果',
+    to: { name: 'search', query: { preset: 'zero-basic' } }
+  },
+  {
+    icon: CalendarDays,
+    label: '试听',
+    meta: '搜可试听结果',
+    to: { name: 'search', query: { preset: 'trial' } }
+  },
+  {
+    icon: Star,
+    label: '老师',
+    meta: '搜老师相关结果',
+    to: { name: 'search', query: { keyword: '老师' } }
+  },
+  { icon: Ticket, label: 'Workshop', meta: '进入活动专题页', to: '/workshops' }
 ];
 
 interface RecommendCard {
@@ -61,6 +83,10 @@ const heroImage =
 onMounted(() => {
   void loadRecommendations();
 });
+
+const openQuickEntry = (entry: QuickEntry) => {
+  void router.push(entry.to);
+};
 </script>
 
 <template>
@@ -92,17 +118,24 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="quick" aria-label="快捷入口">
-        <button
-          v-for="entry in quickEntries"
-          :key="entry.label"
-          class="quick__item"
-          type="button"
-          @click="router.push(entry.to)"
-        >
-          <component :is="entry.icon" :size="20" :stroke-width="2" />
-          <span>{{ entry.label }}</span>
-        </button>
+      <section class="quick-block" aria-label="快捷搜索入口">
+        <header class="quick-block__head">
+          <h2>快捷入口</h2>
+          <p>前 4 个入口会进入对应搜索结果页</p>
+        </header>
+        <div class="quick">
+          <button
+            v-for="entry in quickEntries"
+            :key="entry.label"
+            class="quick__item"
+            type="button"
+            @click="openQuickEntry(entry)"
+          >
+            <component :is="entry.icon" :size="20" :stroke-width="2" />
+            <strong>{{ entry.label }}</strong>
+            <span>{{ entry.meta }}</span>
+          </button>
+        </div>
       </section>
 
       <section class="recommend">
@@ -263,30 +296,73 @@ onMounted(() => {
   }
 }
 
-.quick {
+.quick-block {
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+
+  &__head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__head h2,
+  &__head p {
+    margin: 0;
+  }
+
+  &__head h2 {
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  &__head p {
+    color: var(--nike-mute);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+}
+
+.quick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 
   &__item {
-    flex: 1;
     min-width: 0;
-    height: 82px;
+    min-height: 96px;
     border: 0;
     border-radius: 16px;
+    padding: 12px 10px;
     background: var(--nike-soft-cloud);
     color: var(--nike-ink);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
     gap: 6px;
     cursor: pointer;
+    text-align: left;
+
+    strong,
+    span {
+      display: block;
+    }
+
+    strong {
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
 
     span {
-      font-size: 11px;
+      color: var(--nike-mute);
+      font-size: 10px;
       font-weight: 700;
-      line-height: 1.25;
+      line-height: 1.3;
     }
   }
 }

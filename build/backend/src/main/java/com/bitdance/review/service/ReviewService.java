@@ -7,12 +7,15 @@ import com.bitdance.common.exception.BizException;
 import com.bitdance.iam.domain.AppUser;
 import com.bitdance.iam.repository.AppUserRepository;
 import com.bitdance.review.domain.Review;
+import com.bitdance.review.domain.ReviewAppeal;
 import com.bitdance.review.domain.ReviewDimensionScore;
 import com.bitdance.review.dto.CreateReviewRequest;
 import com.bitdance.review.dto.DimensionScoreDto;
+import com.bitdance.review.dto.ReviewAppealDto;
 import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewListResponse;
 import com.bitdance.review.dto.ReviewSummary;
+import com.bitdance.review.repository.ReviewAppealRepository;
 import com.bitdance.review.repository.ReviewDimensionScoreRepository;
 import com.bitdance.review.repository.ReviewRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -38,6 +41,7 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepo;
     private final ReviewDimensionScoreRepository dimRepo;
+    private final ReviewAppealRepository appealRepo;
     private final ReviewRiskService riskService;
     private final ReviewMediaService mediaService;
     private final TrialBookingRepository trialRepo;
@@ -47,6 +51,7 @@ public class ReviewService {
     public ReviewService(
         ReviewRepository reviewRepo,
         ReviewDimensionScoreRepository dimRepo,
+        ReviewAppealRepository appealRepo,
         ReviewRiskService riskService,
         ReviewMediaService mediaService,
         TrialBookingRepository trialRepo,
@@ -55,6 +60,7 @@ public class ReviewService {
     ) {
         this.reviewRepo = reviewRepo;
         this.dimRepo = dimRepo;
+        this.appealRepo = appealRepo;
         this.riskService = riskService;
         this.mediaService = mediaService;
         this.trialRepo = trialRepo;
@@ -119,7 +125,12 @@ public class ReviewService {
             "review", saved.getId());
 
         // 评价主体先落库，再把前端提交的外链/模拟媒体绑定到 review 目标。
-        return toDto(saved, dims, mediaService.attachReviewMedia(saved.getId(), userId, req.mediaAssets()));
+        return toDto(
+            saved,
+            dims,
+            mediaService.attachReviewMedia(saved.getId(), userId, req.mediaAssets()),
+            null
+        );
     }
 
     @Transactional
@@ -161,12 +172,14 @@ public class ReviewService {
         // 评价媒体按本页 reviewId 一次性取回，避免列表每条评价重复查附件。
         Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
             mediaService.mediaForReviews(ids);
+        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
 
         List<ReviewDto> items = p.getContent().stream()
             .map(r -> toDto(
                 r,
                 byReview.getOrDefault(r.getId(), List.of()),
-                mediaByReview.getOrDefault(r.getId(), List.of())
+                mediaByReview.getOrDefault(r.getId(), List.of()),
+                latestAppealByReview.get(r.getId())
             ))
             .toList();
 
@@ -188,12 +201,14 @@ public class ReviewService {
         // 用户主页评价同样批量取媒体，保持公开主页与详情页附件展示一致。
         Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
             mediaService.mediaForReviews(ids);
+        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
 
         List<ReviewDto> items = p.getContent().stream()
             .map(r -> toDto(
                 r,
                 byReview.getOrDefault(r.getId(), List.of()),
-                mediaByReview.getOrDefault(r.getId(), List.of())
+                mediaByReview.getOrDefault(r.getId(), List.of()),
+                latestAppealByReview.get(r.getId())
             ))
             .toList();
 
@@ -215,12 +230,14 @@ public class ReviewService {
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
         Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
             mediaService.mediaForReviews(ids);
+        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
 
         List<ReviewDto> items = p.getContent().stream()
             .map(r -> toDto(
                 r,
                 byReview.getOrDefault(r.getId(), List.of()),
-                mediaByReview.getOrDefault(r.getId(), List.of())
+                mediaByReview.getOrDefault(r.getId(), List.of()),
+                latestAppealByReview.get(r.getId())
             ))
             .toList();
 
@@ -309,7 +326,8 @@ public class ReviewService {
     private ReviewDto toDto(
         Review r,
         List<ReviewDimensionScore> dims,
-        List<com.bitdance.review.dto.ReviewMediaDto> mediaAssets
+        List<com.bitdance.review.dto.ReviewMediaDto> mediaAssets,
+        ReviewAppealDto latestAppeal
     ) {
         List<DimensionScoreDto> dimDtos = dims.stream()
             .map(d -> new DimensionScoreDto(d.getDimensionCode(), d.getDimensionName(), d.getScore()))
@@ -320,7 +338,27 @@ public class ReviewService {
             r.getIsVerified(), r.getVerifiedSourceType(),
             r.getWeightFactor(), r.getReviewStatus(), r.getRiskLevel(),
             r.getHelpfulCount(), r.getIsPinned(),
-            r.getPublishedAt(), dimDtos, mediaAssets
+            r.getPublishedAt(), dimDtos, mediaAssets, latestAppeal
         );
+    }
+
+    private Map<Long, ReviewAppealDto> latestAppealsFor(List<Long> reviewIds) {
+        if (reviewIds == null || reviewIds.isEmpty()) return Map.of();
+        Map<Long, ReviewAppealDto> result = new HashMap<>();
+        for (ReviewAppeal appeal : appealRepo.findByReviewIdInOrderByIdDesc(reviewIds)) {
+            result.putIfAbsent(appeal.getReviewId(), new ReviewAppealDto(
+                appeal.getId(),
+                appeal.getReviewId(),
+                appeal.getAppellantUserId(),
+                appeal.getAppealReason(),
+                appeal.getAppealStatus(),
+                appeal.getEvidenceNote(),
+                appeal.getReviewedByUserId(),
+                appeal.getReviewedAt(),
+                appeal.getReviewRemark(),
+                appeal.getCreatedAt()
+            ));
+        }
+        return result;
     }
 }

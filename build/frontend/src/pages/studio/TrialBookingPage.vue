@@ -37,8 +37,10 @@ const availableSlots = computed(() =>
 );
 const activeScheduleId = ref<number | undefined>(requestedScheduleId);
 const selectedSlot = computed(
-  () => availableSlots.value.find((slot) => slot.id === activeScheduleId.value) ?? availableSlots.value[0] ?? schedule.value[0]
+  () => availableSlots.value.find((slot) => slot.id === activeScheduleId.value) ?? availableSlots.value[0]
 );
+// 没有可预约时段时，底部主按钮直接禁用，避免用户点了才发现没有可提交对象。
+const canSubmitBooking = computed(() => Boolean(selectedSlot.value && contactPhone.value.trim()));
 
 const studioTitle = computed(() => detail.value?.name || `舞室 #${studioId}`);
 const studioMeta = computed(() =>
@@ -172,6 +174,7 @@ watch(
       soft-label="收藏"
       dark-label="确认预约"
       @soft="favoriteStudio"
+      :dark-disabled="!canSubmitBooking"
       @dark="onConfirm"
     />
   </main>

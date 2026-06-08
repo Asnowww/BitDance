@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { EyeOff, Image, ShieldCheck, Star } from 'lucide-vue-next';
+import { AlertTriangle, EyeOff, Gavel, Image, Play, ShieldCheck, Star } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { fetchCourseDetail, fetchCoachDetail } from '@/api/course';
 import { fetchMyReviews, type ReviewItem, type ReviewTargetType } from '@/api/review';
@@ -48,11 +48,61 @@ const reviewTargetName = (review: ReviewItem) =>
   || `${typeLabel[review.targetType]} #${review.targetId}`;
 
 const reviewStatusGuide = (review: ReviewItem) => {
+  if (review.latestAppeal?.appealStatus === 'pending') return '这条评价已进入申诉复核，平台会结合签到、来源和内容信号重新判断展示方式。';
+  if (review.latestAppeal?.appealStatus === 'approved') return '申诉成立后，这条评价已进入治理流程；当前状态和展示范围会按处理结果同步更新。';
+  if (review.latestAppeal?.appealStatus === 'rejected') return '平台已复核申诉，当前保留原评价状态与展示权重。';
   if (review.reviewStatus === 'pending') return '系统已收到评价，正在核验来源和异常波动。';
   if (review.reviewStatus === 'folded') return '该评价因低权重或异常特征被折叠，复核后可能恢复展示。';
   if (review.reviewStatus === 'hidden') return '该评价当前对外隐藏，请等待平台处理结果。';
   if (review.isVerified) return '已验证来源，展示权重更高。';
   return review.riskLevel > 0 ? '当前以普通权重展示，风险升高时可能进入复核。' : '当前以普通权重展示。';
+};
+
+const riskLevelLabel = (review: ReviewItem) => {
+  if (review.reviewStatus === 'hidden') return '平台隐藏';
+  if (review.reviewStatus === 'folded') return '折叠复核';
+  if (review.riskLevel >= 2) return '高风险复核';
+  if (review.riskLevel === 1) return '轻度异常';
+  return '状态正常';
+};
+
+const riskReasonGuide = (review: ReviewItem) => {
+  if (review.latestAppeal?.appealStatus === 'approved') {
+    return '本条评价因申诉成立进入治理处理，平台会限制公开展示并保留复核记录。';
+  }
+  if (review.reviewStatus === 'hidden') {
+    return '平台已暂时隐藏这条评价，通常是因为申诉成立或人工审核需要先下线处理。';
+  }
+  if (review.reviewStatus === 'folded') {
+    return review.riskLevel >= 2
+      ? '系统检测到短时间异常评分波动或来源可信度不足，所以先折叠等待复核。'
+      : '当前互动权重偏低，平台先降低展示优先级，后续复核通过后可恢复。';
+  }
+  if (review.reviewStatus === 'pending') {
+    return '提交后会先核验来源、评分波动和内容完整度，审核通过后再进入公开展示。';
+  }
+  if (review.riskLevel >= 2) {
+    return '虽然仍在展示，但系统已经标记高风险信号，后续可能进入人工复核。';
+  }
+  if (review.riskLevel === 1) {
+    return '系统观察到轻微异常波动，当前仍展示，但传播权重会更保守。';
+  }
+  return review.isVerified ? '来源已核验，当前按较高可信度参与聚合评分。' : '暂未核验来源，当前按普通权重参与聚合评分。';
+};
+
+const appealStatusLabel = (review: ReviewItem) => {
+  if (!review.latestAppeal) return '';
+  if (review.latestAppeal.appealStatus === 'pending') return '申诉处理中';
+  if (review.latestAppeal.appealStatus === 'approved') return '申诉成立';
+  if (review.latestAppeal.appealStatus === 'rejected') return '申诉未成立';
+  return review.latestAppeal.appealStatus;
+};
+
+const appealStatusTone = (review: ReviewItem) => {
+  if (!review.latestAppeal) return 'neutral';
+  if (review.latestAppeal.appealStatus === 'pending') return 'warning';
+  if (review.latestAppeal.appealStatus === 'approved') return 'danger';
+  return 'success';
 };
 
 const dimLine = (review: ReviewItem) =>
@@ -63,6 +113,16 @@ const dimLine = (review: ReviewItem) =>
 
 const dateLabel = (value: string) =>
   new Date(value).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+
+const dateTimeLabel = (value?: string) => {
+  if (!value) return '';
+  return new Date(value).toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
 
 const openTarget = (review: ReviewItem) => {
   if (review.targetType === 'studio') router.push(`/studio/${review.targetId}?tab=reviews`);
@@ -166,6 +226,16 @@ onMounted(loadReviews);
         <p class="rev__dims">{{ dimLine(review) }}</p>
         <p class="rev__content">{{ review.contentText || '用户暂未填写评价内容。' }}</p>
 
+        <div v-if="review.mediaAssets?.length" class="rev__media">
+          <div v-for="(media, index) in review.mediaAssets.slice(0, 3)" :key="`${review.id}-${media.name}-${index}`" class="rev__media-item">
+            <img v-if="media.type === 'image'" :src="media.url" :alt="media.name" />
+            <div v-else class="rev__video-cover">
+              <video :src="media.url" muted playsinline preload="metadata" />
+              <span class="rev__video-badge"><Play :size="12" /> 视频</span>
+            </div>
+          </div>
+        </div>
+
         <div class="rev__meta">
           <span v-if="review.isVerified" class="rev__pill rev__pill--success">
             <ShieldCheck :size="12" /> 已验证来源
@@ -177,10 +247,30 @@ onMounted(loadReviews);
             <Image :size="12" /> {{ review.mediaAssets.length }} 个媒体
           </span>
           <span class="rev__pill">权重 {{ Number(review.weightFactor ?? 0).toFixed(2) }}</span>
-          <span class="rev__pill">风险 {{ review.riskLevel ?? 0 }}</span>
+          <span class="rev__pill" :class="`rev__pill--${statusTone(review.reviewStatus)}`">
+            <AlertTriangle :size="12" /> {{ riskLevelLabel(review) }}
+          </span>
+          <span v-if="review.latestAppeal" class="rev__pill" :class="`rev__pill--${appealStatusTone(review)}`">
+            <Gavel :size="12" /> {{ appealStatusLabel(review) }}
+          </span>
         </div>
 
         <p class="rev__explain">{{ reviewStatusGuide(review) }}</p>
+        <p class="rev__risk-guide">{{ riskReasonGuide(review) }}</p>
+
+        <section v-if="review.latestAppeal" class="rev__appeal">
+          <strong class="rev__appeal-title">治理进度</strong>
+          <p class="rev__appeal-line">
+            {{ appealStatusLabel(review) }}
+            <span v-if="review.latestAppeal.createdAt"> · 发起于 {{ dateTimeLabel(review.latestAppeal.createdAt) }}</span>
+          </p>
+          <p v-if="review.latestAppeal.reviewedAt" class="rev__appeal-line">
+            平台处理时间 · {{ dateTimeLabel(review.latestAppeal.reviewedAt) }}
+          </p>
+          <p v-if="review.latestAppeal.reviewRemark" class="rev__appeal-line">
+            平台备注 · {{ review.latestAppeal.reviewRemark }}
+          </p>
+        </section>
       </article>
     </section>
   </main>
@@ -269,14 +359,21 @@ onMounted(loadReviews);
     color: $pen-success;
   }
 
-  &__status--warning {
+  &__status--warning,
+  &__pill--warning {
     border-color: #c99700;
     color: #8a6500;
   }
 
-  &__status--danger {
+  &__status--danger,
+  &__pill--danger {
     border-color: #d84c4c;
     color: #b22f2f;
+  }
+
+  &__pill--neutral {
+    border-color: $pen-hairline;
+    color: $pen-mute;
   }
 
   &__score {
@@ -307,12 +404,58 @@ onMounted(loadReviews);
     line-height: 1.4;
   }
 
+  &__media {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  &__media-item {
+    overflow: hidden;
+    border-radius: 12px;
+    background: $pen-canvas;
+    aspect-ratio: 1 / 1;
+
+    img,
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+  }
+
+  &__video-cover {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  &__video-badge {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 24px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgb(17 17 17 / 78%);
+    color: $pen-on-primary;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+
   &__meta {
     flex-wrap: wrap;
   }
 
   &__context,
-  &__explain {
+  &__explain,
+  &__risk-guide,
+  &__appeal-line {
     margin: 0;
     color: $pen-mute;
     font-size: 12px;
@@ -322,6 +465,27 @@ onMounted(loadReviews);
 
   &__explain {
     line-height: 1.45;
+  }
+
+  &__risk-guide {
+    line-height: 1.45;
+  }
+
+  &__appeal {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: $pen-canvas;
+    border: 1px solid $pen-hairline;
+  }
+
+  &__appeal-title {
+    color: $pen-ink;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: $pen-lh;
   }
 }
 </style>
