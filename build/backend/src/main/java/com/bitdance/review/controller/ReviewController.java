@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,8 +51,12 @@ public class ReviewController {
     public ApiResponse<ReviewListResponse> list(
         @RequestParam @NotBlank String targetType,
         @RequestParam @NotNull Long targetId,
-        @RequestParam(required = false) String sort,
-        @RequestParam(required = false) String status,
+        @RequestParam(required = false)
+        @Pattern(regexp = "latest|helpful|verified", message = "sort 必须是 latest/helpful/verified")
+        String sort,
+        @RequestParam(required = false)
+        @Pattern(regexp = "published|folded", message = "status 必须是 published/folded")
+        String status,
         @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {

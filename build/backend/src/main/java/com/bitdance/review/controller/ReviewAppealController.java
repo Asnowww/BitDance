@@ -9,6 +9,7 @@ import com.bitdance.review.service.ReviewAppealService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,7 +45,9 @@ public class ReviewAppealController {
 
     @GetMapping("/admin/review-appeals")
     public ApiResponse<Page<ReviewAppealDto>> listByStatus(
-        @RequestParam(required = false) String status,
+        @RequestParam(required = false)
+        @Pattern(regexp = "pending|approved|rejected", message = "status 必须是 pending/approved/rejected")
+        String status,
         @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {
