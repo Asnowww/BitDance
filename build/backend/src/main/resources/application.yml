@@ -58,6 +58,8 @@ bitdance:
       # 5173 被其他本地服务占用时，Vite 会使用 5174 作为联调端口。
       - http://localhost:5174
       - http://127.0.0.1:5174
+  media:
+    upload-dir: ${BITDANCE_MEDIA_UPLOAD_DIR:uploads}
 
 springdoc:
   swagger-ui:

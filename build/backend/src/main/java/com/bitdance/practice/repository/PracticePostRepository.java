@@ -28,7 +28,43 @@ public interface PracticePostRepository extends JpaRepository<PracticePost, Long
         Pageable pageable
     );
 
+    @Query("""
+        select p from PracticePost p
+        where p.postStatus in ('published','matched','confirmed')
+          and p.creatorUserId <> :userId
+          and p.currentPeopleCount < p.expectedPeopleMax
+          and p.startAt > :now
+        order by p.startAt asc, p.id desc
+        """)
+    List<PracticePost> recommendCandidates(
+        @Param("userId") Long userId,
+        @Param("now") OffsetDateTime now,
+        Pageable pageable
+    );
+
+    @Query("""
+        select p from PracticePost p
+        where p.postStatus in ('published','matched','confirmed')
+          and p.creatorUserId <> :userId
+          and p.currentPeopleCount < p.expectedPeopleMax
+          and p.startAt > :now
+          and (:cityId is null or p.cityId = :cityId)
+          and (:danceStyleId is null or p.danceStyleId = :danceStyleId)
+          and (:skillLevel is null or p.skillLevel = :skillLevel)
+        order by p.startAt asc, p.id desc
+        """)
+    List<PracticePost> recommendCandidatesFiltered(
+        @Param("userId") Long userId,
+        @Param("now") OffsetDateTime now,
+        @Param("cityId") Long cityId,
+        @Param("danceStyleId") Long danceStyleId,
+        @Param("skillLevel") String skillLevel,
+        Pageable pageable
+    );
+
     List<PracticePost> findByCreatorUserIdOrderByIdDesc(Long userId);
+
+    List<PracticePost> findByCreatorUserIdAndPostStatusOrderByStartAtDesc(Long userId, String postStatus);
 
     @Query("""
         select p from PracticePost p

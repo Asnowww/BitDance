@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { fetchFavorites, toggleFavorite } from '@/api/favorite';
-
-export type FavoriteTargetType = 'studio' | 'course' | 'coach' | 'workshop';
+import type { FavoriteTargetType } from '@/api/favorite';
 
 export interface FavoriteItem {
   targetType: FavoriteTargetType;
@@ -49,7 +48,9 @@ export const useFavoriteStore = defineStore('favorite', () => {
       return cached ?? {
         targetType: item.targetType,
         targetId: item.targetId,
-        title: `${item.targetType} #${item.targetId}`,
+        title: item.card?.title ?? `${item.targetType} #${item.targetId}`,
+        cover: item.card?.coverUrl ?? undefined,
+        subtitle: item.card?.subtitle ?? undefined,
         ts: Date.parse(item.createdAt)
       };
     });
@@ -61,7 +62,8 @@ export const useFavoriteStore = defineStore('favorite', () => {
       studio: [],
       course: [],
       coach: [],
-      workshop: []
+      workshop: [],
+      content_post: []
     };
     items.value.forEach((it) => g[it.targetType].push(it));
     return g;

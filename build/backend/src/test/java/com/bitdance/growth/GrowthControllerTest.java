@@ -191,9 +191,9 @@ class GrowthControllerTest {
     @Test
     void createWork_ok() throws Exception {
         when(service.createWork(eq(42L), any())).thenReturn(new WorkDto(
-            1L, 42L, 1L, "Routine v1", "第一支完整 Routine", null, true, OffsetDateTime.now()
+            1L, 42L, 1L, "Routine v1", "第一支完整 Routine", null, true, OffsetDateTime.now(), null, List.of()
         ));
-        var body = new CreateWorkRequest(1L, "Routine v1", "第一支完整 Routine", null, true);
+        var body = new CreateWorkRequest(1L, "Routine v1", "第一支完整 Routine", null, true, List.of());
         mvc.perform(post("/h5/growth/works")
                 .header("Authorization", "Bearer fake")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -204,7 +204,7 @@ class GrowthControllerTest {
 
     @Test
     void createWork_missingTitle_returns400() throws Exception {
-        var body = new CreateWorkRequest(null, "", null, null, null);
+        var body = new CreateWorkRequest(null, "", null, null, null, null);
         mvc.perform(post("/h5/growth/works")
                 .header("Authorization", "Bearer fake")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -216,7 +216,7 @@ class GrowthControllerTest {
     @Test
     void listWorks_returnsItems() throws Exception {
         when(service.listWorks(42L)).thenReturn(List.of(
-            new WorkDto(1L, 42L, null, "T1", null, null, true, OffsetDateTime.now())
+            new WorkDto(1L, 42L, null, "T1", null, null, true, OffsetDateTime.now(), null, List.of())
         ));
         mvc.perform(get("/h5/growth/works").header("Authorization", "Bearer fake"))
             .andExpect(status().isOk())

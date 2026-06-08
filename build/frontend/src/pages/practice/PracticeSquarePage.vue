@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Bell, Heart, Search, User } from 'lucide-vue-next';
-import { fetchPractices, type PracticePost } from '@/api/practice';
+import { fetchMyPractices, fetchPractices, type PracticeListQuery, type PracticePost } from '@/api/practice';
+import { getToken } from '@/utils/request';
 
 const router = useRouter();
 
 const scopes = ['推荐', '附近', '同舞种', '我的'];
-const activeScope = ref('推荐');
 const filters = ['Hiphop', '中级', '周末', '3人'];
+const activeScope = ref(scopes[0]);
 const activeFilters = reactive<Record<string, boolean>>({});
+const loading = ref(false);
+const error = ref('');
 
 interface PracticeCard {
   id: string;
@@ -22,6 +25,7 @@ interface PracticeCard {
   joined: number;
   capacity: number;
   host: string;
+  distance?: string;
 }
 
 const covers = [
@@ -33,12 +37,15 @@ const covers = [
   'https://images.unsplash.com/photo-1535525153412-5a42439a210d?w=640&q=80&auto=format&fit=crop'
 ];
 
-const cards = ref<PracticeCard[]>([
-  { id: 'jazz-match', cover: covers[0], tag: 'Jazz', title: 'Jazz 找搭子', area: '朝阳区', studio: '舞星 Studio 2', time: '14:00-16:00', joined: 1, capacity: 4, host: '舞月' },
-  { id: 'popping-match', cover: covers[1], tag: 'Popping', title: 'Popping 找搭子', area: '朝阳区', studio: '舞星 Studio 6', time: '20:00-22:00', joined: 2, capacity: 5, host: '羊羊' },
-  { id: 'breaking-jam', cover: covers[2], tag: 'Breaking', title: 'Breaking 地板练习', area: '海淀区', studio: 'DanceLab', time: '周六 16:00', joined: 2, capacity: 4, host: 'Ray' },
-  { id: 'kpop-shoot', cover: covers[3], tag: 'Kpop', title: 'Kpop 成品舞互拍', area: '东城区', studio: 'Joy Dance', time: '今晚 19:30', joined: 3, capacity: 4, host: 'Leo' }
-]);
+const cards = ref<PracticeCard[]>([]);
+
+const activeScopeIndex = computed(() => scopes.indexOf(activeScope.value));
+const filteredCards = computed(() => cards.value);
+const resultText = computed(() => {
+  if (loading.value) return '同步中';
+  if (error.value) return '加载失败';
+  return `${filteredCards.value.length} 个约练`;
+});
 
 const coverOf = (index: number) => covers[index % covers.length];
 
@@ -48,6 +55,12 @@ const splitPlace = (location: string, area: string) => {
   const parts = normalized.split(/\s*[·|,，]\s*/).filter(Boolean);
   if (parts.length >= 2) return { area: parts[0], studio: parts.slice(1).join(' ') };
   return { area: area || '同城', studio: normalized };
+};
+
+const formatDistance = (meters?: number | null) => {
+  if (meters == null) return '';
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
 };
 
 const toCard = (item: PracticePost, index: number): PracticeCard => {
@@ -62,22 +75,63 @@ const toCard = (item: PracticePost, index: number): PracticeCard => {
     time: item.time || item.date,
     joined: item.takenCount,
     capacity: item.capacity,
-    host: item.authorName
+    host: item.authorName,
+    distance: formatDistance(item.distanceMeters)
   };
 };
 
-const filteredCards = computed(() => cards.value);
+const isWeekendPractice = (item: PracticePost) => {
+  const date = new Date(`${item.date}T00:00:00+08:00`);
+  if (!Number.isNaN(date.getTime())) return date.getDay() === 0 || date.getDay() === 6;
+  return /周末|周六|周日|Saturday|Sunday/i.test(`${item.date} ${item.time}`);
+};
 
-onMounted(async () => {
-  try {
-    const resp = await fetchPractices({ page: 1, pageSize: 20 });
-    if (resp.list.length > 0) {
-      cards.value = resp.list.map(toCard);
-    }
-  } catch {
-    // Mock data is enough for the static prototype when the API is unavailable.
-  }
+const applyLocalFilters = (list: PracticePost[]) => list.filter((item) => {
+  if (activeFilters[filters[2]] && !isWeekendPractice(item)) return false;
+  if (activeFilters[filters[3]] && item.capacity !== 3 && item.takenCount !== 3) return false;
+  return true;
 });
+
+const buildQuery = (): PracticeListQuery => {
+  const query: PracticeListQuery = { page: 1, pageSize: 20 };
+  if (activeFilters[filters[0]] || activeScopeIndex.value === 2) query.style = 'Hiphop';
+  if (activeFilters[filters[1]]) query.level = filters[1];
+  if (activeScopeIndex.value === 1) {
+    query.scope = 'nearby';
+    query.sort = 'distance';
+    query.longitude = 116.397;
+    query.latitude = 39.908;
+  }
+  return query;
+};
+
+const loadPractices = async () => {
+  loading.value = true;
+  error.value = '';
+  try {
+    const list = activeScopeIndex.value === 3
+      ? await fetchMyPractices()
+      : (await fetchPractices(buildQuery())).list;
+    cards.value = applyLocalFilters(list).map(toCard);
+  } catch {
+    error.value = '约练列表加载失败';
+    cards.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
+
+const setScope = (scope: string) => {
+  if (scope === activeScope.value) {
+    activeScope.value = '';
+    return;
+  }
+  if (scopes.indexOf(scope) === 3 && !getToken()) {
+    router.push('/me/practices');
+    return;
+  }
+  activeScope.value = scope;
+};
 
 const toggleFilter = (filter: string) => {
   activeFilters[filter] = !activeFilters[filter];
@@ -87,6 +141,18 @@ const visibleSlots = (capacity: number) => Math.min(Math.max(capacity, 1), 4);
 const coverHeights = [150, 120, 112, 160, 132, 122];
 const coverH = (i: number) => `${coverHeights[i % coverHeights.length]}px`;
 const goDetail = (id: string) => router.push(`/practice/${id}`);
+
+onMounted(loadPractices);
+watch(
+  [
+    activeScope,
+    () => activeFilters[filters[0]],
+    () => activeFilters[filters[1]],
+    () => activeFilters[filters[2]],
+    () => activeFilters[filters[3]]
+  ],
+  loadPractices
+);
 </script>
 
 <template>
@@ -115,7 +181,7 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
             class="chip"
             :class="{ 'chip--active': activeScope === scope }"
             type="button"
-            @click="activeScope = scope"
+            @click="setScope(scope)"
           >
             {{ scope }}
           </button>
@@ -132,9 +198,18 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
             {{ filter }}
           </button>
         </div>
+        <div class="filter-status">
+          <span>{{ resultText }}</span>
+          <button v-if="error" type="button" @click="loadPractices">重试</button>
+        </div>
       </section>
 
-      <section class="masonry" aria-label="约练列表">
+      <section v-if="loading" class="state-card">正在按筛选条件刷新约练...</section>
+      <section v-else-if="!error && filteredCards.length === 0" class="state-card">
+        暂时没有符合条件的约练，换个筛选试试。
+      </section>
+
+      <section v-else class="masonry" aria-label="约练列表">
         <article
           v-for="(card, i) in filteredCards"
           :key="card.id"
@@ -150,7 +225,10 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
 
           <div class="card__body">
             <h2 class="card__title">{{ card.title }}</h2>
-            <p class="card__meta">{{ card.area }} {{ card.studio }} · {{ card.time }}</p>
+            <p class="card__meta">
+              {{ card.area }} {{ card.studio }} · {{ card.time }}
+              <template v-if="card.distance"> · {{ card.distance }}</template>
+            </p>
 
             <div class="slot-row" :aria-label="`${card.joined}/${card.capacity} 人`">
               <span
@@ -304,6 +382,36 @@ const goDetail = (id: string) => router.push(`/practice/${id}`);
     background: var(--ink);
     color: var(--canvas);
   }
+}
+
+.filter-status {
+  min-height: 22px;
+  color: var(--mute);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+
+  button {
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+.state-card {
+  padding: 22px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--canvas);
+  color: var(--mute);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 700;
+  text-align: center;
 }
 
 .masonry {

@@ -6,5 +6,6 @@ public record FavoriteDto(
     Long id,
     String targetType,
     Long targetId,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    FavoriteCardDto card
 ) {}

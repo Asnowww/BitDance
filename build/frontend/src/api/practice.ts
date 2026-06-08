@@ -27,6 +27,7 @@ export interface PracticePost {
   authorName: string;
   authorAvatar: string;
   createdAt: number;
+  distanceMeters?: number | null;
 }
 
 export interface PracticeListQuery {
@@ -34,6 +35,9 @@ export interface PracticeListQuery {
   style?: string;
   level?: string;
   scope?: 'nearby' | 'city';
+  sort?: 'time' | 'distance';
+  longitude?: number;
+  latitude?: number;
   page?: number;
   pageSize?: number;
 }
@@ -79,6 +83,7 @@ interface BackendPracticePost {
   postStatus: string;
   description?: string;
   createdAt?: string;
+  distanceMeters?: number | null;
 }
 
 interface BackendPracticeListResp {
@@ -166,7 +171,8 @@ const toPracticePost = (raw: BackendPracticePost | PracticePost): PracticePost =
       authorId: raw.creatorUserId,
       authorName: `用户 ${raw.creatorUserId}`,
       authorAvatar: '',
-      createdAt: raw.createdAt ? new Date(raw.createdAt).getTime() : Date.now()
+      createdAt: raw.createdAt ? new Date(raw.createdAt).getTime() : Date.now(),
+      distanceMeters: raw.distanceMeters ?? null
     };
   }
   return raw;
@@ -204,6 +210,10 @@ const toSquareParams = (q: PracticeListQuery) => ({
   cityId: q.city ? cityIds[q.city] : undefined,
   danceStyleId: q.style ? styleIds[q.style] : undefined,
   skillLevel: q.level,
+  scope: q.scope,
+  sort: q.sort,
+  longitude: q.longitude,
+  latitude: q.latitude,
   page: q.page,
   pageSize: q.pageSize
 });
@@ -240,3 +250,50 @@ export const cancelJoin = (id: number) =>
 
 export const confirmPractice = (id: number) =>
   fetchPracticeDetail(id);
+
+export const fetchPracticeRecommendations = (q: PracticeListQuery = {}) =>
+  request
+    .get<unknown, Array<BackendPracticePost | PracticePost>>('/h5/practices/recommendations', {
+      params: { ...toSquareParams(q), limit: q.pageSize ?? 10 }
+    })
+    .then((list) => list.map((item) => toPracticePost(item)));
+
+export const fetchMyPractices = () =>
+  request
+    .get<unknown, Array<BackendPracticePost | PracticePost>>('/h5/practices/mine')
+    .then((list) => list.map((item) => toPracticePost(item)));
+
+export interface GroupClassIntent {
+  id: number;
+  creatorUserId: number;
+  studioId: number;
+  danceStyleId: number;
+  preferredTimeNote?: string | null;
+  targetPeopleCount: number;
+  currentPeopleCount: number;
+  intentStatus: 'collecting' | 'matched' | 'closed' | 'canceled';
+  joinedByMe?: boolean;
+  createdAt?: string;
+}
+
+export interface CreateGroupClassIntentBody {
+  studioId: number;
+  danceStyleId: number;
+  preferredTimeNote?: string;
+  targetPeopleCount: number;
+}
+
+export const fetchGroupClassIntents = (params: { studioId?: number; danceStyleId?: number; limit?: number } = {}) =>
+  request.get<unknown, GroupClassIntent[]>('/public/group-class-intents', { params });
+
+export const fetchMyGroupClassIntents = () =>
+  request.get<unknown, GroupClassIntent[]>('/h5/group-class-intents/mine');
+
+export const createGroupClassIntent = (body: CreateGroupClassIntentBody) =>
+  request.post<unknown, GroupClassIntent>('/h5/group-class-intents', body);
+
+export const joinGroupClassIntent = (id: number) =>
+  request.post<unknown, GroupClassIntent>(`/h5/group-class-intents/${id}/join`);
+
+export const cancelGroupClassIntent = (id: number) =>
+  request.post<unknown, GroupClassIntent>(`/h5/group-class-intents/${id}/cancel`);

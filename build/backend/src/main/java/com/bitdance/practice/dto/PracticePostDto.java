@@ -22,5 +22,6 @@ public record PracticePostDto(
     OffsetDateTime expiresAt,
     String postStatus,
     String description,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    Long distanceMeters
 ) {}
