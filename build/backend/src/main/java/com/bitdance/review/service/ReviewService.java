@@ -66,54 +66,18 @@ public class ReviewService {
         AppUser author = userRepo.findById(userId)
             .orElseThrow(() -> new BizException("USER_NOT_FOUND", "用户不存在"));
 
-        // 维度分数代码不重复
-        Set<String> codes = new HashSet<>();
-        for (DimensionScoreDto d : req.dimensions()) {
-            if (!codes.add(d.code())) {
-                throw new BizException("INVALID_ARGUMENT",
-                    "维度代码重复: " + d.code());
-            }
-        }
-
+        validateDimensionCodes(req.dimensions());
         boolean verified = verifySource(userId, req);
 
         ReviewRiskService.Verdict verdict = riskService.assess(
             author, verified, req.targetType(), req.targetId()
         );
 
-        Review r = new Review();
-        r.setUserId(userId);
-        r.setTargetType(req.targetType());
-        r.setTargetId(req.targetId());
-        r.setOverallScore(req.overallScore());
-        r.setContentText(req.contentText());
-        if (verified) {
-            r.setVerifiedSourceType(req.sourceType());
-            r.setVerifiedSourceRefId(req.sourceRefId());
-            r.setIsVerified(true);
-        }
-        r.setWeightFactor(verdict.weightFactor());
-        r.setReviewStatus(verdict.status());
-        r.setRiskLevel(verdict.riskLevel());
-        r.setPublishedAt(OffsetDateTime.now());
-        Review saved = reviewRepo.save(r);
-
-        List<ReviewDimensionScore> dims = new ArrayList<>();
-        for (DimensionScoreDto d : req.dimensions()) {
-            ReviewDimensionScore s = new ReviewDimensionScore();
-            s.setReviewId(saved.getId());
-            s.setDimensionCode(d.code());
-            s.setDimensionName(d.name());
-            s.setScore(d.score());
-            dims.add(s);
-        }
+        Review saved = reviewRepo.save(buildReview(userId, req, verified, verdict));
+        List<ReviewDimensionScore> dims = buildDimensionScores(saved.getId(), req.dimensions());
         dimRepo.saveAll(dims);
 
-        // 徽章引擎：用户当前评价总数
-        long totalReviews = reviewRepo.count(); // 简化：BE-016 改 countByUserId 后再细化
-        badgeRuleEngine.evaluate(userId, "review",
-            java.util.Map.of("totalCount", totalReviews),
-            "review", saved.getId());
+        awardReviewBadge(userId, saved.getId());
 
         return toDto(saved, dims);
     }
@@ -245,6 +209,56 @@ public class ReviewService {
             case "studio" -> b.getStudioId().equals(targetId);
             default -> false; // 试听不直接证明 coach 评价（留待 BE-013 互评接入）
         };
+    }
+
+    private void validateDimensionCodes(List<DimensionScoreDto> dimensions) {
+        Set<String> codes = new HashSet<>();
+        for (DimensionScoreDto d : dimensions) {
+            if (!codes.add(d.code())) {
+                throw new BizException("INVALID_ARGUMENT", "维度代码重复: " + d.code());
+            }
+        }
+    }
+
+    private Review buildReview(Long userId, CreateReviewRequest req, boolean verified,
+                               ReviewRiskService.Verdict verdict) {
+        Review r = new Review();
+        r.setUserId(userId);
+        r.setTargetType(req.targetType());
+        r.setTargetId(req.targetId());
+        r.setOverallScore(req.overallScore());
+        r.setContentText(req.contentText());
+        if (verified) {
+            r.setVerifiedSourceType(req.sourceType());
+            r.setVerifiedSourceRefId(req.sourceRefId());
+            r.setIsVerified(true);
+        }
+        r.setWeightFactor(verdict.weightFactor());
+        r.setReviewStatus(verdict.status());
+        r.setRiskLevel(verdict.riskLevel());
+        r.setPublishedAt(OffsetDateTime.now());
+        return r;
+    }
+
+    private List<ReviewDimensionScore> buildDimensionScores(Long reviewId, List<DimensionScoreDto> dimensions) {
+        List<ReviewDimensionScore> dims = new ArrayList<>();
+        for (DimensionScoreDto d : dimensions) {
+            ReviewDimensionScore s = new ReviewDimensionScore();
+            s.setReviewId(reviewId);
+            s.setDimensionCode(d.code());
+            s.setDimensionName(d.name());
+            s.setScore(d.score());
+            dims.add(s);
+        }
+        return dims;
+    }
+
+    private void awardReviewBadge(Long userId, Long reviewId) {
+        // 徽章引擎：用户当前评价总数
+        long totalReviews = reviewRepo.count(); // 简化：BE-016 改 countByUserId 后再细化
+        badgeRuleEngine.evaluate(userId, "review",
+            java.util.Map.of("totalCount", totalReviews),
+            "review", reviewId);
     }
 
     private void validateTargetType(String targetType) {

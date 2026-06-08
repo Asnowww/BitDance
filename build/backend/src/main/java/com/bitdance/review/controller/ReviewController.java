@@ -8,6 +8,11 @@ import com.bitdance.review.dto.ReviewListResponse;
 import com.bitdance.review.dto.ReviewSummary;
 import com.bitdance.review.service.ReviewService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
+@Validated
 @RequestMapping
 public class ReviewController {
 
@@ -42,20 +48,20 @@ public class ReviewController {
 
     @GetMapping("/public/reviews")
     public ApiResponse<ReviewListResponse> list(
-        @RequestParam String targetType,
-        @RequestParam Long targetId,
+        @RequestParam @NotBlank String targetType,
+        @RequestParam @NotNull Long targetId,
         @RequestParam(required = false) String sort,
         @RequestParam(required = false) String status,
-        @RequestParam(defaultValue = "1") int page,
-        @RequestParam(defaultValue = "20") int pageSize
+        @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {
         return ApiResponse.ok(service.list(targetType, targetId, sort, status, page, pageSize));
     }
 
     @GetMapping("/public/reviews/summary")
     public ApiResponse<ReviewSummary> summary(
-        @RequestParam String targetType,
-        @RequestParam Long targetId
+        @RequestParam @NotBlank String targetType,
+        @RequestParam @NotNull Long targetId
     ) {
         return ApiResponse.ok(service.summary(targetType, targetId));
     }
@@ -63,8 +69,8 @@ public class ReviewController {
     @GetMapping("/public/users/{userId}/reviews")
     public ApiResponse<ReviewListResponse> listByUser(
         @PathVariable Long userId,
-        @RequestParam(defaultValue = "1") int page,
-        @RequestParam(defaultValue = "20") int pageSize
+        @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {
         return ApiResponse.ok(service.listByUser(userId, page, pageSize));
     }

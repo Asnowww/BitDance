@@ -160,6 +160,16 @@ class ReviewControllerTest {
     }
 
     @Test
+    void list_invalidPage_returns400() throws Exception {
+        mvc.perform(get("/public/reviews")
+                .param("targetType", "studio")
+                .param("targetId", "1")
+                .param("page", "0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
     void summary_returnsWeightedAvg() throws Exception {
         when(service.summary("studio", 1L)).thenReturn(new ReviewSummary(
             "studio", 1L, 12L, 7L, new BigDecimal("4.32"),

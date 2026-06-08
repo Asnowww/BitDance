@@ -112,6 +112,15 @@ class StudioClaimControllerTest {
     }
 
     @Test
+    void admin_list_invalidPage_returns400() throws Exception {
+        mvc.perform(get("/admin/studio-claims")
+                .param("status", "pending")
+                .param("page", "0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
     void admin_approve_ok() throws Exception {
         when(service.approve(eq(42L), eq(300L), any())).thenReturn(fix("approved"));
         mvc.perform(post("/admin/studio-claims/300/approve")
