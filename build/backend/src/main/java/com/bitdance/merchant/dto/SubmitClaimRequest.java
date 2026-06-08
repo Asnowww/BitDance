@@ -6,7 +6,8 @@ import jakarta.validation.constraints.Size;
 
 public record SubmitClaimRequest(
     @NotNull Long studioId,
-    @Pattern(regexp = "owner_claim|operator_claim") String claimType,
+    @Pattern(regexp = "owner_claim|operator_claim", message = "claimType 必须是 owner_claim/operator_claim")
+    String claimType,
     Long businessLicenseAssetId,
     @Size(max = 1000) String submittedRemark
 ) {}
