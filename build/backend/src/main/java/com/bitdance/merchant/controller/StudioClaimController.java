@@ -7,6 +7,10 @@ import com.bitdance.merchant.dto.StudioClaimDto;
 import com.bitdance.merchant.dto.SubmitClaimRequest;
 import com.bitdance.merchant.service.StudioClaimService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@Validated
 @RequestMapping
 public class StudioClaimController {
 
@@ -40,9 +45,11 @@ public class StudioClaimController {
 
     @GetMapping("/admin/studio-claims")
     public ApiResponse<Page<StudioClaimDto>> listByStatus(
-        @RequestParam(required = false) String status,
-        @RequestParam(defaultValue = "1") int page,
-        @RequestParam(defaultValue = "20") int pageSize
+        @RequestParam(required = false)
+        @Pattern(regexp = "pending|approved|rejected", message = "status 必须是 pending/approved/rejected")
+        String status,
+        @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {
         return ApiResponse.ok(service.listByStatus(status, page, pageSize));
     }

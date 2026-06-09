@@ -105,6 +105,23 @@ class ReviewAppealControllerTest {
     }
 
     @Test
+    void admin_list_invalidPageSize_returns400() throws Exception {
+        mvc.perform(get("/admin/review-appeals")
+                .param("status", "pending")
+                .param("pageSize", "0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void admin_list_invalidStatus_returns400() throws Exception {
+        mvc.perform(get("/admin/review-appeals")
+                .param("status", "done"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
     void admin_approve_ok() throws Exception {
         when(service.approve(eq(42L), eq(300L), any())).thenReturn(fix("approved"));
         mvc.perform(post("/admin/review-appeals/300/approve")
