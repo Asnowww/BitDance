@@ -78,20 +78,20 @@ const pickCity = (cityId: number) => {
         class="search-editor-mask"
         role="button"
         tabindex="0"
-        aria-label="关闭修改搜索"
+        aria-label="关闭搜索条件"
         @pointerdown.prevent="emit('close')"
         @keydown.esc="emit('close')"
       />
     </Transition>
     <Transition name="search-editor-slide">
-      <aside v-if="visible" class="search-editor" aria-label="修改搜索">
+      <aside v-if="visible" class="search-editor" aria-label="搜索条件">
         <div class="search-editor__handle" />
         <header class="search-editor__head">
           <div class="search-editor__title">
-            <h2>修改搜索</h2>
+            <h2>搜索条件</h2>
             <p>{{ currentMeta }}</p>
           </div>
-          <button type="button" class="search-editor__close" aria-label="关闭修改搜索" @click="emit('close')">
+          <button type="button" class="search-editor__close" aria-label="关闭搜索条件" @click="emit('close')">
             <X :size="17" :stroke-width="2.5" />
           </button>
         </header>
@@ -159,7 +159,8 @@ const pickCity = (cityId: number) => {
   position: fixed;
   top: 0;
   right: 0;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  /* M1 搜索入口：搜索弹层打开时遮罩覆盖到底部，避免底层地图和列表继续响应点击。 */
+  bottom: 0;
   left: 0;
   z-index: 120;
   background: rgb(17 17 17 / 42%);
@@ -169,7 +170,8 @@ const pickCity = (cityId: number) => {
 .search-editor {
   position: fixed;
   right: 0;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  /* M1 搜索入口：搜索面板贴底，和筛选抽屉保持一致的触控边界。 */
+  bottom: 0;
   left: 0;
   z-index: 130;
   display: flex;

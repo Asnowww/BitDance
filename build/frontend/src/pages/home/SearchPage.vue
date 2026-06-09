@@ -2,13 +2,13 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { ListFilter, Music, Search } from 'lucide-vue-next';
+import { ChevronRight, ListFilter, Music, Search, Star } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import StudioFilterDrawer, { type StudioFilterValue } from '@/components/studio/StudioFilterDrawer.vue';
 import StudioSearchEditor, { type StudioSearchEditorValue } from '@/components/studio/StudioSearchEditor.vue';
 import { fetchNearbyStudios, type StudioCard, type StudioListQuery } from '@/api/studio';
-import { toggleFavorite } from '@/api/favorite';
+import { fetchFavorites, toggleFavorite } from '@/api/favorite';
 import { getCityName } from '@/constants/cities';
 import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
 
@@ -42,7 +42,6 @@ const buildPresetFilters = (preset?: SearchPreset): StudioFilterValue => {
 
 const drawerVisible = ref(false);
 const searchEditorVisible = ref(false);
-const viewMode = ref<'list' | 'map'>('list');
 const searchValue = ref<StudioSearchEditorValue>(parseRouteSearch());
 const locatedCoords = ref<{ latitude: number; longitude: number } | null>(null);
 
@@ -53,6 +52,8 @@ interface SearchResult {
   tags: string[];
   hint: string;
   to: string;
+  favored: boolean;
+  compareSelected: boolean;
 }
 
 const studios = ref<StudioCard[]>([]);
@@ -60,6 +61,9 @@ const resultCount = ref<number>();
 const loading = ref(false);
 const query = ref<StudioListQuery>({ page: 1, pageSize: 20 });
 const appliedFilters = ref<StudioFilterValue>(buildPresetFilters(parseRoutePreset()));
+const compareMode = ref(false);
+const compareSelection = ref<Record<string, boolean>>({});
+const favoriteState = ref<Record<number, boolean>>({});
 const mapContainer = ref<HTMLElement | null>(null);
 const mapStatus = ref(hasTencentMapConfig() ? '地图加载中' : '未配置腾讯地图 Key，展示坐标降级视图');
 const selectedMapStudioId = ref<number>();
@@ -69,25 +73,26 @@ let map: any = null;
 let markerLayer: any = null;
 
 const results = computed<SearchResult[]>(() =>
-  studios.value.map((studio) => ({
-    id: String(studio.id),
-    title: studio.name,
-    meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
-    tags: studio.favored ? ['已收藏'] : ['附近舞室'],
-    hint: '课程 · 老师 · 评价',
-    to: `/studio/${studio.id}`
-  }))
+  studios.value.map((studio) => {
+    const favored = Boolean(favoriteState.value[studio.id] ?? studio.favored);
+    return {
+      id: String(studio.id),
+      title: studio.name,
+      meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
+      tags: [favored ? '已收藏' : '附近舞室'],
+      hint: '课程 · 老师 · 评价',
+      to: `/studio/${studio.id}`,
+      favored,
+      compareSelected: Boolean(compareSelection.value[String(studio.id)])
+    };
+  })
 );
 
-const selected = ref<Record<string, boolean>>({});
-const selectedStudioIds = computed(() =>
-  Object.entries(selected.value).filter(([, on]) => on).map(([id]) => Number(id))
+const compareSelectedStudioIds = computed(() =>
+  Object.entries(compareSelection.value).filter(([, on]) => on).map(([id]) => Number(id))
 );
-const selectedCount = computed(() => selectedStudioIds.value.length);
-const canFavorite = computed(() => selectedCount.value === 1);
-const canCompare = computed(() => selectedCount.value >= 2 && selectedCount.value <= 3);
-const favoriteActionLabel = computed(() => (canFavorite.value ? '收藏已选' : '选 1 家收藏'));
-const compareActionLabel = computed(() => (canCompare.value ? `对比 ${selectedCount.value} 家` : '选 2 家对比'));
+const compareCount = computed(() => compareSelectedStudioIds.value.length);
+const canEnterCompare = computed(() => compareCount.value >= 2 && compareCount.value <= 3);
 const resultSummary = computed(() => {
   const place = searchValue.value.useNearby ? '附近' : getCityName(searchValue.value.cityId) || '当前城市';
   return `${place}找到 ${resultCount.value ?? studios.value.length} 家舞室`;
@@ -98,15 +103,15 @@ const searchContextMeta = computed(() => {
   return parts.join(' · ');
 });
 const selectionHint = computed(() => {
-  if (selectedCount.value === 0) return '先浏览结果，再选 1 家收藏或选 2-3 家加入对比';
-  if (selectedCount.value === 1) return '已选 1 家舞室，可直接收藏，也可再选 1-2 家进行对比';
-  return `已选 ${selectedCount.value} 家舞室，可加入对比`;
+  if (!compareMode.value) return '点卡片可查看详情，点右侧星标收藏';
+  if (compareCount.value === 0) return '点卡片加入对比，最多同时选 3 家';
+  if (compareCount.value === 1) return '再选 1 家就能进入对比';
+  return `已选 ${compareCount.value} 家，可进入对比`;
 });
-const compareProgress = computed(() => `已选 ${selectedCount.value}/3 家`);
 const compareHint = computed(() => {
-  if (selectedCount.value === 0) return '最多同时选 3 家；先选 2 家再去对比。';
-  if (selectedCount.value === 1) return '再选 1 家就能对比，收藏仍需要保持单选。';
-  if (selectedCount.value === 2) return '已经够开始对比了，还可以再补 1 家。';
+  if (compareCount.value === 0) return '开启后点卡片加入对比，右侧星标仍然只负责收藏。';
+  if (compareCount.value === 1) return '再点 1 家就能进入对比页。';
+  if (compareCount.value === 2) return '已经够开始对比了，还可以再补 1 家。';
   return '已满 3 家，想换对象先取消 1 家。';
 });
 const selectedMapStudio = computed(() => studios.value.find((studio) => studio.id === selectedMapStudioId.value) ?? null);
@@ -132,6 +137,8 @@ const activeFilterTags = computed(() => {
   if (searchValue.value.keyword) tags.push(`关键词：${searchValue.value.keyword}`);
   return tags;
 });
+const searchSummaryTitle = computed(() => resultSummary.value);
+const searchSummaryMeta = computed(() => searchContextMeta.value);
 
 const syncRouteQuery = () => {
   const nextQuery: Record<string, string> = {};
@@ -166,8 +173,17 @@ const loadStudios = async () => {
   loading.value = true;
   try {
     syncQueryFromState();
-    const response = await fetchNearbyStudios(query.value);
-    studios.value = response.list;
+    // M1 收藏链路：列表接口只负责发现舞室，星标状态从用户收藏接口合并，避免隐式默认收藏第一条。
+    const [response, favorites] = await Promise.all([
+      fetchNearbyStudios(query.value),
+      fetchFavorites('studio', { silentError: true }).catch(() => [])
+    ]);
+    const favoriteMap = Object.fromEntries(favorites.map((item) => [item.targetId, true]));
+    favoriteState.value = favoriteMap;
+    studios.value = response.list.map((studio) => ({
+      ...studio,
+      favored: Boolean(favoriteMap[studio.id] ?? studio.favored)
+    }));
     resultCount.value = response.total ?? response.list.length;
   } finally {
     loading.value = false;
@@ -195,7 +211,6 @@ const focusStudio = (id: number, options?: { scrollIntoView?: boolean }) => {
 };
 
 const renderMap = async () => {
-  if (viewMode.value !== 'map') return;
   if (!hasTencentMapConfig()) {
     mapStatus.value = '未配置腾讯地图 Key，已保留列表数据和坐标用于验收';
     return;
@@ -253,6 +268,10 @@ const renderMap = async () => {
     markerLayer.on('click', (event: any) => {
       const id = Number(event?.geometry?.properties?.studioId ?? event?.geometry?.id);
       if (!id) return;
+      if (compareMode.value) {
+        toggleCompare(String(id));
+        return;
+      }
       focusStudio(id, { scrollIntoView: true });
     });
     if (points.length > 1 && TMap.LatLngBounds && typeof map.fitBounds === 'function') {
@@ -315,82 +334,81 @@ const applyFilters = (filters: StudioFilterValue) => {
   void loadStudios().then(renderMap);
 };
 
-const toggleSelect = (id: string) => {
-  if (!selected.value[id] && selectedCount.value >= 3) {
+const toggleCompare = (id: string) => {
+  if (!compareSelection.value[id] && compareCount.value >= 3) {
     showToast('最多选择 3 家舞室进行对比，请先取消 1 家');
     return;
   }
-  selected.value[id] = !selected.value[id];
-  if (selected.value[id]) {
+  compareSelection.value[id] = !compareSelection.value[id];
+  if (compareSelection.value[id]) {
     focusStudio(Number(id));
   }
 };
 
 const handleResultClick = (item: SearchResult) => {
   const id = Number(item.id);
-  if (viewMode.value === 'map' && selectedMapStudioId.value !== id) {
+  if (compareMode.value) {
+    toggleCompare(item.id);
+    return;
+  }
+  if (selectedMapStudioId.value !== id) {
     focusStudio(id);
     return;
   }
   router.push(item.to);
 };
 
+const toggleResultFavorite = async (item: SearchResult) => {
+  const id = Number(item.id);
+  const { favored } = await toggleFavorite('studio', id);
+  favoriteState.value = { ...favoriteState.value, [id]: favored };
+  studios.value = studios.value.map((studio) =>
+    studio.id === id ? { ...studio, favored } : studio
+  );
+  showToast(favored ? '已加入收藏' : '已取消收藏');
+};
+
 const onCompare = () => {
-  if (!canCompare.value) {
+  if (!canEnterCompare.value) {
     showToast('请至少选择 2 个舞室进行对比');
     return;
   }
-  const ids = selectedStudioIds.value.slice(0, 3);
+  const ids = compareSelectedStudioIds.value.slice(0, 3);
   sessionStorage.setItem('bitdance_compare_studio_ids', JSON.stringify(ids));
   router.push('/studio/compare');
 };
 
-const onFavorite = async () => {
-  // 搜索页收藏必须绑定到用户显式选中的舞室，避免按钮悄悄对第一条结果生效。
-  if (selectedCount.value === 0) {
-    showToast('请先选择 1 家舞室再收藏');
-    return;
-  }
-  if (selectedCount.value > 1) {
-    showToast('收藏前请只保留 1 家舞室');
-    return;
-  }
-  const [id] = selectedStudioIds.value;
-  if (!id) return;
-  const { favored } = await toggleFavorite('studio', id);
-  showToast(favored ? '已加入收藏' : '已取消收藏');
-  await loadStudios();
+const clearCompareSelection = () => {
+  compareSelection.value = {};
+  showToast('已清空对比选择');
 };
 
 const resultHintFor = (item: SearchResult) => {
-  if (viewMode.value !== 'map') return item.hint;
-  return selectedMapStudioId.value === Number(item.id)
-    ? '已和地图对齐，再点一次看详情'
-    : '点一下先和地图对齐，再点进详情';
+  if (compareMode.value) return item.compareSelected ? '已加入对比' : '点卡片加入对比';
+  if (selectedMapStudioId.value === Number(item.id)) {
+    return '已和地图对齐，再点一次看详情';
+  }
+  return item.hint;
 };
 
 onMounted(() => {
   locate();
 });
 
-watch(viewMode, (mode) => {
-  if (mode === 'map') void renderMap();
-});
-
 watch(selectedMapStudioId, () => {
-  if (viewMode.value === 'map') void renderMap();
+  void renderMap();
 });
 
 watch(studios, (list) => {
   // 搜索页的“已选舞室”只应属于当前结果集，筛选后移除失效选择，避免底栏动作指向不可见对象。
   const visibleIds = new Set(list.map((studio) => String(studio.id)));
-  selected.value = Object.fromEntries(
-    Object.entries(selected.value).filter(([id, checked]) => checked && visibleIds.has(id))
-  );
   if (selectedMapStudioId.value && !visibleIds.has(String(selectedMapStudioId.value))) {
     selectedMapStudioId.value = undefined;
   }
-  if (viewMode.value === 'map') void renderMap();
+  compareSelection.value = Object.fromEntries(
+    Object.entries(compareSelection.value).filter(([id, checked]) => checked && visibleIds.has(id))
+  );
+  void renderMap();
 });
 
 onUnmounted(() => {
@@ -405,13 +423,21 @@ onUnmounted(() => {
     <PenTopBar title="搜索结果" @share="showToast('搜索结果链接已复制')" />
 
     <section class="pen-scroll">
-      <section class="search-summary" aria-label="搜索结果摘要">
+      <section
+        class="search-summary"
+        aria-label="搜索结果摘要"
+        role="button"
+        tabindex="0"
+        @click="openSearchEditor"
+        @keydown.enter.prevent="openSearchEditor"
+        @keydown.space.prevent="openSearchEditor"
+      >
         <Search class="search-summary__icon" :size="18" :stroke-width="2" />
         <div class="search-summary__body">
-          <strong class="search-summary__title">{{ resultSummary }}</strong>
-          <p class="search-summary__meta">{{ searchContextMeta }}</p>
+          <strong class="search-summary__title">{{ searchSummaryTitle }}</strong>
+          <p class="search-summary__meta">{{ searchSummaryMeta }}</p>
         </div>
-        <button type="button" class="search-summary__action" @click="openSearchEditor">修改搜索</button>
+        <ChevronRight class="search-summary__chevron" :size="18" :stroke-width="2" />
       </section>
 
       <section class="filter-toolbar" aria-label="筛选与选择">
@@ -428,37 +454,25 @@ onUnmounted(() => {
         </button>
       </section>
 
-      <section class="compare-status" aria-label="对比选择状态">
-        <div class="compare-status__body">
-          <strong class="compare-status__title">{{ compareProgress }}</strong>
-          <p class="compare-status__meta">{{ compareHint }}</p>
-        </div>
-        <span class="compare-status__badge">{{ selectionHint }}</span>
-      </section>
-
-      <div class="toggle">
-        <button
-          type="button"
-          class="toggle__btn"
-          :class="{ 'toggle__btn--active': viewMode === 'list' }"
-          @click="viewMode = 'list'"
-        >
-          列表
-        </button>
-        <button
-          type="button"
-          class="toggle__btn"
-          :class="{ 'toggle__btn--active': viewMode === 'map' }"
-          @click="viewMode = 'map'"
-        >
-          地图
-        </button>
-      </div>
-
-      <section v-if="viewMode === 'map'" class="map-panel" aria-label="舞室地图">
+      <section class="map-panel" aria-label="舞室地图">
         <div ref="mapContainer" class="map-panel__canvas" />
         <p class="map-panel__status">{{ mapStatus }}</p>
-        <p class="map-panel__status map-panel__status--focus">{{ mapFocusHint }}</p>
+        <div class="map-panel__footer">
+          <p class="map-panel__focus">{{ mapFocusHint }}</p>
+          <!-- M1 对比入口：滑钮只切换选择模式，底部确认/取消按钮才执行对比动作。 -->
+          <button
+            type="button"
+            class="compare-switch"
+            :class="{ 'compare-switch--active': compareMode }"
+            @click="compareMode = !compareMode"
+          >
+            <span class="compare-switch__label">对比</span>
+            <span class="compare-switch__track" aria-hidden="true">
+              <span class="compare-switch__thumb" />
+            </span>
+          </button>
+        </div>
+        <p class="map-panel__hint">{{ compareMode ? compareHint : selectionHint }}</p>
         <div v-if="!hasTencentMapConfig()" class="map-panel__fallback">
           <button
             v-for="studio in studios.slice(0, 8)"
@@ -479,7 +493,10 @@ onUnmounted(() => {
           :key="item.id"
           :ref="(el) => bindResultRef(Number(item.id), el as Element | null)"
           class="result"
-          :class="{ 'result--focused': selectedMapStudioId === Number(item.id) }"
+          :class="{
+            'result--focused': selectedMapStudioId === Number(item.id),
+            'result--compare': item.compareSelected
+          }"
           @click="handleResultClick(item)"
         >
           <div class="result__cover" aria-hidden="true">
@@ -489,6 +506,7 @@ onUnmounted(() => {
             <div class="result__title-row">
               <strong class="result__title">{{ item.title }}</strong>
               <span v-if="selectedMapStudioId === Number(item.id)" class="result__focus-tag">地图已定位</span>
+              <span v-if="item.compareSelected" class="result__focus-tag result__focus-tag--compare">已选对比</span>
             </div>
             <p class="result__meta">{{ item.meta }}</p>
             <div class="result__tags">
@@ -498,13 +516,13 @@ onUnmounted(() => {
           </div>
           <button
             type="button"
-            class="select-chip"
-            :class="{ 'select-chip--on': selected[item.id] }"
-            :aria-label="selected[item.id] ? `取消选择 ${item.title}` : `选中 ${item.title}`"
-            :aria-pressed="selected[item.id] ? 'true' : 'false'"
-            @click.stop="toggleSelect(item.id)"
+            class="favorite-chip"
+            :class="{ 'favorite-chip--on': item.favored }"
+            :aria-label="item.favored ? `取消收藏 ${item.title}` : `收藏 ${item.title}`"
+            :aria-pressed="item.favored ? 'true' : 'false'"
+            @click.stop="toggleResultFavorite(item)"
           >
-            {{ selected[item.id] ? '已选' : '选中' }}
+            <Star :size="16" :stroke-width="2.25" :fill="item.favored ? 'currentColor' : 'none'" />
           </button>
         </li>
       </ul>
@@ -527,11 +545,12 @@ onUnmounted(() => {
     />
 
     <PenActionBar
-      :soft-label="favoriteActionLabel"
-      :dark-label="compareActionLabel"
-      :soft-disabled="!canFavorite"
-      :dark-disabled="!canCompare"
-      @soft="onFavorite"
+      v-if="compareMode"
+      soft-label="取消全部"
+      dark-label="进入对比"
+      :soft-disabled="!compareCount"
+      :dark-disabled="!canEnterCompare"
+      @soft="clearCompareSelection"
       @dark="onCompare"
     />
   </main>
@@ -563,8 +582,9 @@ onUnmounted(() => {
   min-height: 68px;
   padding: 14px 16px;
   border: 1px solid $pen-hairline;
-  border-radius: 16px;
+  border-radius: 18px;
   background: $pen-canvas;
+  cursor: pointer;
 
   &__icon {
     flex: none;
@@ -594,19 +614,9 @@ onUnmounted(() => {
     line-height: $pen-lh;
   }
 
-  &__action {
+  &__chevron {
     flex: none;
-    min-width: 92px;
-    height: 38px;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 999px;
-    background: $pen-soft;
     color: $pen-ink;
-    font-size: 13px;
-    font-weight: 800;
-    line-height: $pen-lh;
-    cursor: pointer;
   }
 }
 
@@ -673,68 +683,46 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.compare-status {
+.compare-switch {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: $pen-soft;
-
-  &__body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  &__title {
-    color: $pen-ink;
-    font-size: 15px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  &__meta {
-    margin: 0;
-    color: $pen-mute;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: $pen-lh;
-  }
-
-  &__badge {
-    display: inline-flex;
-    align-self: flex-start;
-    min-height: 34px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: $pen-canvas;
-    color: $pen-ink;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
-}
-
-.toggle {
-  display: flex;
+  align-items: center;
   gap: 8px;
+  border: 0;
+  background: transparent;
+  color: $pen-ink;
+  cursor: pointer;
 
-  &__btn {
-    flex: 1;
-    height: 48px;
-    border: 0;
-    border-radius: 999px;
-    background: $pen-soft;
-    color: $pen-ink;
-    font-size: 14px;
+  &__label {
+    font-size: 13px;
     font-weight: 800;
     line-height: $pen-lh;
-    cursor: pointer;
+  }
 
-    &--active {
+  &__track {
+    width: 42px;
+    height: 24px;
+    padding: 2px;
+    border-radius: 999px;
+    background: $pen-hairline-strong;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    box-sizing: border-box;
+  }
+
+  &__thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: $pen-canvas;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+    transition: transform .18s ease;
+  }
+
+  &--active {
+    .compare-switch__track {
       background: $pen-ink;
-      color: $pen-on-primary;
+      justify-content: flex-end;
     }
   }
 }
@@ -763,6 +751,31 @@ onUnmounted(() => {
   &--focus {
     color: $pen-ink;
   }
+}
+
+.map-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-panel__focus {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: $pen-ink;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: $pen-lh;
+}
+
+.map-panel__hint {
+  margin: 0;
+  color: $pen-mute;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: $pen-lh;
 }
 
 .map-panel__fallback {
@@ -813,6 +826,11 @@ onUnmounted(() => {
     background: $pen-soft;
   }
 
+  &--compare {
+    background: #f9f9f9;
+    outline: 1px solid $pen-ink;
+  }
+
   &__cover {
     flex: none;
     display: grid;
@@ -859,6 +877,10 @@ onUnmounted(() => {
     font-size: 11px;
     font-weight: 800;
     line-height: $pen-lh;
+
+    &--compare {
+      background: $pen-success;
+    }
   }
 
   &__meta {
@@ -897,17 +919,16 @@ onUnmounted(() => {
   line-height: $pen-lh;
 }
 
-.select-chip {
+.favorite-chip {
   flex: none;
-  min-width: 58px;
-  height: 34px;
-  padding: 0 12px;
+  width: 36px;
+  height: 36px;
   border: 1px solid $pen-hairline-strong;
   border-radius: 999px;
   background: $pen-canvas;
   color: $pen-ink;
-  font-size: 12px;
-  font-weight: 800;
+  display: grid;
+  place-items: center;
   line-height: $pen-lh;
   cursor: pointer;
 

@@ -3,6 +3,16 @@ import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'a
 import { showFailToast } from 'vant';
 import { attachMockAdapter } from '@/mock';
 
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silentError?: boolean;
+  }
+
+  export interface InternalAxiosRequestConfig {
+    silentError?: boolean;
+  }
+}
+
 export interface ApiResp<T = unknown> {
   code: number | string;
   message: string;
@@ -37,11 +47,12 @@ request.interceptors.response.use(
     if (body.code === 0 || body.code === 200 || body.code === 'SUCCESS') {
       return body.data as never;
     }
-    showFailToast(body.message || '请求失败');
+    // M1/M2 可选链路：收藏等登录态接口允许页面自行降级时，不弹全局错误遮挡主流程。
+    if (!response.config.silentError) showFailToast(body.message || '请求失败');
     return Promise.reject(body);
   },
   (error) => {
-    showFailToast(error?.message || '网络异常');
+    if (!error?.config?.silentError) showFailToast(error?.message || '网络异常');
     return Promise.reject(error);
   }
 );

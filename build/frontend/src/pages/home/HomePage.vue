@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter, type RouteLocationRaw } from 'vue-router';
 import { Bell, Search, MapPin, Sparkles, CalendarDays, Star, Ticket } from 'lucide-vue-next';
 import { fetchCourseDetail } from '@/api/course';
-import { fetchNearbyStudios } from '@/api/studio';
-import { fetchStudioSchedule } from '@/api/trial';
+import { fetchNearbyStudios, type StudioCard } from '@/api/studio';
+import { fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 
 const router = useRouter();
 
@@ -38,43 +38,107 @@ const quickEntries: QuickEntry[] = [
   { icon: Ticket, label: 'Workshop', meta: '进入活动专题页', to: '/workshops' }
 ];
 
+type RecommendType = 'studio' | 'course';
+
 interface RecommendCard {
   id: string;
+  type: RecommendType;
   title: string;
   meta: string;
   action: string;
   to: string;
+  imageUrl: string;
 }
 
-const recommends = ref<RecommendCard[]>([]);
+const studioRecommends = ref<RecommendCard[]>([]);
+const courseRecommends = ref<RecommendCard[]>([]);
+const activeRecommendType = ref<RecommendType>('studio');
+const recommendTabs: Array<{ id: RecommendType; label: string }> = [
+  { id: 'studio', label: '舞室' },
+  { id: 'course', label: '课程' }
+];
+
+const activeRecommends = computed(() =>
+  activeRecommendType.value === 'studio' ? studioRecommends.value : courseRecommends.value
+);
+
+const recommendMoreTarget = computed(() =>
+  activeRecommendType.value === 'studio' ? '/search' : { name: 'search', query: { preset: 'trial' } }
+);
+
+const studioCoverUrls = [
+  'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=720&q=80',
+  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=720&q=80',
+  'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?auto=format&fit=crop&w=720&q=80'
+];
+
+const courseCoverUrls = [
+  'https://images.unsplash.com/photo-1535525153412-5a42439a210d?auto=format&fit=crop&w=720&q=80',
+  'https://images.unsplash.com/photo-1504609813442-a8924e83f76e?auto=format&fit=crop&w=720&q=80',
+  'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&w=720&q=80'
+];
+
+const fallbackCoverUrl =
+  'https://images.unsplash.com/photo-1529111290557-82f6d5c6cf85?auto=format&fit=crop&w=720&q=80';
+
+const resolveCoverUrl = (type: RecommendType, id: number, coverAssetId?: number) => {
+  // M1 首页推荐封面：后端当前只返回 coverAssetId，不返回可访问 URL；先用稳定图片池映射，有缺口时落到通用舞蹈图。
+  const pool = type === 'studio' ? studioCoverUrls : courseCoverUrls;
+  const key = coverAssetId ?? id;
+  return pool[Math.abs(key) % pool.length] ?? fallbackCoverUrl;
+};
+
+const toStudioCard = (studio: StudioCard): RecommendCard => ({
+  id: `studio-${studio.id}`,
+  type: 'studio',
+  title: studio.name,
+  meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
+  action: '查看',
+  to: `/studio/${studio.id}`,
+  imageUrl: resolveCoverUrl('studio', studio.id, studio.coverAssetId)
+});
+
+const collectCourseSlots = async (studios: StudioCard[]) => {
+  const scheduleResults = await Promise.allSettled(
+    studios.map(async (studio) => {
+      const slots = await fetchStudioSchedule(studio.id).catch(() => []);
+      return slots.map((slot) => ({ slot, studio }));
+    })
+  );
+  const slots: Array<{ slot: ScheduleSlot; studio: StudioCard }> = [];
+  scheduleResults.forEach((result) => {
+    if (result.status === 'fulfilled') slots.push(...result.value);
+  });
+  return slots;
+};
 
 const loadRecommendations = async () => {
-  const nearby = await fetchNearbyStudios({ page: 1, pageSize: 3, distanceKm: 5 });
-  const firstStudio = nearby.list[0];
-  const cards: RecommendCard[] = nearby.list.slice(0, 1).map((studio) => ({
-    id: `studio-${studio.id}`,
-    title: studio.name,
-    meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
-    action: '试听',
-    to: `/studio/${studio.id}`
-  }));
-  if (firstStudio) {
-    // M1 智能推荐：基于后端附近舞室的第一场排期补一张课程推荐卡，避免首页推荐跳到不存在的静态路由。
-    const slot = (await fetchStudioSchedule(firstStudio.id).catch(() => []))[0];
-    if (slot) {
-      const course = await fetchCourseDetail(slot.courseId).catch(() => null);
-      if (course) {
-        cards.push({
+  // M1 首页推荐：舞室和课程分开加载，避免“为你推荐”只混合展示两张卡。
+  const nearby = await fetchNearbyStudios({ page: 1, pageSize: 8, distanceKm: 5 });
+  studioRecommends.value = nearby.list.slice(0, 6).map(toStudioCard);
+
+  const uniqueCourses = new Map<number, { slot: ScheduleSlot; studio: StudioCard }>();
+  (await collectCourseSlots(nearby.list)).forEach((item) => {
+    if (!uniqueCourses.has(item.slot.courseId)) uniqueCourses.set(item.slot.courseId, item);
+  });
+  const courseResults = await Promise.allSettled(
+    Array.from(uniqueCourses.values())
+      .slice(0, 6)
+      .map(async ({ slot, studio }) => {
+        const course = await fetchCourseDetail(slot.courseId);
+        return {
           id: `course-${course.id}`,
+          type: 'course' as const,
           title: course.courseName,
-          meta: `${course.difficultyLevel} · ¥${course.priceAmount}/节 · ${course.zeroBasicFriendly ? '零基础友好' : '进阶'}`,
+          meta: `${studio.name} · ${course.difficultyLevel} · ¥${course.priceAmount}/节`,
           action: '预约',
-          to: `/course/${course.id}`
-        });
-      }
-    }
-  }
-  recommends.value = cards;
+          to: `/course/${course.id}`,
+          imageUrl: resolveCoverUrl('course', course.id, course.coverAssetId)
+        };
+      })
+  );
+  courseRecommends.value = courseResults
+    .flatMap((item) => (item.status === 'fulfilled' ? [item.value as RecommendCard] : []));
 };
 
 const heroImage =
@@ -141,16 +205,30 @@ const openQuickEntry = (entry: QuickEntry) => {
       <section class="recommend">
         <header class="recommend__head">
           <h2>为你推荐</h2>
-          <button class="recommend__more" type="button" @click="router.push('/search')">全部</button>
+          <div class="recommend__tabs" role="tablist" aria-label="推荐类型">
+            <button
+              v-for="tab in recommendTabs"
+              :key="tab.id"
+              type="button"
+              class="recommend__tab"
+              :class="{ 'recommend__tab--active': activeRecommendType === tab.id }"
+              role="tab"
+              :aria-selected="activeRecommendType === tab.id"
+              @click="activeRecommendType = tab.id"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+          <button class="recommend__more" type="button" @click="router.push(recommendMoreTarget)">全部</button>
         </header>
-        <div class="recommend__grid">
+        <div v-if="activeRecommends.length" class="recommend__grid">
           <article
-            v-for="card in recommends"
+            v-for="card in activeRecommends"
             :key="card.id"
             class="rec-card"
             @click="router.push(card.to)"
           >
-            <div class="rec-card__cover" aria-hidden="true" />
+            <div class="rec-card__cover" :style="{ backgroundImage: `url(${card.imageUrl})` }" aria-hidden="true" />
             <div class="rec-card__row">
               <span class="rec-card__title">{{ card.title }}</span>
               <button class="rec-card__pill" type="button" @click.stop="router.push(card.to)">
@@ -160,6 +238,7 @@ const openQuickEntry = (entry: QuickEntry) => {
             <p class="rec-card__meta">{{ card.meta }}</p>
           </article>
         </div>
+        <p v-else class="recommend__empty">暂无可推荐内容</p>
       </section>
     </main>
   </div>
@@ -370,20 +449,45 @@ const openQuickEntry = (entry: QuickEntry) => {
 .recommend {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 
   &__head {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 8px;
   }
 
   &__head h2 {
-    flex: 1;
     margin: 0;
     font-size: 20px;
     font-weight: 800;
     line-height: 1.25;
+  }
+
+  &__tabs {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--nike-soft-cloud);
+  }
+
+  &__tab {
+    min-width: 44px;
+    height: 30px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--nike-mute);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+
+    &--active {
+      background: var(--nike-ink);
+      color: #fff;
+    }
   }
 
   &__more {
@@ -398,7 +502,19 @@ const openQuickEntry = (entry: QuickEntry) => {
   &__grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 10px;
+  }
+
+  &__empty {
+    min-height: 80px;
+    margin: 0;
+    padding: 20px;
+    border-radius: 12px;
+    background: var(--nike-soft-cloud);
+    color: var(--nike-mute);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
   }
 }
 
@@ -409,9 +525,11 @@ const openQuickEntry = (entry: QuickEntry) => {
   cursor: pointer;
 
   &__cover {
-    height: 112px;
+    height: 124px;
     border-radius: 14px;
     background: var(--nike-soft-cloud);
+    background-size: cover;
+    background-position: center;
   }
 
   &__row {
@@ -426,18 +544,21 @@ const openQuickEntry = (entry: QuickEntry) => {
     font-size: 14px;
     font-weight: 800;
     line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__pill {
     flex: none;
-    height: 40px;
-    padding: 8px 14px;
+    height: 36px;
+    padding: 8px 12px;
     border: 1px solid var(--nike-hairline-soft);
     border-radius: 999px;
     background: var(--nike-soft-cloud);
     color: var(--nike-ink);
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 800;
     line-height: 1.25;
     cursor: pointer;
   }
@@ -447,7 +568,7 @@ const openQuickEntry = (entry: QuickEntry) => {
     color: var(--nike-mute);
     font-size: 12px;
     font-weight: 500;
-    line-height: 1.25;
+    line-height: 1.35;
   }
 }
 </style>
