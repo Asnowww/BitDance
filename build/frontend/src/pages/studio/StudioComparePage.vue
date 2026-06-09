@@ -22,7 +22,6 @@ interface CompareStudio {
 
 interface CompareCell {
   text: string;
-  best?: boolean;
 }
 
 interface CompareRow {
@@ -31,6 +30,7 @@ interface CompareRow {
 }
 
 const studios = ref<CompareStudio[]>([]);
+const selectedStudioId = ref<number | null>(null);
 const columns = computed(() => ['维度', ...studios.value.map((studio) => studio.detail.name)]);
 const gridStyle = computed(() => ({
   gridTemplateColumns: `minmax(72px, .85fr) repeat(${Math.max(studios.value.length, 1)}, minmax(0, 1fr))`
@@ -50,12 +50,6 @@ const priceRange = (item: CompareStudio) => {
   return min === max ? `¥${min}` : `¥${min}-${max}`;
 };
 
-const averagePrice = (item: CompareStudio) => {
-  const prices = coursePrices(item);
-  if (!prices.length) return 180;
-  return prices.reduce((sum, price) => sum + price, 0) / prices.length;
-};
-
 const zeroBasicCount = (item: CompareStudio) =>
   item.courses.filter((course) => course.zeroBasicFriendly || course.targetAudience?.includes('零基础')).length;
 
@@ -64,57 +58,32 @@ const numericDistance = (item: CompareStudio) => {
   return Number.isFinite(distance) && distance > 0 ? distance : 8;
 };
 
-const compareScore = (item: CompareStudio) => {
-  // M1 对比推荐：用评分、余位、零基础友好、距离和价格生成明确“当前最优”，避免底部动作没有指向。
-  const rating = Number(item.summary?.weightedAvgScore ?? 0);
-  const seats = Math.min(availableCount(item), 20);
-  const zeroBasic = Math.min(zeroBasicCount(item), 6);
-  const distancePenalty = Math.min(numericDistance(item), 20);
-  const pricePenalty = Math.min(averagePrice(item) / 60, 6);
-  const favoriteBoost = item.detail.favored ? 1.5 : 0;
-  return rating * 12 + seats * 0.8 + zeroBasic * 2.2 + favoriteBoost - distancePenalty - pricePenalty;
-};
-
-const scoredStudios = computed(() =>
-  studios.value
-    .map((studio) => ({ studio, score: compareScore(studio) }))
-    .sort((a, b) => b.score - a.score)
-);
-
-const bestStudio = computed(() => scoredStudios.value[0]?.studio ?? null);
-const bestStudioId = computed(() => bestStudio.value?.detail.id);
-const bestReason = computed(() => {
-  if (!bestStudio.value) return '等待对比数据';
-  return `评分 ${bestStudio.value.summary?.weightedAvgScore?.toFixed(1) ?? '暂无'} · 余位 ${availableCount(bestStudio.value)} · 零基础 ${zeroBasicCount(bestStudio.value)} 门`;
-});
-
-const isBestStudio = (studio: CompareStudio) => studio.detail.id === bestStudioId.value;
-const cell = (studio: CompareStudio, text: string): CompareCell => ({ text, best: isBestStudio(studio) });
-
 const rows = computed<CompareRow[]>(() => [
-  {
-    label: '当前最优',
-    values: studios.value.map((studio) => cell(studio, isBestStudio(studio) ? '当前最优' : '参考对象'))
-  },
   {
     label: '综合评分',
     values: studios.value.map((studio) =>
-      cell(studio, studio.summary?.weightedAvgScore ? `${studio.summary.weightedAvgScore.toFixed(1)} / 5` : '暂无评价')
+      ({ text: studio.summary?.weightedAvgScore ? `${studio.summary.weightedAvgScore.toFixed(1)} / 5` : '暂无评价' })
     )
   },
-  { label: '价格区间', values: studios.value.map((studio) => cell(studio, priceRange(studio))) },
-  { label: '课表余位', values: studios.value.map((studio) => cell(studio, `${availableCount(studio)} 个`)) },
-  { label: '零基础课', values: studios.value.map((studio) => cell(studio, `${zeroBasicCount(studio)} 门`)) },
+  { label: '价格区间', values: studios.value.map((studio) => ({ text: priceRange(studio) })) },
+  { label: '课表余位', values: studios.value.map((studio) => ({ text: `${availableCount(studio)} 个` })) },
+  { label: '零基础课', values: studios.value.map((studio) => ({ text: `${zeroBasicCount(studio)} 门` })) },
   {
     label: '距离/交通',
     values: studios.value.map((studio) =>
-      cell(studio, `${studio.detail.distanceKm ?? '-'}km · ${studio.detail.transportInfo || '待补交通'}`)
+      ({ text: `${studio.detail.distanceKm ?? '-'}km · ${studio.detail.transportInfo || '待补交通'}` })
     )
   },
-  { label: '地址', values: studios.value.map((studio) => cell(studio, studio.detail.address || '-')) },
-  { label: '收藏状态', values: studios.value.map((studio) => cell(studio, studio.detail.favored ? '已收藏' : '未收藏')) },
-  { label: '操作', values: studios.value.map((studio) => cell(studio, 'actions')) }
+  { label: '地址', values: studios.value.map((studio) => ({ text: studio.detail.address || '-' })) },
+  { label: '收藏状态', values: studios.value.map((studio) => ({ text: studio.detail.favored ? '已收藏' : '未收藏' })) },
+  { label: '操作', values: studios.value.map(() => ({ text: 'actions' })) }
 ]);
+
+const selectedStudio = computed(() => studios.value.find((studio) => studio.detail.id === selectedStudioId.value) ?? null);
+
+const selectStudio = (studioId: number) => {
+  selectedStudioId.value = studioId;
+};
 
 const onShare = () => showToast('已生成对比分享卡');
 
@@ -127,8 +96,8 @@ const bookStudio = (id?: number) => {
   void router.push(`/studio/${id}/trial`);
 };
 
-const bookBest = () => {
-  bookStudio(bestStudio.value?.detail.id);
+const bookSelected = () => {
+  bookStudio(selectedStudio.value?.detail.id);
 };
 
 const toggleStudioFavorite = async (item: CompareStudio) => {
@@ -138,8 +107,8 @@ const toggleStudioFavorite = async (item: CompareStudio) => {
 };
 
 const favoriteBest = async () => {
-  if (!bestStudio.value) return;
-  await toggleStudioFavorite(bestStudio.value);
+  if (!selectedStudio.value) return;
+  await toggleStudioFavorite(selectedStudio.value);
 };
 
 const loadCompareStudio = async (id: number): Promise<CompareStudio> => {
@@ -190,6 +159,7 @@ onMounted(async () => {
     loaded = await loadCompareStudios(await resolveNearbyCompareIds());
   }
   studios.value = loaded;
+  selectedStudioId.value = loaded[0]?.detail.id ?? null;
 });
 </script>
 
@@ -201,8 +171,7 @@ onMounted(async () => {
       <header class="compare-head">
         <div>
           <h2 class="pen-h2">{{ studios.length }} 家舞室对比</h2>
-          <p v-if="bestStudio" class="compare-head__meta">当前最优：{{ bestStudio.detail.name }} · {{ bestReason }}</p>
-          <p v-else class="compare-head__meta">正在读取对比数据</p>
+          <p class="compare-head__meta">点击任意格子可选中该列，下方收藏和预约会跟着当前选择走。</p>
         </div>
       </header>
 
@@ -214,12 +183,13 @@ onMounted(async () => {
             class="compare-cell"
             :class="[
               i === 0 ? 'compare-cell--dim' : 'compare-cell--head',
-              i > 0 && studios[i - 1]?.detail.id === bestStudioId ? 'compare-cell--best-col' : ''
+              i > 0 && studios[i - 1]?.detail.id === selectedStudioId ? 'compare-cell--selected-col' : ''
             ]"
             role="columnheader"
+            @click="i > 0 && selectStudio(studios[i - 1].detail.id)"
           >
             <span>{{ col }}</span>
-            <em v-if="i > 0 && studios[i - 1]?.detail.id === bestStudioId">当前最优</em>
+            <em v-if="i > 0 && studios[i - 1]?.detail.id === selectedStudioId">已选中</em>
           </div>
         </div>
         <div v-for="row in rows" :key="row.label" class="compare-grid__row compare-grid__row--body" role="row" :style="gridStyle">
@@ -228,11 +198,12 @@ onMounted(async () => {
             v-for="(val, i) in row.values"
             :key="`${row.label}-${i}`"
             class="compare-cell compare-cell--value"
-            :class="{ 'compare-cell--best-col': val.best, 'compare-cell--actions': row.label === '操作' }"
+            :class="{ 'compare-cell--selected-col': studios[i]?.detail.id === selectedStudioId, 'compare-cell--actions': row.label === '操作' }"
             role="cell"
+            @click="selectStudio(studios[i].detail.id)"
           >
             <template v-if="row.label === '操作'">
-              <!-- M1 对比操作：每列按钮只作用于本列舞室，不再通过底部按钮隐式操作第一家。 -->
+              <!-- M1 对比操作：每列按钮只作用于本列舞室，底部按钮跟随当前选中列。 -->
               <div class="compare-actions">
                 <button type="button" class="compare-action" @click="openStudioDetail(studios[i].detail.id)">
                   <ChevronRight :size="14" :stroke-width="2.4" />
@@ -245,15 +216,15 @@ onMounted(async () => {
                 <button
                   type="button"
                   class="compare-action compare-action--primary"
-                  :class="{ 'compare-action--best': val.best }"
+                  :class="{ 'compare-action--selected': studios[i]?.detail.id === selectedStudioId }"
                   @click="bookStudio(studios[i].detail.id)"
                 >
                   <CalendarDays :size="14" :stroke-width="2.4" />
-                  <span>{{ val.best ? '预约最优' : '预约' }}</span>
+                  <span>预约</span>
                 </button>
               </div>
             </template>
-            <span v-else class="compare-cell__text" :class="{ 'compare-cell__text--best': val.best && row.label === '当前最优' }">
+            <span v-else class="compare-cell__text">
               {{ val.text }}
             </span>
           </div>
@@ -262,12 +233,12 @@ onMounted(async () => {
     </section>
 
     <PenActionBar
-      soft-label="收藏当前最优"
-      dark-label="预约当前最优"
-      :soft-disabled="!bestStudio"
-      :dark-disabled="!bestStudio"
+      soft-label="收藏"
+      dark-label="预约"
+      :soft-disabled="!selectedStudio"
+      :dark-disabled="!selectedStudio"
       @soft="favoriteBest"
-      @dark="bookBest"
+      @dark="bookSelected"
     />
   </main>
 </template>
@@ -382,7 +353,7 @@ onMounted(async () => {
     color: $pen-mute;
   }
 
-  &--best-col {
+  &--selected-col {
     border-color: $pen-ink !important;
     background: #fafafa;
     color: $pen-ink;
@@ -439,7 +410,7 @@ onMounted(async () => {
     background: $pen-soft;
   }
 
-  &--best {
+  &--selected {
     border-color: $pen-ink;
     background: $pen-ink;
     color: $pen-on-primary;

@@ -1,42 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter, type RouteLocationRaw } from 'vue-router';
-import { Bell, Search, MapPin, Sparkles, CalendarDays, Star, Ticket } from 'lucide-vue-next';
+import { useRouter } from 'vue-router';
+import { Bell, Search } from 'lucide-vue-next';
 import { fetchCourseDetail } from '@/api/course';
 import { fetchNearbyStudios, type StudioCard } from '@/api/studio';
 import { fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 
 const router = useRouter();
-
-interface QuickEntry {
-  icon: typeof MapPin;
-  label: string;
-  meta: string;
-  to: RouteLocationRaw;
-}
-
-const quickEntries: QuickEntry[] = [
-  { icon: MapPin, label: '附近', meta: '搜附近结果', to: { name: 'search' } },
-  {
-    icon: Sparkles,
-    label: '新手',
-    meta: '搜零基础结果',
-    to: { name: 'search', query: { preset: 'zero-basic' } }
-  },
-  {
-    icon: CalendarDays,
-    label: '试听',
-    meta: '搜可试听结果',
-    to: { name: 'search', query: { preset: 'trial' } }
-  },
-  {
-    icon: Star,
-    label: '老师',
-    meta: '搜老师相关结果',
-    to: { name: 'search', query: { keyword: '老师' } }
-  },
-  { icon: Ticket, label: 'Workshop', meta: '进入活动专题页', to: '/workshops' }
-];
 
 type RecommendType = 'studio' | 'course';
 
@@ -148,9 +118,6 @@ onMounted(() => {
   void loadRecommendations();
 });
 
-const openQuickEntry = (entry: QuickEntry) => {
-  void router.push(entry.to);
-};
 </script>
 
 <template>
@@ -179,26 +146,6 @@ const openQuickEntry = (entry: QuickEntry) => {
         <div class="hero__overlay">
           <strong class="hero__title">FIND<br />YOUR<br />STUDIO</strong>
           <p class="hero__sub">附近零基础友好课程</p>
-        </div>
-      </section>
-
-      <section class="quick-block" aria-label="快捷搜索入口">
-        <header class="quick-block__head">
-          <h2>快捷入口</h2>
-          <p>前 4 个入口会进入对应搜索结果页</p>
-        </header>
-        <div class="quick">
-          <button
-            v-for="entry in quickEntries"
-            :key="entry.label"
-            class="quick__item"
-            type="button"
-            @click="openQuickEntry(entry)"
-          >
-            <component :is="entry.icon" :size="20" :stroke-width="2" />
-            <strong>{{ entry.label }}</strong>
-            <span>{{ entry.meta }}</span>
-          </button>
         </div>
       </section>
 
@@ -372,77 +319,6 @@ const openQuickEntry = (entry: QuickEntry) => {
     font-size: 13px;
     font-weight: 700;
     line-height: 1.25;
-  }
-}
-
-.quick-block {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  &__head {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  &__head h2,
-  &__head p {
-    margin: 0;
-  }
-
-  &__head h2 {
-    font-size: 20px;
-    font-weight: 800;
-    line-height: 1.25;
-  }
-
-  &__head p {
-    color: var(--nike-mute);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.25;
-  }
-}
-
-.quick {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-
-  &__item {
-    min-width: 0;
-    min-height: 96px;
-    border: 0;
-    border-radius: 16px;
-    padding: 12px 10px;
-    background: var(--nike-soft-cloud);
-    color: var(--nike-ink);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 6px;
-    cursor: pointer;
-    text-align: left;
-
-    strong,
-    span {
-      display: block;
-    }
-
-    strong {
-      font-size: 12px;
-      font-weight: 800;
-      line-height: 1.25;
-    }
-
-    span {
-      color: var(--nike-mute);
-      font-size: 10px;
-      font-weight: 700;
-      line-height: 1.3;
-    }
   }
 }
 

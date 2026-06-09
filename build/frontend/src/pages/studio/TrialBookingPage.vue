@@ -6,7 +6,6 @@ import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import { fetchCourseDetail, type CourseDetail } from '@/api/course';
-import { toggleFavorite } from '@/api/favorite';
 import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
 import { createTrialBooking, fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 import { useUserStore } from '@/stores/user';
@@ -24,6 +23,7 @@ const contactName = ref('');
 const contactPhone = ref('');
 const danceLevel = ref(user.preferences.level || '零基础');
 const bookingNote = ref('');
+const submitting = ref(false);
 
 const today = new Date();
 const days = Array.from({ length: 7 }, (_, index) => {
@@ -39,9 +39,6 @@ const activeScheduleId = ref<number | undefined>(requestedScheduleId);
 const selectedSlot = computed(
   () => availableSlots.value.find((slot) => slot.id === activeScheduleId.value) ?? availableSlots.value[0]
 );
-// 没有可预约时段时，底部主按钮直接禁用，避免用户点了才发现没有可提交对象。
-const canSubmitBooking = computed(() => Boolean(selectedSlot.value && contactPhone.value.trim()));
-
 const studioTitle = computed(() => detail.value?.name || `舞室 #${studioId}`);
 const studioMeta = computed(() =>
   [detail.value?.address, detail.value?.transportInfo].filter(Boolean).join(' · ') || '地址与交通信息待完善'
@@ -59,27 +56,31 @@ const setActiveDay = (date: string) => {
   activeScheduleId.value = availableSlots.value[0]?.id;
 };
 
-const favoriteStudio = async () => {
-  const result = await toggleFavorite('studio', studioId);
-  showSuccessToast(result.favored ? '已收藏' : '已取消收藏');
-};
-
 const onConfirm = async () => {
+  if (submitting.value) return;
   const selected = selectedSlot.value;
-  if (!selected) return;
+  if (!selected) {
+    showFailToast('当前没有可预约场次，请切换日期');
+    return;
+  }
   if (!contactPhone.value.trim()) {
     showFailToast('请填写联系电话');
     return;
   }
-  await createTrialBooking({
-    courseId: requestedCourseId ?? selected.courseId,
-    courseScheduleId: selected.id,
-    contactPhone: contactPhone.value.trim(),
-    // M1 预约流程：把报名人、基础和备注写入 bookingNote，后端暂无独立字段时仍可追踪。
-    bookingNote: [contactName.value.trim(), danceLevel.value.trim(), bookingNote.value.trim()].filter(Boolean).join(' / ')
-  });
-  showSuccessToast('已提交，等待舞室确认');
-  router.push('/me/trials');
+  submitting.value = true;
+  try {
+    await createTrialBooking({
+      courseId: requestedCourseId ?? selected.courseId,
+      courseScheduleId: selected.id,
+      contactPhone: contactPhone.value.trim(),
+      // M1 预约流程：把报名人、基础和备注写入 bookingNote，后端暂无独立字段时仍可追踪。
+      bookingNote: [contactName.value.trim(), danceLevel.value.trim(), bookingNote.value.trim()].filter(Boolean).join(' / ')
+    });
+    showSuccessToast('已提交，等待舞室确认');
+    router.push('/me/trials');
+  } finally {
+    submitting.value = false;
+  }
 };
 
 onMounted(async () => {
@@ -171,10 +172,10 @@ watch(
     </section>
 
     <PenActionBar
-      soft-label="收藏"
-      dark-label="确认预约"
-      @soft="favoriteStudio"
-      :dark-disabled="!canSubmitBooking"
+      soft-label=""
+      hide-soft
+      :dark-label="submitting ? '提交中' : '确认预约'"
+      :dark-disabled="submitting"
       @dark="onConfirm"
     />
   </main>

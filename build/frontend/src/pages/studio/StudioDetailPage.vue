@@ -300,9 +300,9 @@ onMounted(async () => {
     </section>
 
     <PenActionBar
-      :soft-label="favored ? '已收藏' : '收藏'"
+      soft-label=""
+      hide-soft
       dark-label="预约试听"
-      @soft="toggleStudioFavorite"
       @dark="onBook"
     />
   </main>

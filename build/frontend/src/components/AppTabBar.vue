@@ -43,6 +43,7 @@ const tabs: TabItem[] = [
 
 const goTab = (to: string) => {
   if (route.path === to) return;
+  // 我的 tab 走正常路由跳转，由 router.beforeEach 统一检测登录态并带 redirect 回跳。
   router.push(to);
 };
 </script>

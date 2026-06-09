@@ -5,6 +5,7 @@ defineProps<{
   darkLabel: string;
   softDisabled?: boolean;
   darkDisabled?: boolean;
+  hideSoft?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 <template>
   <footer class="pen-action-bar">
     <button
+      v-if="!hideSoft"
       type="button"
       class="pen-action-bar__btn pen-action-bar__btn--soft"
       :disabled="softDisabled"

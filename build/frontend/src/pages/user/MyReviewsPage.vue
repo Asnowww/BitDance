@@ -161,8 +161,10 @@ const loadReviews = async () => {
     // M2 风控验收：读取真实 h5 本人评价列表，包含 pending 状态用于展示“待审核”。
     const resp = await fetchMyReviews({ page: 1, pageSize: 50 });
     reviews.value = resp.list ?? [];
-    // M2 我的评价：真实对象名要和评价状态一起出现，不能继续只给用户看“课程 #100010”。
-    await loadTargetNames(reviews.value);
+    // M2 我的评价：评价列表先展示，真实对象名后台补齐，避免详情接口慢时页面一直显示“评价同步中...”。
+    void loadTargetNames(reviews.value).catch(() => {
+      targetNameMap.value = {};
+    });
   } catch {
     reviews.value = [];
     targetNameMap.value = {};

@@ -9,6 +9,7 @@ import StudioFilterDrawer, { type StudioFilterValue } from '@/components/studio/
 import StudioSearchEditor, { type StudioSearchEditorValue } from '@/components/studio/StudioSearchEditor.vue';
 import { fetchNearbyStudios, type StudioCard, type StudioListQuery } from '@/api/studio';
 import { fetchFavorites, toggleFavorite } from '@/api/favorite';
+import { getToken } from '@/utils/request';
 import { getCityName } from '@/constants/cities';
 import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
 
@@ -64,6 +65,7 @@ const appliedFilters = ref<StudioFilterValue>(buildPresetFilters(parseRoutePrese
 const compareMode = ref(false);
 const compareSelection = ref<Record<string, boolean>>({});
 const favoriteState = ref<Record<number, boolean>>({});
+const canFavorite = computed(() => Boolean(getToken()));
 const mapContainer = ref<HTMLElement | null>(null);
 const mapStatus = ref(hasTencentMapConfig() ? '地图加载中' : '未配置腾讯地图 Key，展示坐标降级视图');
 const selectedMapStudioId = ref<number>();
@@ -176,9 +178,9 @@ const loadStudios = async () => {
     // M1 收藏链路：列表接口只负责发现舞室，星标状态从用户收藏接口合并，避免隐式默认收藏第一条。
     const [response, favorites] = await Promise.all([
       fetchNearbyStudios(query.value),
-      fetchFavorites('studio', { silentError: true }).catch(() => [])
+      canFavorite.value ? fetchFavorites('studio', { silentError: true }).catch(() => []) : Promise.resolve([])
     ]);
-    const favoriteMap = Object.fromEntries(favorites.map((item) => [item.targetId, true]));
+    const favoriteMap = Object.fromEntries((favorites ?? []).map((item) => [item.targetId, true]));
     favoriteState.value = favoriteMap;
     studios.value = response.list.map((studio) => ({
       ...studio,
@@ -359,6 +361,10 @@ const handleResultClick = (item: SearchResult) => {
 };
 
 const toggleResultFavorite = async (item: SearchResult) => {
+  if (!canFavorite.value) {
+    showToast('请先登录后收藏');
+    return;
+  }
   const id = Number(item.id);
   const { favored } = await toggleFavorite('studio', id);
   favoriteState.value = { ...favoriteState.value, [id]: favored };
@@ -517,7 +523,8 @@ onUnmounted(() => {
           <button
             type="button"
             class="favorite-chip"
-            :class="{ 'favorite-chip--on': item.favored }"
+            :class="{ 'favorite-chip--on': item.favored, 'favorite-chip--disabled': !canFavorite }"
+            :disabled="!canFavorite"
             :aria-label="item.favored ? `取消收藏 ${item.title}` : `收藏 ${item.title}`"
             :aria-pressed="item.favored ? 'true' : 'false'"
             @click.stop="toggleResultFavorite(item)"
@@ -936,6 +943,10 @@ onUnmounted(() => {
     border-color: $pen-ink;
     background: $pen-ink;
     color: $pen-on-primary;
+  }
+
+  &--disabled {
+    opacity: 0.5;
   }
 }
 </style>

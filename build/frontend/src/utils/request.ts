@@ -21,10 +21,21 @@ export interface ApiResp<T = unknown> {
 }
 
 const TOKEN_KEY = 'bitdance_token';
+const PROFILE_KEY = 'bitdance_profile';
 
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const getToken = () => localStorage.getItem(TOKEN_KEY) ?? '';
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+const redirectToLoginWhenAuthExpired = () => {
+  if (!getToken() || window.location.hash.startsWith('#/login')) return false;
+  clearToken();
+  localStorage.removeItem(PROFILE_KEY);
+  const redirect = window.location.hash.replace(/^#/, '') || '/home';
+  // 登录态失效兜底：旧 JWT 会让路由误以为已登录，这里清理后带 redirect 回到登录页。
+  window.location.hash = `#/login?redirect=${encodeURIComponent(redirect)}`;
+  return true;
+};
 
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
@@ -52,7 +63,13 @@ request.interceptors.response.use(
     return Promise.reject(body);
   },
   (error) => {
-    if (!error?.config?.silentError) showFailToast(error?.message || '网络异常');
+    const serverMessage = error?.response?.data?.message;
+    const status = error?.response?.status;
+    if ((status === 401 || status === 403) && redirectToLoginWhenAuthExpired()) {
+      showFailToast('登录已失效，请重新登录');
+      return Promise.reject(error);
+    }
+    if (!error?.config?.silentError) showFailToast(serverMessage || error?.message || '网络异常');
     return Promise.reject(error);
   }
 );
