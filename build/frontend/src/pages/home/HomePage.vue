@@ -21,7 +21,7 @@ interface RecommendCard {
 }
 
 const recommends: RecommendCard[] = [
-  { id: 'urban-flow', title: 'Urban Flow 舞室', meta: '1.2km · 4.8 · 韩舞强', action: '试听', to: '/studio/urban-flow' },
+  { id: 'urban-flow', title: 'Urban Flow 舞室', meta: '1.2km · 4.8 · 韩舞强', action: '试听', to: '/studio/1' },
   { id: 'beatlab', title: 'BeatLab 新手课', meta: '今晚 19:30 · ¥79/节', action: '试听', to: '/course/beatlab-newbie' }
 ];
 

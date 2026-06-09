@@ -20,16 +20,28 @@ const routes: RouteRecordRaw[] = [
     meta: { tab: 'practice', title: '约练广场' }
   },
   {
+    path: '/practice/group-class',
+    name: 'group-class',
+    component: () => import('@/pages/practice/GroupClassPage.vue'),
+    meta: { tab: 'practice', title: '拼课广场' }
+  },
+  {
+    path: '/practice/group-class/create',
+    name: 'group-class-create',
+    component: () => import('@/pages/practice/GroupClassCreatePage.vue'),
+    meta: { tab: 'practice', title: '发起拼课', requiresAuth: true, hideTabBar: true }
+  },
+  {
     path: '/publish/checkin',
     name: 'publish-checkin',
     component: () => import('@/pages/publish/PublishCheckinPage.vue'),
-    meta: { title: '训练打卡', requiresAuth: true }
+    meta: { tab: 'growth', title: '训练打卡', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/publish/practice',
     name: 'publish-practice',
     component: () => import('@/pages/publish/PublishPracticePage.vue'),
-    meta: { title: '发起约练', requiresAuth: true }
+    meta: { tab: 'practice', title: '发起约练', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/publish/review',
@@ -134,12 +146,6 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的评价', requiresAuth: true }
   },
   {
-    path: '/practice/:id',
-    name: 'practice-detail',
-    component: () => import('@/pages/practice/PracticeDetailPage.vue'),
-    meta: { title: '约练详情' }
-  },
-  {
     path: '/me/profile',
     name: 'profile-edit',
     component: () => import('@/pages/user/ProfileEditPage.vue'),
@@ -155,7 +161,7 @@ const routes: RouteRecordRaw[] = [
     path: '/me/practices',
     name: 'my-practices',
     component: () => import('@/pages/user/MyPracticesPage.vue'),
-    meta: { title: '我的约练', requiresAuth: true }
+    meta: { tab: 'practice', title: '我的约练', requiresAuth: true }
   },
   {
     path: '/me/coach-home',
@@ -257,25 +263,43 @@ const routes: RouteRecordRaw[] = [
     path: '/practice/:id/rate',
     name: 'practice-rate',
     component: () => import('@/pages/practice/PracticeRatingPage.vue'),
-    meta: { title: '约练评价', requiresAuth: true }
+    meta: { tab: 'practice', title: '约练评价', requiresAuth: true, hideTabBar: true }
+  },
+  {
+    path: '/practice/:id',
+    name: 'practice-detail',
+    component: () => import('@/pages/practice/PracticeDetailPage.vue'),
+    meta: { tab: 'practice', title: '约练详情', hideTabBar: true }
   },
   {
     path: '/me/works',
     name: 'my-works',
     component: () => import('@/pages/growth/WorksPage.vue'),
-    meta: { title: '阶段作品', requiresAuth: true }
+    meta: { tab: 'growth', title: '阶段作品', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/me/works/upload',
     name: 'publish-work',
-    component: () => import('@/pages/community/PublishPostPage.vue'),
-    meta: { tab: 'growth', title: '上传作品', requiresAuth: true }
+    component: () => import('@/pages/growth/WorkUploadPage.vue'),
+    meta: { tab: 'growth', title: '上传作品', requiresAuth: true, hideTabBar: true }
+  },
+  {
+    path: '/growth/report',
+    name: 'growth-report',
+    component: () => import('@/pages/growth/GrowthReportPage.vue'),
+    meta: { tab: 'growth', title: '成长报告', requiresAuth: true }
+  },
+  {
+    path: '/growth/timeline',
+    name: 'growth-timeline',
+    component: () => import('@/pages/growth/GrowthTimelinePage.vue'),
+    meta: { tab: 'growth', title: '成长时间线', requiresAuth: true }
   },
   {
     path: '/me/goal',
     name: 'my-goal',
     component: () => import('@/pages/growth/GoalPage.vue'),
-    meta: { title: '训练目标', requiresAuth: true }
+    meta: { tab: 'growth', title: '训练目标', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/coach/appeal',

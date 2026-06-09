@@ -190,42 +190,42 @@ public class GrowthService {
     public List<TimelineItem> timeline(Long userId) {
         List<TimelineItem> out = new ArrayList<>();
         for (GrowthCheckin c : checkinRepo.findByUserIdOrderByCheckinAtDesc(userId)) {
-            out.add(new TimelineItem(
+            addTimelineItem(out,
                 "checkin", c.getId(), "训练打卡",
                 c.getDurationMinutes() + " 分钟" +
                     (c.getFeelingText() == null ? "" : " · " + truncate(c.getFeelingText(), 30)),
                 c.getCheckinAt()
-            ));
+            );
         }
         for (GrowthWork w : workRepo.findByUserIdOrderByIdDesc(userId)) {
-            out.add(new TimelineItem(
+            addTimelineItem(out,
                 "work", w.getId(), "阶段作品 · " + w.getWorkTitle(),
                 w.getWorkDescription() == null ? null : truncate(w.getWorkDescription(), 30),
                 w.getCreatedAt() == null ? OffsetDateTime.now() : w.getCreatedAt()
-            ));
+            );
         }
         for (PracticePost p : practicePostRepo.findByCreatorUserIdAndPostStatusOrderByStartAtDesc(userId, "completed")) {
-            out.add(new TimelineItem(
+            addTimelineItem(out,
                 "practice", p.getId(), "约练完成",
                 (p.getSkillLevel() == null ? "" : p.getSkillLevel() + " · ") + p.getLocationName(),
                 p.getEndAt()
-            ));
+            );
         }
         for (Review r : reviewRepo.findByUserIdAndReviewStatusOrderByPublishedAtDesc(
             userId, "published", PageRequest.of(0, 50)
         )) {
-            out.add(new TimelineItem(
+            addTimelineItem(out,
                 "review", r.getId(), "发布评价",
                 r.getTargetType() + " #" + r.getTargetId() + " · " + r.getOverallScore() + " 分",
                 r.getPublishedAt()
-            ));
+            );
         }
         for (TrialBooking b : trialBookingRepo.findByUserIdAndBookingStatusOrderByAttendedAtDesc(userId, "attended")) {
-            out.add(new TimelineItem(
+            addTimelineItem(out,
                 "trial", b.getId(), "试听完成",
                 "课程 #" + b.getCourseId() + " · 舞室 #" + b.getStudioId(),
                 b.getAttendedAt() == null ? b.getCreatedAt() : b.getAttendedAt()
-            ));
+            );
         }
         out.sort(Comparator.comparing(TimelineItem::ts).reversed());
         return out;
@@ -352,6 +352,18 @@ public class GrowthService {
                 .toList(),
             suggestion
         );
+    }
+
+    private void addTimelineItem(
+        List<TimelineItem> out,
+        String type,
+        Long refId,
+        String title,
+        String subtitle,
+        OffsetDateTime ts
+    ) {
+        if (ts == null) return;
+        out.add(new TimelineItem(type, refId, title, subtitle, ts));
     }
 
     private int computeStreak(Set<LocalDate> days) {

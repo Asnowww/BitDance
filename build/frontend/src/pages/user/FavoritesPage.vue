@@ -1,101 +1,91 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { showToast } from 'vant';
-import { Music } from 'lucide-vue-next';
+import { Heart, Image as ImageIcon } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { fetchFavorites, type FavoriteDto, type FavoriteTargetType } from '@/api/favorite';
 
 const router = useRouter();
+const active = ref<FavoriteTargetType | 'all'>('all');
+const loading = ref(false);
+const favorites = ref<FavoriteDto[]>([]);
 
-const stats = [
-  { value: '126', label: '累计天数' },
-  { value: '43h', label: '训练时长' },
-  { value: '5', label: '尝试舞种' }
+const tabs: Array<{ key: FavoriteTargetType | 'all'; label: string }> = [
+  { key: 'all', label: '全部' },
+  { key: 'studio', label: '舞室' },
+  { key: 'course', label: '课程' },
+  { key: 'coach', label: '老师' },
+  { key: 'workshop', label: '活动' },
+  { key: 'content_post', label: '动态' }
 ];
 
-const trend = [
-  { day: '周一', ratio: 0.6 },
-  { day: '周二', ratio: 0.85 },
-  { day: '周三', ratio: 0.5 },
-  { day: '周四', ratio: 1 },
-  { day: '周五', ratio: 0.7 }
-];
+const titleOf = (item: FavoriteDto) => item.card?.title || `${item.targetType} #${item.targetId}`;
+const subtitleOf = (item: FavoriteDto) => item.card?.subtitle || '暂无摘要';
+const actionOf = (item: FavoriteDto) => item.card?.actionText || '查看';
+const pathOf = (item: FavoriteDto) => item.card?.path || '/';
+const createdLabel = (item: FavoriteDto) => item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '刚刚收藏';
 
-interface FavoriteCard {
-  id: string;
-  title: string;
-  meta: string;
-  tag: string;
-  action: string;
-  to: string;
-}
+const filtered = computed(() =>
+  active.value === 'all' ? favorites.value : favorites.value.filter((item) => item.targetType === active.value)
+);
 
-const favorites: FavoriteCard[] = [
-  {
-    id: 'urban-flow',
-    title: 'Urban Flow 舞室',
-    meta: '收藏于 5/24 · 可预约',
-    tag: '舞室',
-    action: '预约试听',
-    to: '/studio/urban-flow'
-  },
-  {
-    id: 'mia-jazz',
-    title: 'Mia Jazz 基础课',
-    meta: '周三晚 · 可报名',
-    tag: '课程',
-    action: '立即报名',
-    to: '/course/mia-jazz'
+const load = async () => {
+  loading.value = true;
+  try {
+    favorites.value = await fetchFavorites();
+  } finally {
+    loading.value = false;
   }
-];
+};
+
+onMounted(load);
 </script>
 
 <template>
   <main class="pen-page">
-    <PenTopBar title="学习数据" @share="showToast('学习数据链接已复制')" />
+    <PenTopBar title="收藏管理" :show-share="false" />
 
     <section class="pen-scroll">
-      <div class="stats">
-        <div v-for="stat in stats" :key="stat.label" class="stat">
-          <strong class="stat__value">{{ stat.value }}</strong>
-          <span class="stat__label">{{ stat.label }}</span>
+      <section class="hero">
+        <div>
+          <p>GROWTH FAVORITES</p>
+          <h1>{{ favorites.length }} 个真实收藏</h1>
         </div>
+        <Heart :size="30" />
+      </section>
+
+      <div class="chips">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          class="chip"
+          :class="{ 'chip--on': active === tab.key }"
+          type="button"
+          @click="active = tab.key"
+        >
+          {{ tab.label }}
+        </button>
       </div>
 
-      <section class="trend">
-        <h3 class="trend__title">训练趋势</h3>
-        <div class="trend__rows">
-          <div v-for="item in trend" :key="item.day" class="trend-row">
-            <span class="trend-row__day">{{ item.day }}</span>
-            <span class="trend-row__bar" :style="{ width: `${item.ratio * 100}%` }" />
+      <p v-if="loading" class="empty">正在加载收藏...</p>
+
+      <article v-for="item in filtered" v-else :key="item.id" class="fav" @click="router.push(pathOf(item))">
+        <img v-if="item.card?.coverUrl" class="cover cover--image" :src="item.card.coverUrl" :alt="titleOf(item)" />
+        <div v-else class="cover"><ImageIcon :size="24" /></div>
+        <div class="body">
+          <div class="body__top">
+            <strong>{{ titleOf(item) }}</strong>
+            <span>{{ createdLabel(item) }}</span>
+          </div>
+          <p>{{ subtitleOf(item) }}</p>
+          <div class="foot">
+            <em>{{ item.targetType }}</em>
+            <button type="button" @click.stop="router.push(pathOf(item))">{{ actionOf(item) }}</button>
           </div>
         </div>
-      </section>
+      </article>
 
-      <section class="favorites">
-        <header class="favorites__head">
-          <h3>收藏管理</h3>
-          <span class="favorites__sub">舞室 / 课程 / 老师</span>
-        </header>
-
-        <article
-          v-for="item in favorites"
-          :key="item.id"
-          class="fav"
-          @click="router.push(item.to)"
-        >
-          <div class="fav__cover" aria-hidden="true">
-            <Music :size="28" :stroke-width="2" />
-          </div>
-          <div class="fav__body">
-            <strong class="fav__title">{{ item.title }}</strong>
-            <p class="fav__meta">{{ item.meta }}</p>
-            <span class="tag">{{ item.tag }}</span>
-            <button class="fav__action" type="button" @click.stop="router.push(item.to)">
-              {{ item.action }}
-            </button>
-          </div>
-        </article>
-      </section>
+      <p v-if="!loading && !filtered.length" class="empty">还没有这个分类的收藏，去舞室、课程或 Workshop 详情页点收藏即可出现。</p>
     </section>
   </main>
 </template>
@@ -103,175 +93,23 @@ const favorites: FavoriteCard[] = [
 <style lang="scss" scoped>
 @import '@/styles/pen-nike.scss';
 
-.pen-page {
-  @include pen-page;
-}
-
-.pen-scroll {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  height: 112px;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 14px;
-  border-radius: 16px;
-  background: $pen-soft;
-
-  &__value {
-    font-size: 28px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  &__label {
-    color: $pen-mute;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
-}
-
-.trend {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  &__title {
-    @include pen-h3-section;
-  }
-
-  &__rows {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-}
-
-.trend-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-
-  &__day {
-    flex: none;
-    width: 36px;
-    color: $pen-mute;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
-
-  &__bar {
-    height: 10px;
-    border-radius: 999px;
-    background: $pen-ink;
-  }
-}
-
-.favorites {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-
-  &__head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  &__head h3 {
-    @include pen-h3-section;
-    flex: 1;
-  }
-
-  &__sub {
-    color: $pen-mute;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
-}
-
-.fav {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 124px;
-  cursor: pointer;
-
-  &__cover {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 112px;
-    align-self: stretch;
-    border-radius: 14px;
-    background: $pen-soft;
-    color: $pen-ink;
-  }
-
-  &__body {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 4px 0;
-  }
-
-  &__title {
-    font-size: 16px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  &__meta {
-    margin: 0;
-    color: $pen-mute;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: $pen-lh;
-  }
-
-  &__action {
-    align-self: flex-start;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: $pen-success;
-    font-size: 14px;
-    font-weight: 800;
-    line-height: $pen-lh;
-    cursor: pointer;
-  }
-}
-
-.tag {
-  align-self: flex-start;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 14px;
-  border: 1px solid $pen-hairline;
-  border-radius: 999px;
-  background: $pen-canvas;
-  color: $pen-ink;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: $pen-lh;
-}
+.pen-page { @include pen-page; }
+.pen-scroll { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px calc(24px + env(safe-area-inset-bottom)); }
+.hero { display: flex; justify-content: space-between; align-items: center; padding: 18px; border-radius: 8px; background: $pen-ink; color: $pen-on-primary; }
+.hero p { margin: 0 0 5px; color: $pen-subtle-text; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+.hero h1 { margin: 0; font-size: 25px; font-weight: 900; line-height: 1.05; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.chip { flex: none; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: $pen-soft; color: $pen-ink; font-weight: 900; }
+.chip--on { background: $pen-ink; color: $pen-on-primary; }
+.fav { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid $pen-hairline; cursor: pointer; }
+.cover { flex: none; width: 82px; height: 82px; border-radius: 8px; background: $pen-soft; color: $pen-ink; display: grid; place-items: center; object-fit: cover; }
+.cover--image { display: block; }
+.body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.body__top { display: flex; justify-content: space-between; gap: 8px; }
+.body strong { font-size: 16px; font-weight: 900; line-height: $pen-lh; }
+.body__top span, .body p { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 700; line-height: 1.4; }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.foot em { font-style: normal; color: $pen-mute; font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.foot button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary; font-weight: 900; }
+.empty { padding: 22px 8px; color: $pen-mute; text-align: center; font-size: 13px; font-weight: 700; }
 </style>

@@ -125,6 +125,17 @@ export interface GrowthReport {
   suggestion: string;
 }
 
+export interface BadgeDefinition {
+  id: number;
+  badgeCode: string;
+  badgeName: string;
+  description?: string | null;
+  iconAssetId?: number | null;
+  ruleType: string;
+  ruleConfig?: string | null;
+  status: string;
+}
+
 export interface CreateGrowthWorkBody {
   danceStyleId?: number | null;
   workTitle: string;
@@ -172,6 +183,9 @@ export const saveGrowthGoal = (body: GrowthGoal) =>
 
 export const fetchGrowthBadges = () =>
   request.get<unknown, Array<{ id: number; badgeId: number; sourceType?: string; sourceRefId?: number; awardedAt: string }>>('/h5/growth/badges');
+
+export const fetchBadgeDefinitions = () =>
+  request.get<unknown, BadgeDefinition[]>('/public/badges/definitions');
 
 export const fetchGrowthReport = (period: 'monthly' | 'quarterly', anchorDate?: string) =>
   request.get<unknown, GrowthReport>('/h5/growth/reports', { params: { period, anchorDate } });

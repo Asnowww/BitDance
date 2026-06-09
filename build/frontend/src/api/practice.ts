@@ -49,6 +49,17 @@ export interface PracticeListResp {
   total: number;
 }
 
+export interface PracticeJoinRequest {
+  id: number;
+  practicePostId: number;
+  applicantUserId: number;
+  joinStatus: 'pending' | 'accepted' | 'rejected' | 'canceled';
+  joinMessage?: string | null;
+  actedByUserId?: number | null;
+  actedAt?: string | null;
+  createdAt?: string | null;
+}
+
 export interface PracticeCreateBody {
   title: string;
   style: string;
@@ -262,6 +273,21 @@ export const fetchMyPractices = () =>
   request
     .get<unknown, Array<BackendPracticePost | PracticePost>>('/h5/practices/mine')
     .then((list) => list.map((item) => toPracticePost(item)));
+
+export const fetchMyPracticeRequests = () =>
+  request.get<unknown, PracticeJoinRequest[]>('/h5/practice-requests/mine');
+
+export const fetchPracticeRequests = (practiceId: number) =>
+  request.get<unknown, PracticeJoinRequest[]>(`/h5/practices/${practiceId}/requests`);
+
+export const acceptPracticeRequest = (requestId: number) =>
+  request.post<unknown, PracticeJoinRequest>(`/h5/practice-requests/${requestId}/accept`);
+
+export const rejectPracticeRequest = (requestId: number) =>
+  request.post<unknown, PracticeJoinRequest>(`/h5/practice-requests/${requestId}/reject`);
+
+export const cancelPracticeRequest = (requestId: number) =>
+  request.post<unknown, PracticeJoinRequest>(`/h5/practice-requests/${requestId}/cancel`);
 
 export interface GroupClassIntent {
   id: number;
