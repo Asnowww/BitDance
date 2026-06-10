@@ -218,6 +218,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '动态' }
   },
   {
+    path: '/community/post/:id/edit',
+    name: 'edit-post',
+    component: () => import('@/pages/community/PublishPostPage.vue'),
+    meta: { title: '编辑动态', requiresAuth: true }
+  },
+  {
     path: '/community/publish',
     name: 'publish-post',
     component: () => import('@/pages/community/PublishPostPage.vue'),
@@ -325,7 +331,6 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta?.requiresAuth && !getToken()) {
-    // 登录态统一守卫：点击“我的”等受保护入口时先去登录页，登录成功后按 redirect 回到原目标页。
     return { path: '/login', query: { redirect: to.fullPath } };
   }
   return true;

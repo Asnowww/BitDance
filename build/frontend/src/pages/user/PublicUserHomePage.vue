@@ -11,8 +11,10 @@ import {
   User,
   UserPlus
 } from 'lucide-vue-next';
+import { showToast } from 'vant';
 import { fetchUserPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
 import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
+import { fetchFollowStatus, toggleFollow } from '@/api/community';
 
 const router = useRouter();
 const route = useRoute();
@@ -29,6 +31,8 @@ const posts = ref<UserContentPost[]>([]);
 const reviews = ref<UserReviewItem[]>([]);
 const practices = ref<UserPracticePost[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
+const following = ref(false);
+const followCounts = ref({ followers: 0, following: 0 });
 const loading = ref(false);
 
 const userId = computed(() => Number(route.params.id || 1));
@@ -53,10 +57,11 @@ const practiceMeta = (item: UserPracticePost) => {
 const loadHomeData = async () => {
   loading.value = true;
   try {
-    const [postResp, reviewResp, practiceResp] = await Promise.all([
+    const [postResp, reviewResp, practiceResp, statusResp] = await Promise.all([
       fetchUserPosts(userId.value, 1, 20),
       fetchUserReviews(userId.value, 1, 20),
-      fetchUserPractices(userId.value)
+      fetchUserPractices(userId.value),
+      fetchFollowStatus(userId.value).catch(() => null)
     ]);
     posts.value = postResp.list ?? [];
     reviews.value = reviewResp.list ?? [];
@@ -66,9 +71,24 @@ const loadHomeData = async () => {
       reviews: reviewResp.total ?? reviews.value.length,
       practices: practices.value.length
     };
+    following.value = Boolean(statusResp?.following);
+    followCounts.value = {
+      followers: statusResp?.followerCount ?? 0,
+      following: statusResp?.followeeCount ?? 0
+    };
   } finally {
     loading.value = false;
   }
+};
+
+const onFollow = async () => {
+  const next = await toggleFollow(userId.value);
+  following.value = next.following;
+  followCounts.value = {
+    followers: next.followerCount,
+    following: followCounts.value.following
+  };
+  showToast(next.following ? '已关注' : '已取消关注');
 };
 
 onMounted(loadHomeData);
@@ -104,15 +124,21 @@ watch(userId, loadHomeData);
           </div>
         </div>
         <div class="hero-actions">
-          <button class="hero-actions__follow" type="button">
+          <button class="hero-actions__follow" type="button" @click="onFollow">
             <UserPlus :size="18" />
-            <span>关注</span>
+            <span>{{ following ? '已关注' : '关注' }}</span>
           </button>
           <button class="hero-actions__message" type="button">
             <MessageCircle :size="18" />
             <span>私信</span>
           </button>
         </div>
+      </section>
+
+      <section class="stats" aria-label="社交数据">
+        <span><strong>{{ totals.posts }}</strong><em>动态</em></span>
+        <span><strong>{{ followCounts.followers }}</strong><em>粉丝</em></span>
+        <span><strong>{{ followCounts.following }}</strong><em>关注</em></span>
       </section>
 
       <section class="section">
@@ -149,7 +175,7 @@ watch(userId, loadHomeData);
       <section class="content-list" aria-live="polite">
         <p v-if="loading" class="empty-state">加载中</p>
         <template v-else-if="activeTab === 'posts'">
-          <article v-for="item in posts" :key="item.id" class="content-card">
+          <article v-for="item in posts" :key="item.id" class="content-card" @click="router.push(`/community/post/${item.id}`)">
             <h3>最近动态</h3>
             <p>{{ postText(item) }}</p>
             <div v-if="postTopics(item).length" class="chips">
@@ -325,6 +351,38 @@ watch(userId, loadHomeData);
   }
 }
 
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  span {
+    min-height: 56px;
+    border: 1px solid $pen-hairline;
+    border-radius: 14px;
+    background: $pen-canvas;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  em {
+    color: $pen-mute;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -450,6 +508,7 @@ watch(userId, loadHomeData);
   border: 1px solid $pen-hairline;
   border-radius: 14px;
   background: $pen-canvas;
+  cursor: pointer;
 
   h3,
   p {

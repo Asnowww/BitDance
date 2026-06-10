@@ -160,19 +160,6 @@ const openPublishReview = () => {
   });
 };
 
-const openAppeal = (review: ReviewItem) => {
-  // M2 商家/教练申诉：从真实评价卡带入 reviewId 和摘要，进入后端 review_appeal 提交流。
-  router.push({
-    path: '/coach/appeal',
-    query: {
-      reviewId: String(review.id),
-      score: String(review.overallScore ?? 0),
-      author: reviewName(review),
-      content: reviewBody(review).slice(0, 160)
-    }
-  });
-};
-
 watch(() => [props.targetType, props.targetId], load);
 onMounted(load);
 </script>
@@ -211,12 +198,6 @@ onMounted(load);
         <strong>{{ dimensionValue(item.key).toFixed(1) }}</strong>
       </div>
     </div>
-
-    <!-- M2 评分阅读顺序：先强调这是聚合总览，再进入单条评价，避免用户把总分卡误读成某一条评论。 -->
-    <section class="review-guide" aria-label="评价阅读说明">
-      <strong>先看总分，再看单条评价</strong>
-      <p>上方是当前公开评价的加权汇总，下方展示最近发布的具体反馈、维度分数和媒体内容。</p>
-    </section>
 
     <nav class="review-filters" aria-label="评价筛选">
       <button
@@ -273,7 +254,6 @@ onMounted(load);
         </div>
         <footer>
           <span>{{ dimLine(review) }}</span>
-          <button type="button" class="review-card__appeal" @click="openAppeal(review)">申诉</button>
           <span class="review-card__helpful"><ThumbsUp :size="12" /> {{ review.helpfulCount ?? 0 }}</span>
         </footer>
       </article>
@@ -407,26 +387,6 @@ onMounted(load);
   flex-direction: column;
   gap: 8px;
   padding: 0 4px;
-}
-
-.review-guide {
-  display: grid;
-  gap: 4px;
-  padding: 0 4px;
-
-  strong {
-    color: $pen-ink;
-    font-size: 13px;
-    font-weight: 900;
-    line-height: $pen-lh;
-  }
-
-  p {
-    margin: 0;
-    color: $pen-mute;
-    font-size: 12px;
-    line-height: 1.5;
-  }
 }
 
 .dimension-row {
@@ -624,16 +584,6 @@ onMounted(load);
     align-items: center;
     gap: 3px;
     white-space: nowrap;
-  }
-
-  &__appeal {
-    // M2 申诉入口：保持为低干扰文本按钮，不抢占普通用户阅读评价的主视觉。
-    flex: none;
-    border: 0;
-    background: transparent;
-    color: $pen-ink;
-    font: inherit;
-    cursor: pointer;
   }
 }
 

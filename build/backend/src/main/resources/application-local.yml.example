@@ -14,8 +14,3 @@ bitdance:
     secret: REPLACE_WITH_32_BYTE_RANDOM_STRING
   sms:
     mock: true
-  maps:
-    tencent:
-      # M1 腾讯地图服务端 Key：填腾讯位置服务 WebService Key，真实值只放本地 gitignored 配置。
-      key: REPLACE_WITH_TENCENT_MAP_WEBSERVICE_KEY
-      referer: BitDance

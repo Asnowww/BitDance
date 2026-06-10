@@ -45,7 +45,7 @@ public class CourseService {
             .existsByUserIdAndTargetTypeAndTargetId(currentUserId, TARGET_TYPE, id);
         return new CourseDetail(
             c.getId(), c.getStudioId(), c.getCoachId(), c.getDanceStyleId(),
-            c.getCourseName(), c.getDifficultyLevel(), c.getTargetAudience(),
+            c.getCourseName(), c.getDifficultyLevel(), formatTargetAudience(c.getTargetAudience()),
             c.getPriceAmount(), c.getDurationMinutes(), c.getIntensityLevel(),
             c.getCourseType(), c.getZeroBasicFriendly(), c.getDescription(),
             c.getCoverAssetId(), c.getStatus(), favored
@@ -89,6 +89,10 @@ public class CourseService {
             s.getClassroomName(), s.getStartAt(), s.getEndAt(),
             s.getCapacity(), s.getBookedCount(), s.getStatus()
         );
+    }
+
+    private String formatTargetAudience(String[] targetAudience) {
+        return targetAudience == null ? "" : String.join("、", targetAudience);
     }
 
     private record Range(OffsetDateTime from, OffsetDateTime to) {}

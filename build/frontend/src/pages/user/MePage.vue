@@ -5,6 +5,7 @@ import {
   Bell,
   CalendarDays,
   Heart,
+  MessageSquareText,
   PackageCheck,
   Shield,
   Star,
@@ -24,6 +25,7 @@ const quickActions = [
   { label: '预约', icon: CalendarDays, path: '/me/trials' },
   { label: '评价', icon: Star, path: '/me/reviews' },
   { label: '消息', icon: Bell, path: '/messages' },
+  { label: '动态', icon: MessageSquareText, path: '/me/home?tab=posts' },
   { label: '收藏', icon: Heart, path: '/favorites' },
   { label: '隐私', icon: Shield, path: '/me/privacy' }
 ];

@@ -35,12 +35,10 @@ export interface DimensionScoreDto {
 }
 
 export interface ReviewMediaDto {
-  assetId?: number;
   type: 'image' | 'video';
   url: string;
   name: string;
   size: number;
-  previewUrl?: string;
 }
 
 export interface ReviewItem {
@@ -60,7 +58,6 @@ export interface ReviewItem {
   publishedAt: string;
   dimensions: DimensionScoreDto[];
   mediaAssets?: ReviewMediaDto[];
-  latestAppeal?: ReviewAppealDto;
 }
 
 export interface ReviewListQuery {
@@ -99,19 +96,6 @@ export interface ReviewCreateBody {
   sourceRefId?: number;
 }
 
-export interface ReviewAppealDto {
-  id: number;
-  reviewId: number;
-  appellantUserId: number;
-  appealReason: string;
-  appealStatus: string;
-  evidenceNote?: string;
-  reviewedByUserId?: number;
-  reviewedAt?: string;
-  reviewRemark?: string;
-  createdAt: string;
-}
-
 export const fetchReviews = (q: ReviewListQuery) =>
   request.get<unknown, ReviewListResp>('/public/reviews', { params: q });
 
@@ -123,16 +107,5 @@ export const fetchReviewSummary = (targetType: ReviewTargetType, targetId: numbe
 export const createReview = (body: ReviewCreateBody) =>
   request.post<unknown, ReviewItem>('/h5/reviews', body);
 
-export const fetchMyReviews = (params: { page?: number; pageSize?: number } = {}) =>
-  // M2 风控验收：本人列表读取 h5 接口，保留 pending/folded 等审核状态用于前端可视化。
-  request.get<unknown, ReviewListResp>('/h5/reviews/mine', { params });
-
 export const deleteReview = (id: number) =>
   request.delete<unknown, { deleted: boolean }>(`/h5/reviews/${id}`);
-
-export const createReviewAppeal = (body: { reviewId: number; appealReason: string; evidenceNote?: string }) =>
-  // M2 商家/教练申诉：写入后端 review_appeal 表，进入平台人工审核流。
-  request.post<unknown, ReviewAppealDto>('/h5/review-appeals', body);
-
-export const fetchMyReviewAppeals = () =>
-  request.get<unknown, ReviewAppealDto[]>('/h5/review-appeals/mine');

@@ -14,5 +14,7 @@ public record WorkshopBrief(
     String locationName,
     BigDecimal priceAmount,
     OffsetDateTime signupDeadline,
-    String publishStatus
+    String publishStatus,
+    Integer capacity,
+    Integer soldCount
 ) {}

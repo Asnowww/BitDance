@@ -8,11 +8,22 @@ import {
   fetchMyWorkshopOrders,
   payWorkshopOrder,
   refundWorkshopOrder,
-  type OrderStatus,
   type WorkshopOrder
 } from '@/api/workshop';
 
 type FilterKey = 'all' | 'pending_payment' | 'paid' | 'completed' | 'closed';
+type UiOrderStatus =
+  | 'UNPAID'
+  | 'PAID'
+  | 'CANCELED'
+  | 'REFUNDED'
+  | 'CHECKED_IN'
+  | 'COMPLETED'
+  | 'pending_payment'
+  | 'paid'
+  | 'completed'
+  | 'refunded'
+  | 'canceled';
 
 interface FilterItem {
   key: FilterKey;
@@ -46,17 +57,17 @@ const activeFilter = ref<FilterKey>('all');
 const orders = ref<WorkshopOrder[]>([]);
 const loading = ref(false);
 
-const normalizeStatus = (order: WorkshopOrder): OrderStatus =>
-  ((order.orderStatus ?? order.status ?? 'pending_payment') as OrderStatus);
+const normalizeStatus = (order: WorkshopOrder): UiOrderStatus =>
+  ((order.orderStatus ?? order.status ?? 'pending_payment') as UiOrderStatus);
 
-const statusGroup = (status: OrderStatus): FilterKey => {
+const statusGroup = (status: UiOrderStatus): FilterKey => {
   if (status === 'UNPAID' || status === 'pending_payment') return 'pending_payment';
   if (status === 'PAID' || status === 'CHECKED_IN' || status === 'paid') return 'paid';
   if (status === 'COMPLETED' || status === 'completed') return 'completed';
   return 'closed';
 };
 
-const statusLabel = (status: OrderStatus, amount: number) => {
+const statusLabel = (status: UiOrderStatus, amount: number) => {
   const price = amount ? ` ¥${amount}` : '';
   if (status === 'UNPAID' || status === 'pending_payment') return `待支付${price}`;
   if (status === 'PAID' || status === 'paid') return '已报名 · 待签到核销';

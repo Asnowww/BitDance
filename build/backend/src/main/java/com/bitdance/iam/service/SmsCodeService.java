@@ -6,8 +6,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,7 +21,7 @@ public class SmsCodeService {
     private final boolean mockMode;
     private final String fixedCode;
     private final long cooldownSeconds;
-    private final Map<String, String> mockCodes = new ConcurrentHashMap<>();
+    private final Map<String, MockCode> mockCodes = new ConcurrentHashMap<>();
     private final Map<String, Instant> mockCooldownUntil = new ConcurrentHashMap<>();
 
     public SmsCodeService(
@@ -38,14 +38,7 @@ public class SmsCodeService {
 
     public void send(String phone) {
         if (mockMode) {
-            // 本地 M1/M2 验收不应强依赖 Redis 容器；mock 短信用内存保存验证码，生产模式仍走 Redis。
-            Instant now = Instant.now();
-            Instant cooldownUntil = mockCooldownUntil.get(phone);
-            if (cooldownUntil != null && cooldownUntil.isAfter(now)) {
-                throw new BizException("SMS_COOLDOWN", "请稍后再试");
-            }
-            mockCooldownUntil.put(phone, now.plusSeconds(cooldownSeconds));
-            mockCodes.put(phone, fixedCode);
+            sendMock(phone);
             return;
         }
         String cdKey = COOLDOWN_KEY.formatted(phone);
@@ -60,15 +53,7 @@ public class SmsCodeService {
 
     public void verify(String phone, String code) {
         if (mockMode) {
-            // 本地 M1/M2 验收：与 send() 的内存验证码配套，避免 Redis 未启动导致验证码永远过期。
-            String stored = mockCodes.get(phone);
-            if (stored == null) {
-                throw new BizException("SMS_EXPIRED", "验证码已过期");
-            }
-            if (!stored.equals(code)) {
-                throw new BizException("SMS_INVALID", "验证码错误");
-            }
-            mockCodes.remove(phone);
+            verifyMock(phone, code);
             return;
         }
         String stored = redis.opsForValue().get(CODE_KEY.formatted(phone));
@@ -81,8 +66,32 @@ public class SmsCodeService {
         redis.delete(CODE_KEY.formatted(phone));
     }
 
+    private void sendMock(String phone) {
+        Instant now = Instant.now();
+        Instant cooldownUntil = mockCooldownUntil.get(phone);
+        if (cooldownUntil != null && cooldownUntil.isAfter(now)) {
+            throw new BizException("SMS_COOLDOWN", "请稍后再试");
+        }
+        mockCooldownUntil.put(phone, now.plusSeconds(cooldownSeconds));
+        mockCodes.put(phone, new MockCode(fixedCode, now.plus(Duration.ofMinutes(5))));
+    }
+
+    private void verifyMock(String phone, String code) {
+        MockCode stored = mockCodes.get(phone);
+        if (stored == null || stored.expiresAt().isBefore(Instant.now())) {
+            mockCodes.remove(phone);
+            throw new BizException("SMS_EXPIRED", "验证码已过期");
+        }
+        if (!stored.code().equals(code)) {
+            throw new BizException("SMS_INVALID", "验证码错误");
+        }
+        mockCodes.remove(phone);
+    }
+
     private String generateCode() {
         SecureRandom rnd = new SecureRandom();
         return String.format("%06d", rnd.nextInt(1_000_000));
     }
+
+    private record MockCode(String code, Instant expiresAt) {}
 }

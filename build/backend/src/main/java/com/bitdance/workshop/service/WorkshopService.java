@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,7 +72,19 @@ public class WorkshopService {
         Page<Workshop> p = workshopRepo.listPublished(
             cityId, danceStyleId, PageRequest.of(safePage - 1, safeSize)
         );
-        List<WorkshopBrief> items = p.getContent().stream().map(this::toBrief).toList();
+        List<Long> workshopIds = p.getContent().stream().map(Workshop::getId).toList();
+        Map<Long, int[]> stats = new HashMap<>();
+        if (!workshopIds.isEmpty()) {
+            for (Object[] row : sessionRepo.statsByWorkshopIds(workshopIds)) {
+                Long workshopId = ((Number) row[0]).longValue();
+                int capacity = ((Number) row[1]).intValue();
+                int soldCount = ((Number) row[2]).intValue();
+                stats.put(workshopId, new int[] { capacity, soldCount });
+            }
+        }
+        List<WorkshopBrief> items = p.getContent().stream()
+            .map(w -> toBrief(w, stats.get(w.getId())))
+            .toList();
         return new WorkshopListResponse(items, safePage, safeSize, p.getTotalElements());
     }
 
@@ -176,13 +189,13 @@ public class WorkshopService {
         o.setPaidAt(OffsetDateTime.now());
         orderRepo.save(o);
 
-        // 生成签到码（写 workshop_checkin 以保留唯一记录）
+        // 生成签到凭证；真正扫码成功后再标记为 checked_in。
         WorkshopCheckin c = new WorkshopCheckin();
         c.setWorkshopOrderId(o.getId());
         c.setWorkshopSessionId(o.getWorkshopSessionId());
         c.setCheckinCode(generateCheckinCode());
-        c.setCheckinStatus("checked_in"); // 占位状态；真正签到时不改这里
-        c.setCheckedInAt(OffsetDateTime.now()); // schema NOT NULL 字段，先填创建时间
+        c.setCheckinStatus("pending");
+        c.setCheckedInAt(OffsetDateTime.now()); // schema NOT NULL 字段，先记录凭证创建时间
         WorkshopCheckin saved = checkinRepo.save(c);
         return toOrderDto(o, saved);
     }
@@ -258,11 +271,13 @@ public class WorkshopService {
         c.setCheckedInAt(now);
         c.setCheckinStatus("checked_in");
         checkinRepo.save(c);
+        o.setOrderStatus("completed");
+        orderRepo.save(o);
         sessionRepo.incrementCheckin(session.getId());
 
         // 触发徽章引擎（用户自助签到）
         long total = orderRepo.findByUserIdOrderByIdDesc(userId).stream()
-            .filter(x -> "paid".equals(x.getOrderStatus()))
+            .filter(x -> "paid".equals(x.getOrderStatus()) || "completed".equals(x.getOrderStatus()))
             .count();
         badgeRuleEngine.evaluate(userId, "workshop_attended",
             Map.of("totalCount", total),
@@ -296,11 +311,13 @@ public class WorkshopService {
         return sb.toString();
     }
 
-    private WorkshopBrief toBrief(Workshop w) {
+    private WorkshopBrief toBrief(Workshop w, int[] stats) {
         return new WorkshopBrief(
             w.getId(), w.getStudioId(), w.getCoachId(), w.getCityId(), w.getDanceStyleId(),
             w.getWorkshopName(), w.getCoverAssetId(), w.getLocationName(),
-            w.getPriceAmount(), w.getSignupDeadline(), w.getPublishStatus()
+            w.getPriceAmount(), w.getSignupDeadline(), w.getPublishStatus(),
+            stats == null ? 0 : stats[0],
+            stats == null ? 0 : stats[1]
         );
     }
 

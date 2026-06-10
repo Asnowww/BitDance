@@ -12,6 +12,14 @@ public interface WorkshopSessionRepository extends JpaRepository<WorkshopSession
 
     List<WorkshopSession> findByWorkshopIdOrderByStartAtAsc(Long workshopId);
 
+    @Query("""
+        select s.workshopId, coalesce(sum(s.capacity), 0), coalesce(sum(s.soldCount), 0)
+        from WorkshopSession s
+        where s.workshopId in :workshopIds
+        group by s.workshopId
+        """)
+    List<Object[]> statsByWorkshopIds(@Param("workshopIds") List<Long> workshopIds);
+
     /**
      * 原子占座：仅在未满员时才 +1，返回受影响行数。
      * 0 表示满员或不存在，调用方据此抛 WORKSHOP_FULL。

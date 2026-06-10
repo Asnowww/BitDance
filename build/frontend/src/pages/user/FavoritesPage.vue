@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import { fetchCoachDetail, fetchCourseDetail } from '@/api/course';
-import { fetchFavorites, type FavoriteDto, type FavoriteTargetType } from '@/api/favorite';
-import { fetchStudioDetail } from '@/api/studio';
-import { fetchWorkshopDetail } from '@/api/workshop';
 
 const router = useRouter();
 
@@ -34,116 +29,29 @@ interface FavoriteCard {
   to: string;
 }
 
-const favorites = ref<FavoriteCard[]>([]);
-const loading = ref(false);
-const favoriteStatus = ref('');
-const favoriteCountText = computed(() => (loading.value ? '同步中' : `${favorites.value.length} 项`));
-
-const typeLabel: Record<FavoriteTargetType, string> = {
-  studio: '舞室',
-  course: '课程',
-  coach: '老师',
-  workshop: '活动'
-};
-
-const typeAction: Record<FavoriteTargetType, string> = {
-  studio: '预约试听',
-  course: '查看课程',
-  coach: '查看老师',
-  workshop: '查看活动'
-};
-
-const routeForFavorite = (item: FavoriteDto) => {
-  if (item.targetType === 'studio') return `/studio/${item.targetId}`;
-  if (item.targetType === 'course') return `/course/${item.targetId}`;
-  if (item.targetType === 'coach') return `/coach/${item.targetId}`;
-  return `/workshop/${item.targetId}`;
-};
-
-const formatCreatedAt = (value: string) =>
-  new Date(value).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
-
-const fallbackCard = (item: FavoriteDto): FavoriteCard => ({
-  id: String(item.id),
-  title: `${typeLabel[item.targetType] ?? item.targetType} #${item.targetId}`,
-  meta: `收藏于 ${formatCreatedAt(item.createdAt)} · 详情待补全`,
-  tag: typeLabel[item.targetType] ?? item.targetType,
-  action: typeAction[item.targetType] ?? '查看',
-  to: routeForFavorite(item)
-});
-
-const buildFavoriteCard = async (item: FavoriteDto): Promise<FavoriteCard> => {
-  try {
-    // M1 收藏管理：收藏接口只返回类型和 ID，这里按对象类型补详情，不完整时降级显示。
-    if (item.targetType === 'studio') {
-      const detail = await fetchStudioDetail(item.targetId);
-      return {
-        id: String(item.id),
-        title: detail.name,
-        meta: `收藏于 ${formatCreatedAt(item.createdAt)} · ${detail.address || '地址待补'}`,
-        tag: typeLabel[item.targetType],
-        action: typeAction[item.targetType],
-        to: routeForFavorite(item)
-      };
-    }
-    if (item.targetType === 'course') {
-      const detail = await fetchCourseDetail(item.targetId);
-      return {
-        id: String(item.id),
-        title: detail.courseName,
-        meta: `收藏于 ${formatCreatedAt(item.createdAt)} · ¥${detail.priceAmount} · ${detail.difficultyLevel}`,
-        tag: typeLabel[item.targetType],
-        action: typeAction[item.targetType],
-        to: routeForFavorite(item)
-      };
-    }
-    if (item.targetType === 'coach') {
-      const detail = await fetchCoachDetail(item.targetId);
-      return {
-        id: String(item.id),
-        title: detail.displayName,
-        meta: `收藏于 ${formatCreatedAt(item.createdAt)} · 评分 ${Number(detail.avgRating ?? 0).toFixed(1)}`,
-        tag: typeLabel[item.targetType],
-        action: typeAction[item.targetType],
-        to: routeForFavorite(item)
-      };
-    }
-    const detail = await fetchWorkshopDetail(item.targetId);
-    return {
-      id: String(item.id),
-      title: detail.title,
-      meta: `收藏于 ${formatCreatedAt(item.createdAt)} · ${detail.city} · ${detail.coachName}`,
-      tag: typeLabel[item.targetType],
-      action: typeAction[item.targetType],
-      to: routeForFavorite(item)
-    };
-  } catch {
-    return fallbackCard(item);
+const favorites: FavoriteCard[] = [
+  {
+    id: 'urban-flow',
+    title: 'Urban Flow 舞室',
+    meta: '收藏于 5/24 · 可预约',
+    tag: '舞室',
+    action: '预约试听',
+    to: '/studio/urban-flow'
+  },
+  {
+    id: 'mia-jazz',
+    title: 'Mia Jazz 基础课',
+    meta: '周三晚 · 可报名',
+    tag: '课程',
+    action: '立即报名',
+    to: '/course/mia-jazz'
   }
-};
-
-const loadFavorites = async () => {
-  loading.value = true;
-  favoriteStatus.value = '';
-  try {
-    const list = await fetchFavorites();
-    favorites.value = await Promise.all(list.map(buildFavoriteCard));
-    favoriteStatus.value = favorites.value.length ? '' : '暂无收藏，可先在舞室、课程或老师详情页点收藏';
-  } catch {
-    favorites.value = [];
-    favoriteStatus.value = '收藏接口暂不可用，请检查登录态或后端服务';
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(loadFavorites);
+];
 </script>
 
 <template>
   <main class="pen-page">
-    <!-- M1 收藏页：页头必须先告诉用户这里是收藏管理，再把训练概览作为次级信息展示。 -->
-    <PenTopBar title="收藏管理" @share="showToast('收藏清单链接已复制')" />
+    <PenTopBar title="学习数据" @share="showToast('学习数据链接已复制')" />
 
     <section class="pen-scroll">
       <div class="stats">
@@ -154,7 +62,7 @@ onMounted(loadFavorites);
       </div>
 
       <section class="trend">
-        <h3 class="trend__title">训练概览</h3>
+        <h3 class="trend__title">训练趋势</h3>
         <div class="trend__rows">
           <div v-for="item in trend" :key="item.day" class="trend-row">
             <span class="trend-row__day">{{ item.day }}</span>
@@ -166,10 +74,8 @@ onMounted(loadFavorites);
       <section class="favorites">
         <header class="favorites__head">
           <h3>收藏管理</h3>
-          <span class="favorites__sub">{{ favoriteCountText }}</span>
+          <span class="favorites__sub">舞室 / 课程 / 老师</span>
         </header>
-
-        <p v-if="favoriteStatus" class="favorites__empty">{{ favoriteStatus }}</p>
 
         <article
           v-for="item in favorites"
@@ -293,16 +199,6 @@ onMounted(loadFavorites);
   }
 
   &__sub {
-    color: $pen-mute;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: $pen-lh;
-  }
-
-  &__empty {
-    margin: 0;
-    padding: 14px;
-    border: 1px solid $pen-hairline;
     color: $pen-mute;
     font-size: 13px;
     font-weight: 700;

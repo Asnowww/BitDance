@@ -54,7 +54,8 @@ class WorkshopControllerTest {
     private WorkshopBrief brief() {
         return new WorkshopBrief(
             10L, 1L, 7L, 1L, 1L, "Yumi Hiphop Workshop",
-            null, "海淀区舞星 Studio", new BigDecimal("199.00"), null, "published"
+            null, "海淀区舞星 Studio", new BigDecimal("199.00"), null, "published",
+            30, 8
         );
     }
 
@@ -95,7 +96,9 @@ class WorkshopControllerTest {
         mvc.perform(get("/public/workshops").param("cityId", "1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.total").value(1))
-            .andExpect(jsonPath("$.data.list[0].workshopName").value("Yumi Hiphop Workshop"));
+            .andExpect(jsonPath("$.data.list[0].workshopName").value("Yumi Hiphop Workshop"))
+            .andExpect(jsonPath("$.data.list[0].capacity").value(30))
+            .andExpect(jsonPath("$.data.list[0].soldCount").value(8));
     }
 
     @Test

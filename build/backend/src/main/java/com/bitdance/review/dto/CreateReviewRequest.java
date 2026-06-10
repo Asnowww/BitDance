@@ -21,7 +21,5 @@ public record CreateReviewRequest(
     @NotEmpty @Valid List<DimensionScoreDto> dimensions,
     @Pattern(regexp = "trial|order|checkin", message = "sourceType 必须是 trial/order/checkin")
     String sourceType,
-    Long sourceRefId,
-    // 评价媒体先支持外链/模拟图片元数据，后续接对象存储时保持请求结构不变。
-    @Valid @Size(max = 6) List<ReviewMediaDto> mediaAssets
+    Long sourceRefId
 ) {}

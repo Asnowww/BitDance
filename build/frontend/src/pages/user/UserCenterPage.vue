@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   BookOpen,
   ChevronLeft,
@@ -11,11 +11,13 @@ import {
   Settings,
   User
 } from 'lucide-vue-next';
-import { fetchUserPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
+import { fetchMyCommunityPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
 import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
+import { fetchFollowers, fetchFollowing } from '@/api/community';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
+const route = useRoute();
 const user = useUserStore();
 
 type ContentTab = 'posts' | 'reviews' | 'practices';
@@ -26,20 +28,24 @@ const socials = [
   { platform: 'B站', account: '未绑定', state: '仅自己可见', icon: Play, dark: false }
 ];
 
-const activeTab = ref<ContentTab>('posts');
+const normalizeTab = (value: unknown): ContentTab =>
+  value === 'reviews' || value === 'practices' ? value : 'posts';
+
+const activeTab = ref<ContentTab>(normalizeTab(route.query.tab));
 const posts = ref<UserContentPost[]>([]);
 const reviews = ref<UserReviewItem[]>([]);
 const practices = ref<UserPracticePost[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
+const followTotals = ref({ following: 0, followers: 0 });
 const loading = ref(false);
 
 const profileName = computed(() => user.profile?.nickname || '小李');
 const profileId = computed(() => user.profile?.id || 1);
 const stats = computed(() => [
   { value: String(totals.value.posts), label: '动态' },
-  { value: String(totals.value.reviews), label: '评价' },
-  { value: String(totals.value.practices), label: '约练' },
-  { value: '2.1k', label: '获赞' }
+  { value: String(followTotals.value.following), label: '关注', path: '/community/following?tab=following' },
+  { value: String(followTotals.value.followers), label: '粉丝', path: '/community/following?tab=fans' },
+  { value: String(totals.value.reviews), label: '评价' }
 ]);
 
 const topicLabel = (topic: string | { name?: string; topicName?: string }) =>
@@ -61,10 +67,12 @@ const practiceMeta = (item: UserPracticePost) => {
 const loadHomeData = async () => {
   loading.value = true;
   try {
-    const [postResp, reviewResp, practiceResp] = await Promise.all([
-      fetchUserPosts(profileId.value, 1, 20),
+    const [postResp, reviewResp, practiceResp, followingResp, followerResp] = await Promise.all([
+      fetchMyCommunityPosts(1, 20),
       fetchUserReviews(profileId.value, 1, 20),
-      fetchUserPractices(profileId.value)
+      fetchUserPractices(profileId.value),
+      fetchFollowing().catch(() => []),
+      fetchFollowers().catch(() => [])
     ]);
     posts.value = postResp.list ?? [];
     reviews.value = reviewResp.list ?? [];
@@ -74,12 +82,22 @@ const loadHomeData = async () => {
       reviews: reviewResp.total ?? reviews.value.length,
       practices: practices.value.length
     };
+    followTotals.value = {
+      following: followingResp.length,
+      followers: followerResp.length
+    };
   } finally {
     loading.value = false;
   }
 };
 
 onMounted(loadHomeData);
+watch(
+  () => route.query.tab,
+  (next) => {
+    activeTab.value = normalizeTab(next);
+  }
+);
 </script>
 
 <template>
@@ -114,10 +132,16 @@ onMounted(loadHomeData);
       </section>
 
       <section class="stats" aria-label="主页数据">
-        <div v-for="item in stats" :key="item.label" class="stats__item">
+        <button
+          v-for="item in stats"
+          :key="item.label"
+          class="stats__item"
+          type="button"
+          @click="item.path ? router.push(item.path) : undefined"
+        >
           <strong>{{ item.value }}</strong>
           <span>{{ item.label }}</span>
-        </div>
+        </button>
       </section>
 
       <section class="section">
@@ -165,11 +189,16 @@ onMounted(loadHomeData);
       <section class="content-list" aria-live="polite">
         <p v-if="loading" class="empty-state">加载中</p>
         <template v-else-if="activeTab === 'posts'">
-          <article v-for="item in posts" :key="item.id" class="content-card">
+          <article v-for="item in posts" :key="item.id" class="content-card" @click="router.push(`/community/post/${item.id}`)">
             <h3>最近动态</h3>
             <p>{{ postText(item) }}</p>
             <div v-if="postTopics(item).length" class="chips">
               <span v-for="topic in postTopics(item)" :key="topic" class="chip">{{ topic }}</span>
+            </div>
+            <div class="chips">
+              <span class="chip">{{ item.visibility === 'private' ? '仅自己' : item.visibility === 'followers' ? '粉丝可见' : '公开' }}</span>
+              <span class="chip">{{ item.likeCount ?? 0 }} 赞</span>
+              <span class="chip">{{ item.commentCount ?? 0 }} 评论</span>
             </div>
           </article>
           <p v-if="!posts.length" class="empty-state">还没有发布动态</p>
@@ -355,6 +384,10 @@ onMounted(loadHomeData);
     flex-direction: column;
     align-items: center;
     gap: 2px;
+    border: 0;
+    background: transparent;
+    color: $pen-ink;
+    cursor: pointer;
 
     strong {
       font-size: 22px;

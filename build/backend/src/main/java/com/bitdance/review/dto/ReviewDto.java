@@ -19,9 +19,5 @@ public record ReviewDto(
     Integer helpfulCount,
     Boolean isPinned,
     OffsetDateTime publishedAt,
-    List<DimensionScoreDto> dimensions,
-    // 前端评价聚合面板直接读取该字段展示图文/视频附件。
-    List<ReviewMediaDto> mediaAssets,
-    // 用户侧“我的评价”需要知道是否被申诉、是否已处理，直接读取最新申诉结果。
-    ReviewAppealDto latestAppeal
+    List<DimensionScoreDto> dimensions
 ) {}

@@ -4,8 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast, showToast } from 'vant';
 import { Image, Music, Plus, ShieldCheck, Trash2, Video } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import { fetchCourseDetail, fetchCoachDetail } from '@/api/course';
-import { fetchStudioDetail } from '@/api/studio';
 import {
   createReview,
   REVIEW_DIMENSIONS,
@@ -29,62 +27,26 @@ const targetNames: Record<ReviewTargetType, string> = {
   course: 'K-pop 入门课'
 };
 
-const normalizeTargetType = (raw: unknown): ReviewTargetType =>
-  raw === 'coach' || raw === 'course' || raw === 'studio' ? raw : 'studio';
-
 const draftKey = 'bitdance_review_draft';
-const routeTargetType = computed(() => normalizeTargetType(route.query.targetType));
-const activeType = ref<ReviewTargetType>(routeTargetType.value);
-const routeTargetId = computed(() => Number(route.query.targetId) || 0);
-const hasFixedTarget = computed(() => routeTargetId.value > 0);
+const activeType = ref<ReviewTargetType>('studio');
 const content = ref('');
 const anonymous = ref(false);
 const allowReply = ref(true);
 const submitting = ref(false);
-const targetNameState = ref(String(route.query.targetName || targetNames[routeTargetType.value]));
-const targetMetaState = ref('请从对应详情页进入写评价，避免把评价发给错误对象。');
 const imageInput = ref<HTMLInputElement | null>(null);
 const videoInput = ref<HTMLInputElement | null>(null);
 const mixedInput = ref<HTMLInputElement | null>(null);
 const mediaAssets = ref<ReviewMediaDto[]>([]);
 const scores = reactive<Record<string, number>>({});
 
-const fallbackImageUrls = [
-  'https://images.unsplash.com/photo-1547153760-18fc86324498?w=960&q=80&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=960&q=80&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=960&q=80&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=960&q=80&auto=format&fit=crop'
-];
-const fallbackVideoUrl = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
-
-const fallbackReviewMediaUrl = (kind: 'image' | 'video', seed: string) => {
-  if (kind === 'video') return fallbackVideoUrl;
-  const index = Math.abs(seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % fallbackImageUrls.length;
-  return fallbackImageUrls[index];
-};
-
 const sourceType = computed(() => {
   const raw = route.query.sourceType;
   return raw === 'trial' || raw === 'order' || raw === 'checkin' ? raw : 'trial';
 });
 const sourceRefId = computed(() => Number(route.query.sourceRefId) || undefined);
-const targetId = computed(() => (activeType.value === routeTargetType.value ? routeTargetId.value : 0));
-const targetName = computed(() => targetNameState.value || targetNames[activeType.value]);
-const sourceLabel = computed(() => {
-  if (sourceType.value === 'order') return '订单来源待核验';
-  if (sourceType.value === 'checkin') return '签到来源待核验';
-  return '已完成试听';
-});
-const sourceGuide = computed(() => {
-  if (!hasFixedTarget.value) return '请先从舞室、老师或课程详情页进入，再提交评价。';
-  if (sourceType.value === 'order') return '订单来源会在后端核验完成后决定是否提升权重。';
-  if (sourceType.value === 'checkin') return '签到来源会在后端核验完成后决定是否提升权重。';
-  return '试听来源已带入，提交后会按真实风控状态展示。';
-});
-const lockedTargetNote = computed(() =>
-  hasFixedTarget.value
-    ? `当前入口已绑定${targetTypes.find((item) => item.type === routeTargetType.value)?.label ?? '评价对象'}，如需评价其他对象，请从对应详情页进入。`
-    : '当前未绑定具体对象，暂不能直接提交评价。'
+const targetId = computed(() => Number(route.query.targetId) || 1);
+const targetName = computed(
+  () => String(route.query.targetName || targetNames[activeType.value])
 );
 const currentDimensions = computed(() => REVIEW_DIMENSIONS[activeType.value]);
 const averageScore = computed(() => {
@@ -101,10 +63,6 @@ const resetScores = () => {
 };
 
 const setActiveType = (type: ReviewTargetType) => {
-  if (hasFixedTarget.value && type !== routeTargetType.value) {
-    showToast('请从对应详情页进入，再评价其他对象');
-    return;
-  }
   activeType.value = type;
 };
 
@@ -121,11 +79,9 @@ const fileToMedia = (file: File): Promise<ReviewMediaDto | null> =>
     }
     const reader = new FileReader();
     reader.onload = () =>
-      // M2 媒体评价：未接对象存储前，提交轻量外链，页面继续用本地 dataURL 做即时预览。
       resolve({
         type: kind,
-        url: fallbackReviewMediaUrl(kind, file.name),
-        previewUrl: String(reader.result),
+        url: String(reader.result),
         name: file.name,
         size: file.size
       });
@@ -181,42 +137,7 @@ const saveDraft = () => {
   showSuccessToast('草稿已保存');
 };
 
-const loadTargetContext = async () => {
-  if (!hasFixedTarget.value) {
-    targetNameState.value = targetNames[activeType.value];
-    targetMetaState.value = '请从对应详情页进入写评价，避免把评价发给错误对象。';
-    return;
-  }
-
-  // M2 写评价：真实详情页入口要把对象名称和来源说清，不能再靠硬编码占位名撑场面。
-  targetNameState.value = String(route.query.targetName || targetNames[routeTargetType.value]);
-  targetMetaState.value = `${targetTypes.find((item) => item.type === routeTargetType.value)?.label ?? '评价对象'} · ${sourceLabel.value}`;
-  try {
-    if (routeTargetType.value === 'studio') {
-      const detail = await fetchStudioDetail(routeTargetId.value);
-      targetNameState.value = detail.name;
-      targetMetaState.value = `舞室 · ${detail.address || sourceLabel.value}`;
-      return;
-    }
-    if (routeTargetType.value === 'course') {
-      const detail = await fetchCourseDetail(routeTargetId.value);
-      targetNameState.value = detail.courseName;
-      targetMetaState.value = `课程 · ¥${detail.priceAmount} · ${detail.difficultyLevel || sourceLabel.value}`;
-      return;
-    }
-    const detail = await fetchCoachDetail(routeTargetId.value);
-    targetNameState.value = detail.displayName;
-    targetMetaState.value = `老师 · ${detail.teachingStyle || sourceLabel.value}`;
-  } catch {
-    targetMetaState.value = `${targetTypes.find((item) => item.type === routeTargetType.value)?.label ?? '评价对象'} · ${sourceLabel.value}`;
-  }
-};
-
 const submitReview = async () => {
-  if (!targetId.value) {
-    showFailToast('请从具体舞室、老师或课程详情页进入写评价');
-    return;
-  }
   if (currentDimensions.value.some((item) => scores[item.key] === undefined)) {
     showFailToast('请完成所有维度评分');
     return;
@@ -237,38 +158,20 @@ const submitReview = async () => {
         name: item.label,
         score: scores[item.key] as number
       })),
-      mediaAssets: mediaAssets.value.map(({ type, url, name, size, assetId }) => ({
-        type,
-        url,
-        name,
-        size,
-        assetId
-      })),
+      mediaAssets: mediaAssets.value,
       sourceType: sourceType.value,
       sourceRefId: sourceRefId.value
     };
     await createReview(body);
     localStorage.removeItem(draftKey);
     showSuccessToast('评价已提交');
-    router.replace('/me/reviews');
+    router.back();
   } finally {
     submitting.value = false;
   }
 };
 
-watch(
-  routeTargetType,
-  (next) => {
-    // M2 评价对象直达：同一写评价页面复用时，同步路由 targetType，避免老师/课程入口仍停留在舞室维度。
-    activeType.value = next;
-  },
-  { immediate: true }
-);
-watch([routeTargetType, routeTargetId], loadTargetContext, { immediate: true });
-watch(activeType, () => {
-  resetScores();
-  void loadTargetContext();
-}, { immediate: true });
+watch(activeType, resetScores, { immediate: true });
 </script>
 
 <template>
@@ -282,8 +185,7 @@ watch(activeType, () => {
         </div>
         <div class="target-card__copy">
           <strong>{{ targetName }}</strong>
-          <span>{{ targetMetaState }}</span>
-          <em>{{ sourceGuide }}</em>
+          <span>已完成试听 · 权重 1.5x</span>
         </div>
       </section>
 
@@ -294,14 +196,11 @@ watch(activeType, () => {
           class="segment__btn"
           :class="{ 'segment__btn--active': activeType === item.type }"
           type="button"
-          :disabled="hasFixedTarget && item.type !== routeTargetType"
           @click="setActiveType(item.type)"
         >
           {{ item.label }}
         </button>
       </nav>
-
-      <p class="target-note">{{ lockedTargetNote }}</p>
 
       <section class="block">
         <h2 class="block__title">结构化评分</h2>
@@ -326,7 +225,7 @@ watch(activeType, () => {
 
       <section class="verify-card">
         <ShieldCheck :size="17" :stroke-width="2" />
-        <span>{{ averageScore ? `综合 ${averageScore}` : '待评分' }}，{{ sourceGuide }}</span>
+        <span>{{ averageScore ? `综合 ${averageScore}` : '待评分' }}，将按已验证试听评价计入聚合</span>
       </section>
 
       <label class="content-box">
@@ -346,8 +245,8 @@ watch(activeType, () => {
         <input ref="mixedInput" class="media-input" type="file" accept="image/*,video/*" multiple @change="onMediaSelected" />
         <div class="media-grid">
           <article v-for="(item, index) in mediaAssets" :key="`${item.name}-${index}`" class="media-preview">
-            <img v-if="item.type === 'image'" :src="item.previewUrl || item.url" :alt="item.name" />
-            <video v-else :src="item.previewUrl || item.url" muted playsinline preload="metadata" />
+            <img v-if="item.type === 'image'" :src="item.url" :alt="item.name" />
+            <video v-else :src="item.url" muted playsinline preload="metadata" />
             <button type="button" aria-label="删除媒体" @click="removeMedia(index)">
               <Trash2 :size="14" :stroke-width="2" />
             </button>
@@ -391,10 +290,10 @@ watch(activeType, () => {
       <button
         class="submit-bar__submit"
         type="button"
-        :disabled="submitting || !targetId"
+        :disabled="submitting"
         @click="submitReview"
       >
-        {{ submitting ? '提交中' : targetId ? '提交评价' : '请从详情页进入' }}
+        {{ submitting ? '提交中' : '提交评价' }}
       </button>
     </footer>
   </main>
@@ -455,14 +354,6 @@ watch(activeType, () => {
     font-weight: 700;
     line-height: $pen-lh;
   }
-
-  em {
-    color: $pen-mute;
-    font-size: 11px;
-    font-style: normal;
-    font-weight: 600;
-    line-height: 1.4;
-  }
 }
 
 .segment {
@@ -485,20 +376,7 @@ watch(activeType, () => {
       background: $pen-ink;
       color: $pen-on-primary;
     }
-
-    &:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
   }
-}
-
-.target-note {
-  margin: 0;
-  color: $pen-mute;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.45;
 }
 
 .block {
