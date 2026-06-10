@@ -12,6 +12,8 @@ public interface StudioCoachRelationRepository extends JpaRepository<StudioCoach
 
     List<StudioCoachRelation> findByCoachIdAndRelationStatus(Long coachId, String relationStatus);
 
+    List<StudioCoachRelation> findByCoachIdOrderByIdDesc(Long coachId);
+
     Optional<StudioCoachRelation> findFirstByStudioIdAndCoachIdAndRelationStatusIn(
         Long studioId, Long coachId, List<String> statuses
     );

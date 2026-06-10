@@ -47,6 +47,15 @@ public class CoachCertificationController {
         return ApiResponse.ok(service.listByStatus(status, page, pageSize));
     }
 
+    @GetMapping("/h5/coach/platform/coach-certifications")
+    public ApiResponse<Page<CertificationDto>> platformListByStatus(
+        @RequestParam(required = false) String status,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.ok(service.listByStatus(status, page, pageSize));
+    }
+
     @PostMapping("/admin/coach-certifications/{id}/approve")
     public ApiResponse<CertificationDto> approve(
         @PathVariable Long id,
@@ -55,8 +64,24 @@ public class CoachCertificationController {
         return ApiResponse.ok(service.approve(CurrentUser.getId(), id, body));
     }
 
+    @PostMapping("/h5/coach/platform/coach-certifications/{id}/approve")
+    public ApiResponse<CertificationDto> platformApprove(
+        @PathVariable Long id,
+        @Valid @RequestBody(required = false) HandleCertificationRequest body
+    ) {
+        return ApiResponse.ok(service.approve(CurrentUser.getId(), id, body));
+    }
+
     @PostMapping("/admin/coach-certifications/{id}/reject")
     public ApiResponse<CertificationDto> reject(
+        @PathVariable Long id,
+        @Valid @RequestBody(required = false) HandleCertificationRequest body
+    ) {
+        return ApiResponse.ok(service.reject(CurrentUser.getId(), id, body));
+    }
+
+    @PostMapping("/h5/coach/platform/coach-certifications/{id}/reject")
+    public ApiResponse<CertificationDto> platformReject(
         @PathVariable Long id,
         @Valid @RequestBody(required = false) HandleCertificationRequest body
     ) {

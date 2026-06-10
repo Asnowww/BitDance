@@ -1,6 +1,7 @@
 package com.bitdance.merchant.service;
 
 import com.bitdance.audit.aspect.AuditAction;
+import com.bitdance.catalog.domain.Studio;
 import com.bitdance.catalog.repository.StudioRepository;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.iam.domain.UserRoleBinding;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class StudioClaimService {
@@ -37,6 +39,9 @@ public class StudioClaimService {
 
     @Transactional
     public StudioClaimDto submit(Long userId, SubmitClaimRequest req) {
+        if (req.studioId() == null) {
+            throw new BizException("INVALID_ARGUMENT", "认领已有舞室必须传 studioId");
+        }
         if (!studioRepo.existsById(req.studioId())) {
             throw new BizException("STUDIO_NOT_FOUND", "舞室不存在");
         }
@@ -49,6 +54,46 @@ public class StudioClaimService {
         c.setStudioId(req.studioId());
         c.setApplicantUserId(userId);
         c.setClaimType(req.claimType() == null ? "owner_claim" : req.claimType());
+        c.setBusinessLicenseAssetId(req.businessLicenseAssetId());
+        c.setSubmittedRemark(req.submittedRemark());
+        c.setClaimStatus("pending");
+        return toDto(claimRepo.save(c));
+    }
+
+    @Transactional
+    public StudioClaimDto submitNewStudio(Long userId, SubmitClaimRequest req) {
+        if (req.studioName() == null || req.studioName().isBlank()) {
+            throw new BizException("INVALID_ARGUMENT", "新舞室名称不能为空");
+        }
+        if (req.cityId() == null) {
+            throw new BizException("INVALID_ARGUMENT", "城市不能为空");
+        }
+        if (req.address() == null || req.address().isBlank()) {
+            throw new BizException("INVALID_ARGUMENT", "详细地址不能为空");
+        }
+        Studio s = new Studio();
+        s.setStudioCode(generateStudioCode());
+        s.setStudioName(req.studioName());
+        s.setBrandName(req.brandName());
+        s.setCityId(req.cityId());
+        s.setBusinessDistrictId(req.businessDistrictId());
+        s.setAddress(req.address());
+        s.setLongitude(req.longitude());
+        s.setLatitude(req.latitude());
+        s.setContactPhone(req.contactPhone());
+        s.setIntro(req.intro());
+        s.setBusinessHours(req.businessHours() == null || req.businessHours().isBlank()
+            ? "{}" : req.businessHours());
+        s.setCoverAssetId(req.coverAssetId());
+        s.setSourceType("user_submitted");
+        s.setClaimStatus("pending");
+        s.setStatus("inactive");
+        Studio savedStudio = studioRepo.save(s);
+
+        StudioClaim c = new StudioClaim();
+        c.setStudioId(savedStudio.getId());
+        c.setApplicantUserId(userId);
+        c.setClaimType("new_studio");
         c.setBusinessLicenseAssetId(req.businessLicenseAssetId());
         c.setSubmittedRemark(req.submittedRemark());
         c.setClaimStatus("pending");
@@ -78,7 +123,11 @@ public class StudioClaimService {
         c.setReviewedByUserId(adminId);
         c.setReviewedAt(OffsetDateTime.now());
         if (req != null) c.setReviewRemark(req.remark());
-        // 通过后给申请人绑定 STUDIO_ADMIN 角色（避免重复绑定）
+        studioRepo.findById(c.getStudioId()).ifPresent(studio -> {
+            studio.setStatus("active");
+            studio.setClaimStatus("claimed");
+            studioRepo.save(studio);
+        });
         boolean alreadyBound = roleRepo.findByUserIdAndStatus(c.getApplicantUserId(), "ACTIVE")
             .stream().map(UserRoleBinding::getRole).anyMatch("STUDIO_ADMIN"::equals);
         if (!alreadyBound) {
@@ -106,8 +155,7 @@ public class StudioClaimService {
         StudioClaim c = claimRepo.findById(id)
             .orElseThrow(() -> new BizException("CLAIM_NOT_FOUND", "认领申请不存在"));
         if (!"pending".equals(c.getClaimStatus())) {
-            throw new BizException("CLAIM_STATE_CONFLICT",
-                "申请状态 " + c.getClaimStatus() + " 不可处理");
+            throw new BizException("CLAIM_STATE_CONFLICT", "申请状态不可处理");
         }
         return c;
     }
@@ -119,5 +167,9 @@ public class StudioClaimService {
             c.getSubmittedRemark(), c.getReviewedByUserId(), c.getReviewedAt(),
             c.getReviewRemark(), c.getCreatedAt()
         );
+    }
+
+    private String generateStudioCode() {
+        return "ST" + System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(100, 999);
     }
 }

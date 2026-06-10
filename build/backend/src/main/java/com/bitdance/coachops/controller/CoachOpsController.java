@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -36,8 +37,14 @@ public class CoachOpsController {
     }
 
     @GetMapping("/dashboard")
-    public ApiResponse<CoachDashboardDto> dashboard() {
-        return ApiResponse.ok(service.dashboard(CurrentUser.getId()));
+    public ApiResponse<CoachDashboardDto> dashboard(
+        @RequestParam(required = false) String role,
+        @RequestParam(required = false) Long studioId
+    ) {
+        if (role == null && studioId == null) {
+            return ApiResponse.ok(service.dashboard(CurrentUser.getId()));
+        }
+        return ApiResponse.ok(service.dashboard(CurrentUser.getId(), role, studioId));
     }
 
     @GetMapping("/courses")

@@ -138,7 +138,7 @@ public class WorkshopService {
         o.setWorkshopId(w.getId());
         o.setWorkshopSessionId(session.getId());
         o.setUserId(userId);
-        o.setAmountPayable(w.getPriceAmount());
+        o.setAmountPayable(session.getPriceAmount() == null ? w.getPriceAmount() : session.getPriceAmount());
         o.setOrderStatus("pending_payment");
         return toOrderDto(orderRepo.save(o), null);
     }
@@ -308,7 +308,7 @@ public class WorkshopService {
         return new SessionDto(
             s.getId(), s.getWorkshopId(), s.getSessionName(),
             s.getStartAt(), s.getEndAt(),
-            s.getCapacity(), s.getSoldCount(), s.getCheckinCount(),
+            s.getCapacity(), s.getPriceAmount(), s.getSoldCount(), s.getCheckinCount(),
             s.getSessionStatus()
         );
     }

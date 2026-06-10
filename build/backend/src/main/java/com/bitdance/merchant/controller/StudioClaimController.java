@@ -33,6 +33,11 @@ public class StudioClaimController {
         return ApiResponse.ok(service.submit(CurrentUser.getId(), body));
     }
 
+    @PostMapping("/h5/studio-claims/new-studio")
+    public ApiResponse<StudioClaimDto> submitNewStudio(@Valid @RequestBody SubmitClaimRequest body) {
+        return ApiResponse.ok(service.submitNewStudio(CurrentUser.getId(), body));
+    }
+
     @GetMapping("/h5/studio-claims/mine")
     public ApiResponse<List<StudioClaimDto>> mine() {
         return ApiResponse.ok(service.mine(CurrentUser.getId()));
@@ -40,6 +45,15 @@ public class StudioClaimController {
 
     @GetMapping("/admin/studio-claims")
     public ApiResponse<Page<StudioClaimDto>> listByStatus(
+        @RequestParam(required = false) String status,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.ok(service.listByStatus(status, page, pageSize));
+    }
+
+    @GetMapping("/h5/coach/platform/studio-claims")
+    public ApiResponse<Page<StudioClaimDto>> platformListByStatus(
         @RequestParam(required = false) String status,
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(defaultValue = "20") int pageSize
@@ -55,8 +69,24 @@ public class StudioClaimController {
         return ApiResponse.ok(service.approve(CurrentUser.getId(), id, body));
     }
 
+    @PostMapping("/h5/coach/platform/studio-claims/{id}/approve")
+    public ApiResponse<StudioClaimDto> platformApprove(
+        @PathVariable Long id,
+        @Valid @RequestBody(required = false) HandleClaimRequest body
+    ) {
+        return ApiResponse.ok(service.approve(CurrentUser.getId(), id, body));
+    }
+
     @PostMapping("/admin/studio-claims/{id}/reject")
     public ApiResponse<StudioClaimDto> reject(
+        @PathVariable Long id,
+        @Valid @RequestBody(required = false) HandleClaimRequest body
+    ) {
+        return ApiResponse.ok(service.reject(CurrentUser.getId(), id, body));
+    }
+
+    @PostMapping("/h5/coach/platform/studio-claims/{id}/reject")
+    public ApiResponse<StudioClaimDto> platformReject(
         @PathVariable Long id,
         @Valid @RequestBody(required = false) HandleClaimRequest body
     ) {

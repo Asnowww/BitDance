@@ -1,6 +1,7 @@
 package com.bitdance.merchant.service;
 
 import com.bitdance.catalog.repository.CoachRepository;
+import com.bitdance.catalog.repository.CoachByUserRepository;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.merchant.domain.StudioCoachRelation;
 import com.bitdance.merchant.dto.InviteCoachRequest;
@@ -19,15 +20,18 @@ public class CoachRelationService {
 
     private final StudioCoachRelationRepository relRepo;
     private final CoachRepository coachRepo;
+    private final CoachByUserRepository coachByUserRepo;
     private final MerchantAccessGuard guard;
 
     public CoachRelationService(
         StudioCoachRelationRepository relRepo,
         CoachRepository coachRepo,
+        CoachByUserRepository coachByUserRepo,
         MerchantAccessGuard guard
     ) {
         this.relRepo = relRepo;
         this.coachRepo = coachRepo;
+        this.coachByUserRepo = coachByUserRepo;
         this.guard = guard;
     }
 
@@ -79,12 +83,53 @@ public class CoachRelationService {
         return relRepo.findByStudioIdOrderByIdDesc(studioId).stream().map(this::toDto).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<StudioCoachRelationDto> myInvitations(Long userId) {
+        Long coachId = coachByUserRepo.findByUserId(userId)
+            .orElseThrow(() -> new BizException("COACH_NOT_FOUND", "教练不存在"))
+            .getId();
+        return relRepo.findByCoachIdOrderByIdDesc(coachId).stream()
+            .filter(r -> "pending".equals(r.getRelationStatus()))
+            .map(this::toDto)
+            .toList();
+    }
+
+    @Transactional
+    public StudioCoachRelationDto accept(Long userId, Long relationId) {
+        StudioCoachRelation r = loadMyPendingRelation(userId, relationId);
+        r.setRelationStatus("active");
+        r.setApprovedByUserId(userId);
+        return toDto(relRepo.save(r));
+    }
+
+    @Transactional
+    public StudioCoachRelationDto reject(Long userId, Long relationId) {
+        StudioCoachRelation r = loadMyPendingRelation(userId, relationId);
+        r.setRelationStatus("rejected");
+        return toDto(relRepo.save(r));
+    }
+
     /** 给 MerchantWorkshopService 调用，判定 coach 在该 studio 是否签约。 */
     public boolean isCoachContracted(Long studioId, Long coachId) {
         return relRepo.findFirstByStudioIdAndCoachIdAndRelationStatusIn(
             studioId, coachId, List.of("active")
         ).filter(r -> List.of("full_time", "signed").contains(r.getRelationType()))
         .isPresent();
+    }
+
+    private StudioCoachRelation loadMyPendingRelation(Long userId, Long relationId) {
+        Long coachId = coachByUserRepo.findByUserId(userId)
+            .orElseThrow(() -> new BizException("COACH_NOT_FOUND", "教练不存在"))
+            .getId();
+        StudioCoachRelation r = relRepo.findById(relationId)
+            .orElseThrow(() -> new BizException("RELATION_NOT_FOUND", "合作邀请不存在"));
+        if (!r.getCoachId().equals(coachId)) {
+            throw new BizException("FORBIDDEN", "无权处理该邀请");
+        }
+        if (!"pending".equals(r.getRelationStatus())) {
+            throw new BizException("RELATION_STATE_CONFLICT", "邀请已处理");
+        }
+        return r;
     }
 
     private StudioCoachRelationDto toDto(StudioCoachRelation r) {

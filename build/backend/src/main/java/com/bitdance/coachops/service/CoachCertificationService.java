@@ -57,6 +57,7 @@ public class CoachCertificationService {
         CoachCertificationApplication app = new CoachCertificationApplication();
         app.setUserId(userId);
         app.setApplicationType(req.applicationType() == null ? "independent" : req.applicationType());
+        app.setCoachType(req.coachType() == null ? "freelance" : req.coachType());
         app.setApplicationStatus("pending");
         app.setRemark(req.remark());
         return toDto(appRepo.save(app));
@@ -90,14 +91,16 @@ public class CoachCertificationService {
             c.setUserId(app.getUserId());
             c.setDisplayName(deriveDisplayName(app.getUserId()));
             c.setCertificationStatus("approved");
+            c.setCoachType(app.getCoachType());
             c.setAvgRating(BigDecimal.ZERO);
             coachRepo.save(c);
         } else {
             coachRepo.findByUserId(app.getUserId()).ifPresent(existing -> {
                 if (!"approved".equals(existing.getCertificationStatus())) {
                     existing.setCertificationStatus("approved");
-                    coachRepo.save(existing);
                 }
+                existing.setCoachType(app.getCoachType());
+                coachRepo.save(existing);
             });
         }
         boolean alreadyBound = roleRepo.findByUserIdAndStatus(app.getUserId(), "ACTIVE")
@@ -145,6 +148,7 @@ public class CoachCertificationService {
     private CertificationDto toDto(CoachCertificationApplication a) {
         return new CertificationDto(
             a.getId(), a.getUserId(), a.getApplicationType(),
+            a.getCoachType(),
             a.getApplicationStatus(), a.getRemark(),
             a.getReviewedByUserId(), a.getReviewedAt(), a.getReviewRemark(),
             a.getCreatedAt()

@@ -8,10 +8,17 @@ import com.bitdance.catalog.repository.CourseScheduleRepository;
 import com.bitdance.coachops.dto.CoachDashboardDto;
 import com.bitdance.coachops.dto.CoachMeDto;
 import com.bitdance.coachops.dto.UpdateCoachProfileRequest;
+import com.bitdance.courseorder.domain.CourseOrder;
+import com.bitdance.courseorder.repository.CourseOrderRepository;
+import com.bitdance.courseorder.repository.CourseRefundRequestRepository;
 import com.bitdance.merchant.domain.StudioCoachRelation;
 import com.bitdance.merchant.repository.StudioCoachRelationRepository;
+import com.bitdance.merchant.service.MerchantAccessGuard;
 import com.bitdance.review.repository.ReviewReplyRepository;
 import com.bitdance.review.repository.ReviewRepository;
+import com.bitdance.workshop.domain.WorkshopOrder;
+import com.bitdance.workshop.repository.WorkshopOrderRepository;
+import com.bitdance.workshop.repository.WorkshopRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +28,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -33,6 +41,11 @@ public class CoachOpsService {
     private final CourseScheduleRepository scheduleRepo;
     private final ReviewRepository reviewRepo;
     private final ReviewReplyRepository replyRepo;
+    private final CourseOrderRepository courseOrderRepo;
+    private final CourseRefundRequestRepository courseRefundRepo;
+    private final WorkshopOrderRepository workshopOrderRepo;
+    private final WorkshopRepository workshopRepo;
+    private final MerchantAccessGuard merchantGuard;
 
     public CoachOpsService(
         CoachAccessGuard guard,
@@ -41,7 +54,12 @@ public class CoachOpsService {
         CourseRepository courseRepo,
         CourseScheduleRepository scheduleRepo,
         ReviewRepository reviewRepo,
-        ReviewReplyRepository replyRepo
+        ReviewReplyRepository replyRepo,
+        CourseOrderRepository courseOrderRepo,
+        CourseRefundRequestRepository courseRefundRepo,
+        WorkshopOrderRepository workshopOrderRepo,
+        WorkshopRepository workshopRepo,
+        MerchantAccessGuard merchantGuard
     ) {
         this.guard = guard;
         this.coachRepo = coachRepo;
@@ -50,6 +68,11 @@ public class CoachOpsService {
         this.scheduleRepo = scheduleRepo;
         this.reviewRepo = reviewRepo;
         this.replyRepo = replyRepo;
+        this.courseOrderRepo = courseOrderRepo;
+        this.courseRefundRepo = courseRefundRepo;
+        this.workshopOrderRepo = workshopOrderRepo;
+        this.workshopRepo = workshopRepo;
+        this.merchantGuard = merchantGuard;
     }
 
     @Transactional(readOnly = true)
@@ -72,9 +95,7 @@ public class CoachOpsService {
     @Transactional
     public CoachMeDto updateProfile(Long userId, UpdateCoachProfileRequest req) {
         Coach c = guard.requireCoach(userId);
-        if (req.displayName() != null && !req.displayName().isBlank()) {
-            c.setDisplayName(req.displayName());
-        }
+        if (req.displayName() != null && !req.displayName().isBlank()) c.setDisplayName(req.displayName());
         if (req.intro() != null) c.setIntro(req.intro());
         if (req.teachingStyle() != null) c.setTeachingStyle(req.teachingStyle());
         if (req.coverAssetId() != null) c.setCoverAssetId(req.coverAssetId());
@@ -85,36 +106,77 @@ public class CoachOpsService {
 
     @Transactional(readOnly = true)
     public CoachDashboardDto dashboard(Long userId) {
+        return dashboard(userId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public CoachDashboardDto dashboard(Long userId, String role, Long studioId) {
         Coach c = guard.requireCoach(userId);
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         OffsetDateTime monthStart = now.truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
         OffsetDateTime monthEnd = monthStart.plusMonths(1);
+        boolean studioScope = role != null && role.equalsIgnoreCase("studio_admin");
+        Long scopedStudioId = studioId == null ? c.getHomeStudioId() : studioId;
+        if (studioScope) {
+            merchantGuard.requireStudioOwnership(userId, scopedStudioId);
+        }
 
-        long monthSessions = scheduleRepo
-            .findByStudioIdAndStartAtBetweenOrderByStartAtAsc(
-                c.getHomeStudioId() == null ? -1L : c.getHomeStudioId(),
-                monthStart, monthEnd
-            )
+        long monthSessions = scopedStudioId == null ? 0 : scheduleRepo
+            .findByStudioIdAndStartAtBetweenOrderByStartAtAsc(scopedStudioId, monthStart, monthEnd)
             .stream()
-            .filter(s -> s.getCoachId() != null && s.getCoachId().equals(c.getId()))
+            .filter(s -> studioScope || Objects.equals(s.getCoachId(), c.getId()))
             .count();
 
-        // pendingReplies：评价我（target_type=coach, target_id=coach.id）尚未回复的数量
-        List<Long> myReviewIds = reviewRepo.findPublishedFor("coach", c.getId())
+        List<CourseOrder> courseOrders = scopedStudioId == null ? List.of() : courseOrderRepo
+            .findByStudioIdAndPaidAtBetween(scopedStudioId, monthStart, monthEnd)
+            .stream()
+            .filter(o -> studioScope || Objects.equals(o.getCoachId(), c.getId()))
+            .toList();
+        long courseBookings = courseOrders.size();
+        long courseCheckins = courseOrders.stream()
+            .filter(o -> List.of("checked_in", "completed").contains(o.getOrderStatus()))
+            .count();
+        BigDecimal courseIncome = courseOrders.stream()
+            .filter(o -> List.of("paid", "checked_in", "completed").contains(o.getOrderStatus()))
+            .map(CourseOrder::getAmountPaid)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<WorkshopOrder> workshopOrders = workshopOrderRepo.findByPaidAtBetween(monthStart, monthEnd).stream()
+            .filter(o -> workshopRepo.findById(o.getWorkshopId()).map(w ->
+                studioScope ? Objects.equals(w.getStudioId(), scopedStudioId)
+                    : Objects.equals(w.getCoachId(), c.getId()) || Objects.equals(w.getCreatorUserId(), userId)
+            ).orElse(false))
+            .toList();
+        long workshopSignups = workshopOrders.size();
+        BigDecimal workshopIncome = workshopOrders.stream()
+            .filter(o -> List.of("paid", "completed").contains(o.getOrderStatus()))
+            .map(WorkshopOrder::getAmountPaid)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long workshopRefunds = workshopOrders.stream().filter(o -> "refunded".equals(o.getOrderStatus())).count();
+        long courseRefunds = courseRefundRepo.countByRequestStatusAndCreatedAtBetween("approved", monthStart, monthEnd);
+
+        List<Long> reviewIds = (studioScope && scopedStudioId != null
+            ? reviewRepo.findPublishedFor("studio", scopedStudioId)
+            : reviewRepo.findPublishedFor("coach", c.getId()))
             .stream().map(r -> r.getId()).toList();
         Set<Long> repliedIds = new HashSet<>();
-        for (Long rid : myReviewIds) {
+        for (Long rid : reviewIds) {
             if (!replyRepo.findByReviewIdOrderByIdAsc(rid).isEmpty()) repliedIds.add(rid);
         }
-        long pending = myReviewIds.size() - repliedIds.size();
+        long pendingReplies = reviewIds.size() - repliedIds.size();
 
         return new CoachDashboardDto(
-            monthSessions,
-            0L, // monthWorkshopOrders 留待 BE-015 接 WorkshopOrderRepository.countByPaidAtBetween
-            BigDecimal.ZERO, // monthIncome 留待 settlement_rule 接入
-            pending,
+            courseIncome.add(workshopIncome),
+            courseBookings + workshopSignups,
+            courseCheckins,
+            courseRefunds + workshopRefunds,
+            courseBookings,
+            workshopSignups,
+            pendingReplies,
             c.getAvgRating(),
-            myReviewIds.size()
+            monthSessions,
+            workshopSignups,
+            reviewIds.size()
         );
     }
 
@@ -140,7 +202,7 @@ public class CoachOpsService {
         Long danceStyleId,
         String courseName,
         String difficultyLevel,
-        java.math.BigDecimal priceAmount,
+        BigDecimal priceAmount,
         Integer durationMinutes,
         String status
     ) {}

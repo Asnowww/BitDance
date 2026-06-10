@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/admin/workshops")
 public class AdminWorkshopController {
 
     private final AdminWorkshopService service;
@@ -22,7 +21,7 @@ public class AdminWorkshopController {
         this.service = service;
     }
 
-    @GetMapping
+    @GetMapping({"/admin/workshops", "/h5/coach/platform/workshops"})
     public ApiResponse<Page<WorkshopAdminItem>> list(
         @RequestParam(required = false) String auditStatus,
         @RequestParam(defaultValue = "1") int page,
@@ -31,12 +30,12 @@ public class AdminWorkshopController {
         return ApiResponse.ok(service.listByAuditStatus(auditStatus, page, pageSize));
     }
 
-    @PostMapping("/{id}/approve")
+    @PostMapping({"/admin/workshops/{id}/approve", "/h5/coach/platform/workshops/{id}/approve"})
     public ApiResponse<WorkshopAdminItem> approve(@PathVariable Long id) {
         return ApiResponse.ok(service.approve(CurrentUser.getId(), id));
     }
 
-    @PostMapping("/{id}/reject")
+    @PostMapping({"/admin/workshops/{id}/reject", "/h5/coach/platform/workshops/{id}/reject"})
     public ApiResponse<WorkshopAdminItem> reject(@PathVariable Long id) {
         return ApiResponse.ok(service.reject(CurrentUser.getId(), id));
     }

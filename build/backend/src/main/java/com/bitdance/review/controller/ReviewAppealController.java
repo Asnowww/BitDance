@@ -47,6 +47,15 @@ public class ReviewAppealController {
         return ApiResponse.ok(service.listByStatus(status, page, pageSize));
     }
 
+    @GetMapping("/h5/coach/platform/review-appeals")
+    public ApiResponse<Page<ReviewAppealDto>> platformListByStatus(
+        @RequestParam(required = false) String status,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.ok(service.listByStatus(status, page, pageSize));
+    }
+
     @PostMapping("/admin/review-appeals/{id}/approve")
     public ApiResponse<ReviewAppealDto> approve(
         @PathVariable Long id,
@@ -55,8 +64,24 @@ public class ReviewAppealController {
         return ApiResponse.ok(service.approve(CurrentUser.getId(), id, body));
     }
 
+    @PostMapping("/h5/coach/platform/review-appeals/{id}/approve")
+    public ApiResponse<ReviewAppealDto> platformApprove(
+        @PathVariable Long id,
+        @Valid @RequestBody(required = false) HandleAppealRequest body
+    ) {
+        return ApiResponse.ok(service.approve(CurrentUser.getId(), id, body));
+    }
+
     @PostMapping("/admin/review-appeals/{id}/reject")
     public ApiResponse<ReviewAppealDto> reject(
+        @PathVariable Long id,
+        @Valid @RequestBody(required = false) HandleAppealRequest body
+    ) {
+        return ApiResponse.ok(service.reject(CurrentUser.getId(), id, body));
+    }
+
+    @PostMapping("/h5/coach/platform/review-appeals/{id}/reject")
+    public ApiResponse<ReviewAppealDto> platformReject(
         @PathVariable Long id,
         @Valid @RequestBody(required = false) HandleAppealRequest body
     ) {

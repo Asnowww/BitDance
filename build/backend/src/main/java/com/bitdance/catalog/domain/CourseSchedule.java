@@ -54,4 +54,14 @@ public class CourseSchedule {
     public Integer getCapacity() { return capacity; }
     public Integer getBookedCount() { return bookedCount; }
     public String getStatus() { return status; }
+
+    public void setCourseId(Long v) { this.courseId = v; }
+    public void setStudioId(Long v) { this.studioId = v; }
+    public void setCoachId(Long v) { this.coachId = v; }
+    public void setClassroomName(String v) { this.classroomName = v; }
+    public void setStartAt(OffsetDateTime v) { this.startAt = v; }
+    public void setEndAt(OffsetDateTime v) { this.endAt = v; }
+    public void setCapacity(Integer v) { this.capacity = v; }
+    public void setBookedCount(Integer v) { this.bookedCount = v; }
+    public void setStatus(String v) { this.status = v; }
 }

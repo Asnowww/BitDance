@@ -39,6 +39,9 @@ public class Coach {
     @Column(name = "certification_status", nullable = false, length = 16)
     private String certificationStatus;
 
+    @Column(name = "coach_type", nullable = false, length = 16)
+    private String coachType = "freelance";
+
     @Column(name = "home_studio_id")
     private Long homeStudioId;
 
@@ -60,6 +63,8 @@ public class Coach {
     public String getAvailableTimeSlots() { return availableTimeSlots; }
     public String getCertificationStatus() { return certificationStatus; }
     public void setCertificationStatus(String v) { this.certificationStatus = v; }
+    public String getCoachType() { return coachType; }
+    public void setCoachType(String v) { this.coachType = v; }
     public Long getHomeStudioId() { return homeStudioId; }
     public void setHomeStudioId(Long v) { this.homeStudioId = v; }
     public Long getCoverAssetId() { return coverAssetId; }

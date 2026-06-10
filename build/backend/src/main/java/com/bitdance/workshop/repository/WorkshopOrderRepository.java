@@ -18,6 +18,12 @@ public interface WorkshopOrderRepository extends JpaRepository<WorkshopOrder, Lo
 
     List<WorkshopOrder> findByUserIdOrderByIdDesc(Long userId);
 
+    List<WorkshopOrder> findByPaidAtBetween(OffsetDateTime from, OffsetDateTime to);
+
+    List<WorkshopOrder> findByWorkshopIdInOrderByIdDesc(List<Long> workshopIds);
+
+    List<WorkshopOrder> findByWorkshopIdInAndOrderStatusOrderByIdDesc(List<Long> workshopIds, String orderStatus);
+
     /** 用于 unpaid 自动关单定时任务：扫描超过指定时间未支付的订单。 */
     List<WorkshopOrder> findByOrderStatusAndCreatedAtBefore(
         String orderStatus, OffsetDateTime before

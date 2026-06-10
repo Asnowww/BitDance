@@ -4,12 +4,15 @@ import com.bitdance.common.exception.BizException;
 import com.bitdance.merchant.service.CoachRelationService;
 import com.bitdance.merchant.service.MerchantAccessGuard;
 import com.bitdance.workshop.domain.Workshop;
+import com.bitdance.workshop.domain.WorkshopOrder;
 import com.bitdance.workshop.domain.WorkshopSession;
 import com.bitdance.workshop.dto.CreateSessionRequest;
 import com.bitdance.workshop.dto.CreateWorkshopRequest;
+import com.bitdance.workshop.dto.OrderDto;
 import com.bitdance.workshop.dto.SessionDto;
 import com.bitdance.workshop.dto.WorkshopDetail;
 import com.bitdance.workshop.repository.WorkshopRepository;
+import com.bitdance.workshop.repository.WorkshopOrderRepository;
 import com.bitdance.workshop.repository.WorkshopSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,17 +24,20 @@ public class MerchantWorkshopService {
 
     private final WorkshopRepository workshopRepo;
     private final WorkshopSessionRepository sessionRepo;
+    private final WorkshopOrderRepository orderRepo;
     private final MerchantAccessGuard guard;
     private final CoachRelationService coachRelationService;
 
     public MerchantWorkshopService(
         WorkshopRepository workshopRepo,
         WorkshopSessionRepository sessionRepo,
+        WorkshopOrderRepository orderRepo,
         MerchantAccessGuard guard,
         CoachRelationService coachRelationService
     ) {
         this.workshopRepo = workshopRepo;
         this.sessionRepo = sessionRepo;
+        this.orderRepo = orderRepo;
         this.guard = guard;
         this.coachRelationService = coachRelationService;
     }
@@ -98,6 +104,26 @@ public class MerchantWorkshopService {
     }
 
     @Transactional
+    public WorkshopDetail approve(Long actorId, Long workshopId) {
+        Workshop w = loadOwned(actorId, workshopId);
+        if (!"pending".equals(w.getAuditStatus())) {
+            throw new BizException("WORKSHOP_STATE_CONFLICT", "仅待审批 Workshop 可通过");
+        }
+        w.setAuditStatus("approved");
+        return toDetail(workshopRepo.save(w));
+    }
+
+    @Transactional
+    public WorkshopDetail reject(Long actorId, Long workshopId) {
+        Workshop w = loadOwned(actorId, workshopId);
+        if (!"pending".equals(w.getAuditStatus())) {
+            throw new BizException("WORKSHOP_STATE_CONFLICT", "仅待审批 Workshop 可拒绝");
+        }
+        w.setAuditStatus("rejected");
+        return toDetail(workshopRepo.save(w));
+    }
+
+    @Transactional
     public SessionDto addSession(Long actorId, CreateSessionRequest req) {
         Workshop w = loadOwned(actorId, req.workshopId());
         if (!req.endAt().isAfter(req.startAt())) {
@@ -109,14 +135,36 @@ public class MerchantWorkshopService {
         s.setStartAt(req.startAt());
         s.setEndAt(req.endAt());
         s.setCapacity(req.capacity());
+        s.setPriceAmount(req.priceAmount());
         s.setSessionStatus("scheduled");
         WorkshopSession saved = sessionRepo.save(s);
         return new SessionDto(
             saved.getId(), saved.getWorkshopId(), saved.getSessionName(),
             saved.getStartAt(), saved.getEndAt(),
-            saved.getCapacity(), saved.getSoldCount(), saved.getCheckinCount(),
+            saved.getCapacity(), saved.getPriceAmount(),
+            saved.getSoldCount(), saved.getCheckinCount(),
             saved.getSessionStatus()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkshopDetail> list(Long actorId, Long studioId) {
+        guard.requireStudioOwnership(actorId, studioId);
+        return workshopRepo.findByStudioIdOrderByIdDesc(studioId).stream()
+            .map(this::toDetail)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDto> orders(Long actorId, Long studioId, String status) {
+        guard.requireStudioOwnership(actorId, studioId);
+        List<Long> ids = workshopRepo.findByStudioIdOrderByIdDesc(studioId)
+            .stream().map(Workshop::getId).toList();
+        if (ids.isEmpty()) return List.of();
+        List<WorkshopOrder> orders = status == null || status.isBlank()
+            ? orderRepo.findByWorkshopIdInOrderByIdDesc(ids)
+            : orderRepo.findByWorkshopIdInAndOrderStatusOrderByIdDesc(ids, status);
+        return orders.stream().map(this::toOrderDto).toList();
     }
 
     private Workshop loadOwned(Long actorId, Long workshopId) {
@@ -131,7 +179,7 @@ public class MerchantWorkshopService {
             .map(s -> new SessionDto(
                 s.getId(), s.getWorkshopId(), s.getSessionName(),
                 s.getStartAt(), s.getEndAt(),
-                s.getCapacity(), s.getSoldCount(), s.getCheckinCount(),
+                s.getCapacity(), s.getPriceAmount(), s.getSoldCount(), s.getCheckinCount(),
                 s.getSessionStatus()
             ))
             .toList();
@@ -142,6 +190,15 @@ public class MerchantWorkshopService {
             w.getMinPeople(), w.getMaxPeople(), w.getSignupDeadline(),
             w.getPublishStatus(), w.getAuditStatus(),
             sessions, false
+        );
+    }
+
+    private OrderDto toOrderDto(WorkshopOrder o) {
+        return new OrderDto(
+            o.getId(), o.getOrderNo(), o.getWorkshopId(), o.getWorkshopSessionId(),
+            o.getUserId(), o.getAmountPayable(), o.getAmountPaid(),
+            o.getOrderStatus(), o.getPaymentTxnNo(), null,
+            o.getPaidAt(), o.getCanceledAt(), o.getRefundedAt(), o.getCreatedAt()
         );
     }
 }

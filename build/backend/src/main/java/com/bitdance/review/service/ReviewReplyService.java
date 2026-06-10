@@ -1,9 +1,15 @@
 package com.bitdance.review.service;
 
 import com.bitdance.common.exception.BizException;
+import com.bitdance.catalog.domain.Course;
+import com.bitdance.catalog.repository.CourseRepository;
+import com.bitdance.merchant.domain.StudioCoachRelation;
+import com.bitdance.merchant.repository.StudioCoachRelationRepository;
+import com.bitdance.merchant.service.MerchantAccessGuard;
 import com.bitdance.review.domain.Review;
 import com.bitdance.review.domain.ReviewReply;
 import com.bitdance.review.dto.CreateReplyRequest;
+import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewReplyDto;
 import com.bitdance.review.repository.ReviewReplyRepository;
 import com.bitdance.review.repository.ReviewRepository;
@@ -17,10 +23,22 @@ public class ReviewReplyService {
 
     private final ReviewReplyRepository replyRepo;
     private final ReviewRepository reviewRepo;
+    private final CourseRepository courseRepo;
+    private final StudioCoachRelationRepository relationRepo;
+    private final MerchantAccessGuard merchantGuard;
 
-    public ReviewReplyService(ReviewReplyRepository replyRepo, ReviewRepository reviewRepo) {
+    public ReviewReplyService(
+        ReviewReplyRepository replyRepo,
+        ReviewRepository reviewRepo,
+        CourseRepository courseRepo,
+        StudioCoachRelationRepository relationRepo,
+        MerchantAccessGuard merchantGuard
+    ) {
         this.replyRepo = replyRepo;
         this.reviewRepo = reviewRepo;
+        this.courseRepo = courseRepo;
+        this.relationRepo = relationRepo;
+        this.merchantGuard = merchantGuard;
     }
 
     @Transactional
@@ -59,10 +77,46 @@ public class ReviewReplyService {
             .map(this::toDto).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ReviewDto> pendingMerchantReviews(Long actorId, Long studioId) {
+        merchantGuard.requireStudioOwnership(actorId, studioId);
+        List<Long> courseIds = courseRepo.findByStudioIdOrderByIdDesc(studioId)
+            .stream().map(Course::getId).toList();
+        List<Long> coachIds = relationRepo.findByStudioIdOrderByIdDesc(studioId)
+            .stream()
+            .filter(r -> "active".equals(r.getRelationStatus()))
+            .map(StudioCoachRelation::getCoachId)
+            .toList();
+        List<Review> reviews = new java.util.ArrayList<>();
+        reviews.addAll(reviewRepo.findPublishedFor("studio", studioId));
+        if (!courseIds.isEmpty()) {
+            reviews.addAll(reviewRepo.findByTargetTypeAndTargetIdInAndReviewStatusOrderByPublishedAtDesc(
+                "course", courseIds, "published"));
+        }
+        if (!coachIds.isEmpty()) {
+            reviews.addAll(reviewRepo.findByTargetTypeAndTargetIdInAndReviewStatusOrderByPublishedAtDesc(
+                "coach", coachIds, "published"));
+        }
+        return reviews.stream()
+            .filter(r -> replyRepo.findByReviewIdOrderByIdAsc(r.getId()).isEmpty())
+            .map(this::toReviewDto)
+            .toList();
+    }
+
     private ReviewReplyDto toDto(ReviewReply r) {
         return new ReviewReplyDto(
             r.getId(), r.getReviewId(), r.getReplierUserId(),
             r.getReplyContent(), r.getIsOfficial(), r.getCreatedAt()
+        );
+    }
+
+    private ReviewDto toReviewDto(Review r) {
+        return new ReviewDto(
+            r.getId(), r.getUserId(), r.getTargetType(), r.getTargetId(),
+            r.getOverallScore(), r.getContentText(), r.getIsVerified(),
+            r.getVerifiedSourceType(), r.getWeightFactor(), r.getReviewStatus(),
+            r.getRiskLevel(), r.getHelpfulCount(), r.getIsPinned(),
+            r.getPublishedAt(), List.of()
         );
     }
 }

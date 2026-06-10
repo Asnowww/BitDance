@@ -6,8 +6,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Entity
@@ -33,6 +33,9 @@ public class WorkshopSession {
     @Column(name = "capacity", nullable = false)
     private Integer capacity;
 
+    @Column(name = "price_amount", precision = 10, scale = 2)
+    private BigDecimal priceAmount;
+
     @Column(name = "sold_count", nullable = false)
     private Integer soldCount = 0;
 
@@ -53,6 +56,8 @@ public class WorkshopSession {
     public void setEndAt(OffsetDateTime v) { this.endAt = v; }
     public Integer getCapacity() { return capacity; }
     public void setCapacity(Integer v) { this.capacity = v; }
+    public BigDecimal getPriceAmount() { return priceAmount; }
+    public void setPriceAmount(BigDecimal v) { this.priceAmount = v; }
     public Integer getSoldCount() { return soldCount; }
     public Integer getCheckinCount() { return checkinCount; }
     public String getSessionStatus() { return sessionStatus; }

@@ -3,6 +3,7 @@ package com.bitdance.review.controller;
 import com.bitdance.common.web.ApiResponse;
 import com.bitdance.iam.security.CurrentUser;
 import com.bitdance.review.dto.CreateReplyRequest;
+import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewReplyDto;
 import com.bitdance.review.service.ReviewReplyService;
 import jakarta.validation.Valid;
@@ -47,5 +48,10 @@ public class ReviewReplyController {
     @GetMapping("/h5/review-replies/mine")
     public ApiResponse<List<ReviewReplyDto>> mine() {
         return ApiResponse.ok(service.mine(CurrentUser.getId()));
+    }
+
+    @GetMapping("/merchant/reviews/pending-reply")
+    public ApiResponse<List<ReviewDto>> pendingMerchantReviews(@RequestParam Long studioId) {
+        return ApiResponse.ok(service.pendingMerchantReviews(CurrentUser.getId(), studioId));
     }
 }

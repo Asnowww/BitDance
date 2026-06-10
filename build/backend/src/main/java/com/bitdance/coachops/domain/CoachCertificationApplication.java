@@ -23,6 +23,9 @@ public class CoachCertificationApplication {
     @Column(name = "application_type", nullable = false, length = 32)
     private String applicationType = "independent";
 
+    @Column(name = "coach_type", nullable = false, length = 16)
+    private String coachType = "freelance";
+
     @Column(name = "application_status", nullable = false, length = 16)
     private String applicationStatus = "pending";
 
@@ -46,6 +49,8 @@ public class CoachCertificationApplication {
     public void setUserId(Long v) { this.userId = v; }
     public String getApplicationType() { return applicationType; }
     public void setApplicationType(String v) { this.applicationType = v; }
+    public String getCoachType() { return coachType; }
+    public void setCoachType(String v) { this.coachType = v; }
     public String getApplicationStatus() { return applicationStatus; }
     public void setApplicationStatus(String v) { this.applicationStatus = v; }
     public String getRemark() { return remark; }

@@ -41,4 +41,8 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         @Param("targetType") String targetType,
         @Param("targetId") Long targetId
     );
+
+    List<Review> findByTargetTypeAndTargetIdInAndReviewStatusOrderByPublishedAtDesc(
+        String targetType, List<Long> targetIds, String reviewStatus
+    );
 }
