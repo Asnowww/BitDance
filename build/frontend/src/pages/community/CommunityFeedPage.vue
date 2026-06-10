@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { ChevronLeft, SquarePen, MapPin, Heart, MessageCircle, Share2, Hash, Users } from 'lucide-vue-next';
+import CommunityMediaGallery from '@/components/community/CommunityMediaGallery.vue';
 import {
   fetchFeed,
   fetchMyFolloweeIds,
@@ -203,23 +204,7 @@ watch(
           </button>
         </header>
         <p class="post__text">{{ p.text }}</p>
-        <div v-if="p.mediaAssets.length" class="post__media">
-          <video
-            v-if="p.hasVideo && p.mediaAssets[0]"
-            :src="p.mediaAssets[0].url"
-            muted
-            playsinline
-            preload="metadata"
-          />
-          <template v-else>
-            <img
-              v-for="image in p.mediaAssets.filter((item) => item.mediaType === 'image').slice(0, 4)"
-              :key="image.id"
-              :src="image.url"
-              :alt="image.originalFilename || '动态图片'"
-            />
-          </template>
-        </div>
+        <CommunityMediaGallery v-if="p.mediaAssets.length" :assets="p.mediaAssets" />
         <div class="post__anchor">
           <MapPin :size="14" :stroke-width="2" />
           <span>{{ p.topics.map((topic) => `#${topic}`).join(' ') || p.location || '同城动态' }}</span>
@@ -388,28 +373,6 @@ watch(
   }
 
   &__text { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
-  &__media {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
-    overflow: hidden;
-    min-height: 160px;
-    border-radius: 14px;
-    background: $pen-soft;
-
-    img,
-    video {
-      width: 100%;
-      height: 100%;
-      min-height: 160px;
-      object-fit: cover;
-    }
-
-    video {
-      grid-column: 1 / -1;
-    }
-  }
-
   &__anchor {
     align-self: flex-start;
     display: inline-flex;
