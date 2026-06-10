@@ -165,8 +165,10 @@ export const useUserStore = defineStore('user', () => {
     token.value = '';
     profile.value = null;
     detail.value = null;
+    activeRole.value = 'user';
     clearToken();
     localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(ROLE_KEY);
   };
 
   return {

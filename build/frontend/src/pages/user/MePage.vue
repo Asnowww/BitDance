@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { Bell, CalendarDays, Heart, PackageCheck, Shield, Star, UserRound } from 'lucide-vue-next';
-import { showToast } from 'vant';
+import {
+  Bell,
+  CalendarDays,
+  Heart,
+  LogOut,
+  PackageCheck,
+  RefreshCw,
+  Shield,
+  Star,
+  UserRound
+} from 'lucide-vue-next';
+import { showConfirmDialog, showSuccessToast, showToast } from 'vant';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
@@ -52,6 +62,37 @@ const goWorkbench = (item: { path: string; enabled: boolean }) => {
   router.push(item.path);
 };
 
+const switchAccount = async () => {
+  try {
+    await showConfirmDialog({
+      title: '切换账号',
+      message: '将退出当前账号并返回登录页。',
+      confirmButtonText: '切换',
+      cancelButtonText: '取消'
+    });
+    user.logout();
+    router.replace({ path: '/login', query: { redirect: '/me' } });
+  } catch {
+    // User canceled.
+  }
+};
+
+const logout = async () => {
+  try {
+    await showConfirmDialog({
+      title: '退出登录',
+      message: '退出后仍可浏览公开内容，需要账号的功能会要求重新登录。',
+      confirmButtonText: '退出',
+      cancelButtonText: '取消'
+    });
+    user.logout();
+    showSuccessToast('已退出登录');
+    router.replace('/home');
+  } catch {
+    // User canceled.
+  }
+};
+
 onMounted(() => {
   user.refreshProfile();
 });
@@ -93,6 +134,17 @@ onMounted(() => {
         >
           <component :is="item.icon" :size="22" :stroke-width="2" />
           <span>{{ item.label }}</span>
+        </button>
+      </section>
+
+      <section class="account-actions" aria-label="账号操作">
+        <button class="account-action" type="button" @click="switchAccount">
+          <RefreshCw :size="20" :stroke-width="2" />
+          <span>切换账号</span>
+        </button>
+        <button class="account-action account-action--danger" type="button" @click="logout">
+          <LogOut :size="20" :stroke-width="2" />
+          <span>退出登录</span>
         </button>
       </section>
 
@@ -273,6 +325,37 @@ onMounted(() => {
     font-size: 12px;
     line-height: 1.2;
     font-weight: 900;
+  }
+}
+
+.account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-action {
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  background: var(--canvas);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 900;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  span {
+    min-width: 0;
+  }
+
+  &--danger {
+    color: #b42318;
   }
 }
 
