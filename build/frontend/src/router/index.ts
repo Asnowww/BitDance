@@ -308,6 +308,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '经营看板', requiresAuth: true }
   },
   {
+    path: '/admin/reports',
+    name: 'admin-reports',
+    component: () => import('@/pages/admin/ReportTicketsPage.vue'),
+    meta: { title: '举报后台', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue'),

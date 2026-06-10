@@ -4,8 +4,6 @@ import com.bitdance.admin.dto.HandleReportRequest;
 import com.bitdance.admin.dto.ReportTicketDto;
 import com.bitdance.audit.aspect.AuditAction;
 import com.bitdance.common.exception.BizException;
-import com.bitdance.community.domain.ContentComment;
-import com.bitdance.community.domain.ContentPost;
 import com.bitdance.community.domain.ReportTicket;
 import com.bitdance.community.repository.ContentCommentRepository;
 import com.bitdance.community.repository.ContentPostRepository;
@@ -53,6 +51,7 @@ public class AdminReportTicketService {
         ReportTicket t = load(ticketId);
         require(t, CAN_PROCESS);
         t.setReportStatus("processing");
+        writeHandledBy(t, adminId);
         return toDto(repo.save(t));
     }
 
@@ -62,8 +61,8 @@ public class AdminReportTicketService {
         ReportTicket t = load(ticketId);
         require(t, CAN_CLOSE_REJECT);
         t.setReportStatus("closed");
-        if (req != null) writeHandleResult(t, req.handleResult());
-        // 联动：目标置 hidden
+        writeHandleResult(t, req);
+        writeHandledBy(t, adminId);
         hideTarget(t.getTargetType(), t.getTargetId());
         return toDto(repo.save(t));
     }
@@ -74,7 +73,8 @@ public class AdminReportTicketService {
         ReportTicket t = load(ticketId);
         require(t, CAN_CLOSE_REJECT);
         t.setReportStatus("rejected");
-        if (req != null) writeHandleResult(t, req.handleResult());
+        writeHandleResult(t, req);
+        writeHandledBy(t, adminId);
         return toDto(repo.save(t));
     }
 
@@ -94,15 +94,17 @@ public class AdminReportTicketService {
                 }
             });
         }
-        // 其他 targetType（review/practice_post/app_user/workshop/studio/coach）：MVP 仅记录工单，
-        // 真要 hide 需要对应 service 暴露写接口，留 BE-015 与各业务侧统一审计联动一起做。
     }
 
-    private void writeHandleResult(ReportTicket t, String result) {
-        // schema 字段 handle_result text；entity 没有 setter，本期通过 native 反射写入或暂存为日志。
-        // 简化：用一个 @Modifying native query 写。为避免引入更多代码，本期把 handleResult 通过
-        // service 内的 String 字段绕过，前端在工单详情里仍可看到 handled_by + handled_at 与 status。
-        // 真正写入 handle_result 留 BE-015 时一起补 setter（最小改动 BE-011 实体）。
+    private void writeHandleResult(ReportTicket t, HandleReportRequest req) {
+        if (req != null && req.handleResult() != null && !req.handleResult().isBlank()) {
+            t.setHandleResult(req.handleResult().trim());
+        }
+    }
+
+    private void writeHandledBy(ReportTicket t, Long adminId) {
+        t.setHandledByUserId(adminId);
+        t.setHandledAt(OffsetDateTime.now());
     }
 
     private ReportTicket load(Long id) {
@@ -122,7 +124,7 @@ public class AdminReportTicketService {
             t.getId(), t.getReporterUserId(),
             t.getTargetType(), t.getTargetId(),
             t.getReasonCode(), t.getReasonDetail(),
-            t.getReportStatus(), null, null, null,
+            t.getReportStatus(), t.getHandledByUserId(), t.getHandledAt(), t.getHandleResult(),
             t.getCreatedAt()
         );
     }

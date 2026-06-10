@@ -1,23 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import {
-  Bell,
-  CalendarDays,
-  Heart,
-  PackageCheck,
-  Shield,
-  Star,
-  UserRound
-} from 'lucide-vue-next';
+import { Bell, CalendarDays, Heart, PackageCheck, Shield, Star, UserRound } from 'lucide-vue-next';
 import { showToast } from 'vant';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
 const user = useUserStore();
 
-const profileName = computed(() => user.profile?.nickname || '顾同学');
-const profileMeta = computed(() => '普通用户 · Jazz 初级 · 连续打卡 12 天');
+const profileName = computed(() => user.profile?.nickname || 'BitDance 用户');
+const profileMeta = computed(() => {
+  const level = user.detail?.currentLevel || '未设置水平';
+  const goal = user.detail?.learningGoal || '未设置目标';
+  return `${(user.profile?.roles ?? ['USER']).join(' / ')} · ${level} · ${goal}`;
+});
 
 const quickActions = [
   { label: '订单', icon: PackageCheck, path: '/me/workshop-orders' },
@@ -28,11 +24,11 @@ const quickActions = [
   { label: '隐私', icon: Shield, path: '/me/privacy' }
 ];
 
-const workbench = [
-  { title: '申请成为教练', status: '待认证', path: '/me/coach-home' },
-  { title: '申请舞室管理员', status: '待认证', path: '/coach/appeal' },
-  { title: '平台管理员入口', status: '待认证', path: '' }
-];
+const workbench = computed(() => [
+  { title: '教练主页运营', status: user.isCoach ? '已开通' : '未认证', path: '/me/coach-home', enabled: user.isCoach },
+  { title: '舞室管理员入口', status: user.isStudioAdmin ? '已开通' : '未认证', path: '/coach/dashboard', enabled: user.isStudioAdmin },
+  { title: '平台举报后台', status: user.isPlatformAdmin ? '已开通' : '未开通', path: '/admin/reports', enabled: user.isPlatformAdmin }
+]);
 
 const goProfileHome = () => {
   router.push('/me/home');
@@ -40,17 +36,25 @@ const goProfileHome = () => {
 
 const switchRole = () => {
   const next = user.activeRole === 'coach' ? 'user' : 'coach';
-  user.switchRole(next);
+  const ok = user.switchRole(next);
+  if (!ok) {
+    showToast('当前账号没有教练角色，请先完成教练认证');
+    return;
+  }
   showToast(next === 'coach' ? '已切换为教练视角' : '已切换为用户视角');
 };
 
-const goWorkbench = (path: string) => {
-  if (!path) {
-    showToast('管理员入口待开放');
+const goWorkbench = (item: { path: string; enabled: boolean }) => {
+  if (!item.enabled || !item.path) {
+    showToast('该角色尚未开通');
     return;
   }
-  router.push(path);
+  router.push(item.path);
 };
+
+onMounted(() => {
+  user.refreshProfile();
+});
 </script>
 
 <template>
@@ -74,7 +78,9 @@ const goWorkbench = (path: string) => {
           <strong>{{ profileName }}</strong>
           <em>{{ profileMeta }}</em>
         </span>
-        <button class="profile-card__switch" type="button" @click="switchRole">切换角色</button>
+        <button class="profile-card__switch" type="button" @click="switchRole">
+          {{ user.activeRole === 'coach' ? '用户视角' : '教练视角' }}
+        </button>
       </section>
 
       <section class="quick-grid" aria-label="快捷入口">
@@ -93,7 +99,7 @@ const goWorkbench = (path: string) => {
       <section class="workbench" aria-labelledby="workbench-title">
         <div class="section-title">
           <h2 id="workbench-title">角色工作台</h2>
-          <span>已隐藏</span>
+          <span>来自后端 roles</span>
         </div>
 
         <button
@@ -101,7 +107,7 @@ const goWorkbench = (path: string) => {
           :key="item.title"
           class="workbench-row"
           type="button"
-          @click="goWorkbench(item.path)"
+          @click="goWorkbench(item)"
         >
           <span>{{ item.title }}</span>
           <em>{{ item.status }} &gt;</em>

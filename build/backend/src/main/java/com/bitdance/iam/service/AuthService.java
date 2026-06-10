@@ -59,6 +59,17 @@ public class AuthService {
         return issueFor(user);
     }
 
+    @Transactional
+    public LoginResponse loginWithWechat(String code) {
+        if (!code.startsWith("dev_mock_")) {
+            throw new BizException("WECHAT_NOT_CONFIGURED", "微信开放平台未配置，请使用开发模拟授权或手机号登录");
+        }
+        String openId = "wx_" + code;
+        AppUser user = userRepo.findByOpenId(openId)
+            .orElseGet(() -> bindMockWechatAccount(openId));
+        return issueFor(user);
+    }
+
     /** 仅供开发环境播种测试账号使用：存在则补密码，不存在则建号并绑定 USER 角色。 */
     @Transactional
     public AppUser ensureAccount(String phone, String rawPassword) {
@@ -85,6 +96,14 @@ public class AuthService {
         bind.setStatus("ACTIVE");
         roleRepo.save(bind);
         return saved;
+    }
+
+    private AppUser bindMockWechatAccount(String openId) {
+        AppUser user = userRepo.findByPhone("13900000005")
+            .orElseThrow(() -> new BizException("WECHAT_DEV_USER_MISSING", "开发微信模拟账号不存在"));
+        user.setOpenId(openId);
+        user.setUnionId("union_" + openId);
+        return userRepo.save(user);
     }
 
     private LoginResponse issueFor(AppUser user) {

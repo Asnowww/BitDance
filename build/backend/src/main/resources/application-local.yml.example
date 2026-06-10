@@ -14,3 +14,40 @@ bitdance:
     secret: REPLACE_WITH_32_BYTE_RANDOM_STRING
   sms:
     mock: true
+    provider: aliyun
+    storage: memory
+    fixed-code: "123456"
+    cooldown-seconds: 60
+    ttl-minutes: 5
+    aliyun:
+      endpoint: dysmsapi.aliyuncs.com
+      access-key-id: REPLACE_ME
+      access-key-secret: REPLACE_ME
+      sign-name: REPLACE_ME
+      template-code: REPLACE_ME
+      template-param-name: code
+      template-min-param-name: min
+      connect-timeout-ms: 5000
+      read-timeout-ms: 10000
+    aliyun-pnvs:
+      endpoint: dypnsapi.aliyuncs.com
+      access-key-id: REPLACE_ME
+      access-key-secret: REPLACE_ME
+      sign-name: 速通互联验证码
+      template-code: "100001"
+      template-param-name: code
+      template-min-param-name: min
+      code-placeholder: "##code##"
+      country-code: "86"
+      code-length: 6
+      code-type: 1
+      case-auth-policy: 1
+      duplicate-policy: 1
+      auto-retry: 1
+      return-verify-code: false
+      scheme-name: ""
+      connect-timeout-ms: 10000
+      read-timeout-ms: 10000
+      call-timeout-ms: 15000
+      max-attempts: 2
+      retry-backoff-ms: 300

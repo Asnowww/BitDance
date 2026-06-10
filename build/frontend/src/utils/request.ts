@@ -41,7 +41,8 @@ request.interceptors.response.use(
     return Promise.reject(body);
   },
   (error) => {
-    showFailToast(error?.message || '网络异常');
+    const message = error?.response?.data?.message || error?.message || '网络异常';
+    showFailToast(message);
     return Promise.reject(error);
   }
 );

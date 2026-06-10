@@ -1,16 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import {
-  BookOpen,
-  ChevronLeft,
-  MessageCircle,
-  Music2,
-  Share2,
-  ShieldCheck,
-  User,
-  UserPlus
-} from 'lucide-vue-next';
+import { ChevronLeft, ExternalLink, MessageCircle, Share2, ShieldCheck, User, UserPlus } from 'lucide-vue-next';
+import { fetchPublicSocialAccounts } from '@/api/social';
+import type { SocialAccount } from '@/api/social';
 import { fetchUserPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
 import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
 
@@ -19,20 +12,16 @@ const route = useRoute();
 
 type ContentTab = 'posts' | 'reviews' | 'practices';
 
-const publicSocials = [
-  { platform: '抖音', account: '@urban_lili', icon: Music2, dark: true },
-  { platform: '小红书', account: '小李练舞日记', icon: BookOpen, dark: false }
-];
-
 const activeTab = ref<ContentTab>('posts');
 const posts = ref<UserContentPost[]>([]);
 const reviews = ref<UserReviewItem[]>([]);
 const practices = ref<UserPracticePost[]>([]);
+const socials = ref<SocialAccount[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
 const loading = ref(false);
 
-const userId = computed(() => Number(route.params.id || 1));
-const displayName = computed(() => (userId.value === 1 ? '小李' : `用户 ${userId.value}`));
+const userId = computed(() => Number(route.params.id || 0));
+const displayName = computed(() => `用户 ${userId.value || '-'}`);
 
 const topicLabel = (topic: string | { name?: string; topicName?: string }) =>
   typeof topic === 'string' ? topic : topic.topicName || topic.name || '话题';
@@ -51,21 +40,27 @@ const practiceMeta = (item: UserPracticePost) => {
 };
 
 const loadHomeData = async () => {
+  if (!userId.value) return;
   loading.value = true;
   try {
-    const [postResp, reviewResp, practiceResp] = await Promise.all([
+    socials.value = await fetchPublicSocialAccounts(userId.value);
+    const [postResp, reviewResp, practiceResp] = await Promise.allSettled([
       fetchUserPosts(userId.value, 1, 20),
       fetchUserReviews(userId.value, 1, 20),
       fetchUserPractices(userId.value)
     ]);
-    posts.value = postResp.list ?? [];
-    reviews.value = reviewResp.list ?? [];
-    practices.value = practiceResp ?? [];
-    totals.value = {
-      posts: postResp.total ?? posts.value.length,
-      reviews: reviewResp.total ?? reviews.value.length,
-      practices: practices.value.length
-    };
+    if (postResp.status === 'fulfilled') {
+      posts.value = postResp.value.list ?? [];
+      totals.value.posts = postResp.value.total ?? posts.value.length;
+    }
+    if (reviewResp.status === 'fulfilled') {
+      reviews.value = reviewResp.value.list ?? [];
+      totals.value.reviews = reviewResp.value.total ?? reviews.value.length;
+    }
+    if (practiceResp.status === 'fulfilled') {
+      practices.value = practiceResp.value ?? [];
+      totals.value.practices = practices.value.length;
+    }
   } finally {
     loading.value = false;
   }
@@ -95,11 +90,11 @@ watch(userId, loadHomeData);
           </div>
           <div class="hero-card__copy">
             <h2>{{ displayName }}</h2>
-            <p>@bitdance_lili · 零基础韩舞爱好者 · 北京海淀</p>
+            <p>公开主页只展示对方允许公开的内容和社交账号。</p>
             <div class="chips">
-              <span class="chip chip--active">韩舞</span>
-              <span class="chip">周末约练</span>
-              <span class="chip">Urban</span>
+              <span class="chip chip--active">公开内容</span>
+              <span class="chip">动态 {{ totals.posts }}</span>
+              <span class="chip">评价 {{ totals.reviews }}</span>
             </div>
           </div>
         </div>
@@ -117,21 +112,21 @@ watch(userId, loadHomeData);
 
       <section class="section">
         <h2>公开社交账号</h2>
-        <article v-for="item in publicSocials" :key="item.platform" class="social-row">
-          <span class="social-row__icon" :class="{ 'social-row__icon--dark': item.dark }">
-            <component :is="item.icon" :size="23" />
-          </span>
-          <span class="social-row__copy">
+        <article v-for="item in socials" :key="item.id" class="social-card">
+          <span>
             <strong>{{ item.platform }}</strong>
-            <em>{{ item.account }}</em>
+            <em>{{ item.accountName }}</em>
           </span>
-          <span class="state state--active">公开</span>
+          <a v-if="item.profileUrl" :href="item.profileUrl" target="_blank" rel="noreferrer" aria-label="打开社交账号">
+            <ExternalLink :size="18" />
+          </a>
         </article>
+        <p v-if="!socials.length" class="empty-state">对方暂未公开社交账号</p>
       </section>
 
       <section class="notice">
         <ShieldCheck :size="20" />
-        <span>对方未公开或未绑定的账号不会在此显示</span>
+        <span>对方未公开或未绑定的账号不会在这里显示。</span>
       </section>
 
       <nav class="segment" aria-label="主页内容筛选">
@@ -147,7 +142,7 @@ watch(userId, loadHomeData);
       </nav>
 
       <section class="content-list" aria-live="polite">
-        <p v-if="loading" class="empty-state">加载中</p>
+        <p v-if="loading" class="empty-state">加载中...</p>
         <template v-else-if="activeTab === 'posts'">
           <article v-for="item in posts" :key="item.id" class="content-card">
             <h3>最近动态</h3>
@@ -325,6 +320,57 @@ watch(userId, loadHomeData);
   }
 }
 
+.social-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 12px;
+  border: 1px solid $pen-hairline;
+  border-radius: 14px;
+  background: $pen-canvas;
+
+  span {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  strong,
+  em {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    font-size: 14px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  em {
+    color: $pen-mute;
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+
+  a {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    place-items: center;
+  }
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -333,7 +379,6 @@ watch(userId, loadHomeData);
 }
 
 .chip,
-.state,
 .segment__item {
   display: inline-flex;
   align-items: center;
@@ -351,63 +396,10 @@ watch(userId, loadHomeData);
 }
 
 .chip--active,
-.state--active,
 .segment__item--active {
   border-color: $pen-ink;
   background: $pen-ink;
   color: $pen-on-primary;
-}
-
-.social-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 58px;
-  padding: 10px 12px;
-  border: 1px solid $pen-hairline;
-  border-radius: 12px;
-  background: $pen-canvas;
-
-  &__icon {
-    display: grid;
-    flex: none;
-    width: 38px;
-    height: 38px;
-    border-radius: 999px;
-    background: $pen-soft;
-    color: $pen-ink;
-    place-items: center;
-
-    &--dark {
-      background: $pen-ink;
-      color: $pen-on-primary;
-    }
-  }
-
-  &__copy {
-    min-width: 0;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 3px;
-
-    strong {
-      font-size: 14px;
-      font-weight: 900;
-      line-height: $pen-lh;
-    }
-
-    em {
-      overflow: hidden;
-      color: $pen-mute;
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 800;
-      line-height: $pen-lh;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
 }
 
 .notice {
@@ -441,6 +433,12 @@ watch(userId, loadHomeData);
   cursor: pointer;
 }
 
+.content-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .content-card {
   display: flex;
   min-height: 118px;
@@ -467,12 +465,6 @@ watch(userId, loadHomeData);
     font-weight: 800;
     line-height: 1.45;
   }
-}
-
-.content-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .empty-state {
