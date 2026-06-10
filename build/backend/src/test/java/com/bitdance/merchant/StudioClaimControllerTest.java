@@ -95,6 +95,18 @@ class StudioClaimControllerTest {
     }
 
     @Test
+    void submit_invalidClaimType_returns400() throws Exception {
+        mvc.perform(post("/h5/studio-claims")
+                .header("Authorization", "Bearer fake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new SubmitClaimRequest(
+                    1L, "bad_type", null, "我是店主"
+                ))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
     void mine_list() throws Exception {
         when(service.mine(42L)).thenReturn(List.of(fix("pending"), fix("approved")));
         mvc.perform(get("/h5/studio-claims/mine").header("Authorization", "Bearer fake"))
@@ -109,6 +121,23 @@ class StudioClaimControllerTest {
         mvc.perform(get("/admin/studio-claims").param("status", "pending"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void admin_list_invalidPage_returns400() throws Exception {
+        mvc.perform(get("/admin/studio-claims")
+                .param("status", "pending")
+                .param("page", "0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void admin_list_invalidStatus_returns400() throws Exception {
+        mvc.perform(get("/admin/studio-claims")
+                .param("status", "done"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
     }
 
     @Test

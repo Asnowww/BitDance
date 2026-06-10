@@ -70,7 +70,8 @@ class ReviewControllerTest {
                 "https://images.unsplash.com/photo-1547153760-18fc86324498?w=960&q=80&auto=format&fit=crop",
                 "review-media.jpg",
                 180000L
-            ))
+            )),
+            null
         );
     }
 
@@ -167,6 +168,26 @@ class ReviewControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.total").value(1))
             .andExpect(jsonPath("$.data.list[0].isVerified").value(true));
+    }
+
+    @Test
+    void list_invalidPage_returns400() throws Exception {
+        mvc.perform(get("/public/reviews")
+                .param("targetType", "studio")
+                .param("targetId", "1")
+                .param("page", "0"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void list_invalidSort_returns400() throws Exception {
+        mvc.perform(get("/public/reviews")
+                .param("targetType", "studio")
+                .param("targetId", "1")
+                .param("sort", "random"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
     }
 
     @Test
