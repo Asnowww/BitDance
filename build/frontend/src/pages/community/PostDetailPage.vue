@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Bookmark, ChevronLeft, ChevronRight, Ellipsis, Flag, Heart, MapPin, Pencil, Share2, Trash2, X } from 'lucide-vue-next';
+import CommunityMediaGallery from '@/components/community/CommunityMediaGallery.vue';
 import {
   createComment,
   deletePost,
@@ -313,23 +314,7 @@ onMounted(load);
         {{ post.text }}
       </p>
 
-      <div v-if="post.mediaAssets.length" class="media">
-        <video
-          v-if="post.hasVideo && post.mediaAssets[0]"
-          :src="post.mediaAssets[0].url"
-          controls
-          playsinline
-          preload="metadata"
-        />
-        <template v-else>
-          <img
-            v-for="image in post.mediaAssets.filter((item) => item.mediaType === 'image')"
-            :key="image.id"
-            :src="image.url"
-            :alt="image.originalFilename || '动态图片'"
-          />
-        </template>
-      </div>
+      <CommunityMediaGallery v-if="post.mediaAssets.length" :assets="post.mediaAssets" />
 
       <button class="anchor" type="button" @click="openMap">
         <MapPin :size="20" :stroke-width="2" />
@@ -605,28 +590,6 @@ onMounted(load);
   font-size: 15px;
   font-weight: 500;
   line-height: 1.5;
-}
-
-.media {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  overflow: hidden;
-  min-height: 190px;
-  border-radius: 14px;
-  background: $pen-soft;
-
-  img,
-  video {
-    width: 100%;
-    min-height: 190px;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  video {
-    grid-column: 1 / -1;
-  }
 }
 
 .anchor {
