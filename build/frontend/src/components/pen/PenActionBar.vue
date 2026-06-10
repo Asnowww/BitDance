@@ -1,8 +1,11 @@
 <script setup lang="ts">
+// 底部操作栏允许页面显式声明“当前还不能点”，避免出现看起来可用、实际上不该触发的伪动作。
 defineProps<{
   softLabel: string;
   darkLabel: string;
+  softDisabled?: boolean;
   darkDisabled?: boolean;
+  hideSoft?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -13,7 +16,13 @@ const emit = defineEmits<{
 
 <template>
   <footer class="pen-action-bar">
-    <button type="button" class="pen-action-bar__btn pen-action-bar__btn--soft" @click="emit('soft')">
+    <button
+      v-if="!hideSoft"
+      type="button"
+      class="pen-action-bar__btn pen-action-bar__btn--soft"
+      :disabled="softDisabled"
+      @click="emit('soft')"
+    >
       {{ softLabel }}
     </button>
     <button

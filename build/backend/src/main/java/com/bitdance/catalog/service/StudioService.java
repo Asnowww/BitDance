@@ -5,6 +5,7 @@ import com.bitdance.catalog.domain.StudioDanceStyle;
 import com.bitdance.catalog.dto.StudioCard;
 import com.bitdance.catalog.dto.StudioDetail;
 import com.bitdance.catalog.dto.StudioListResponse;
+import com.bitdance.catalog.dto.UpdateStudioLocationRequest;
 import com.bitdance.catalog.repository.StudioDanceStyleRepository;
 import com.bitdance.catalog.repository.StudioRepository;
 import com.bitdance.catalog.repository.StudioSearchRepository;
@@ -12,6 +13,7 @@ import com.bitdance.catalog.repository.StudioSearchRepository.SearchParams;
 import com.bitdance.catalog.repository.StudioSearchRepository.StudioNearbyRow;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.favorite.repository.FavoriteRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +60,7 @@ public class StudioService {
             safePage, safeSize
         );
         List<StudioNearbyRow> rows = searchRepo.searchNearby(p);
+        long total = searchRepo.countNearby(p);
 
         Set<Long> favored = currentUserId == null
             ? Set.of()
@@ -69,7 +72,26 @@ public class StudioService {
             r.coverAssetId(), r.distanceKm(), r.latitude(), r.longitude(),
             favored.contains(r.id())
         )).toList();
-        return new StudioListResponse(list, safePage, safeSize);
+        return new StudioListResponse(list, safePage, safeSize, total);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "studio:detail", allEntries = true)
+    public StudioDetail updateLocation(Long id, UpdateStudioLocationRequest req) {
+        Studio s = studioRepo.findById(id)
+            .orElseThrow(() -> new BizException("STUDIO_NOT_FOUND", "舞室不存在"));
+        // M1 腾讯地图标注：后端只保存标准经纬度，不保存地图平台密钥。
+        if (req.address() != null && !req.address().isBlank()) {
+            s.setAddress(req.address().trim());
+        }
+        if (req.transportInfo() != null) {
+            s.setTransportInfo(req.transportInfo().trim());
+        }
+        s.setLongitude(req.longitude());
+        s.setLatitude(req.latitude());
+        s.setGeoHash(null);
+        Studio saved = studioRepo.save(s);
+        return detail(saved.getId(), null);
     }
 
     @Transactional(readOnly = true)

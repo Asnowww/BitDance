@@ -22,5 +22,6 @@ declare module 'vue' {
     SkeletonCard: typeof import('./../components/SkeletonCard.vue')['default']
     StarRating: typeof import('./../components/StarRating.vue')['default']
     StudioFilterDrawer: typeof import('./../components/studio/StudioFilterDrawer.vue')['default']
+    StudioSearchEditor: typeof import('./../components/studio/StudioSearchEditor.vue')['default']
   }
 }

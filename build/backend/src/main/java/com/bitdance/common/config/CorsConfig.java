@@ -21,6 +21,8 @@ public class CorsConfig {
     public CorsFilter corsFilter() {
         CorsConfiguration cfg = new CorsConfiguration();
         List<String> origins = new ArrayList<>(Arrays.asList(allowedOrigins));
+        // 本地联调常同时出现 localhost 与 127.0.0.1；显式放行 127.0.0.1:5173，避免真实后端截图时被浏览器报 Network Error。
+        origins.add("http://127.0.0.1:5173");
         // Local Vite may fall back to 5174 when 5173 is already occupied.
         origins.add("http://localhost:5174");
         origins.add("http://127.0.0.1:5174");
