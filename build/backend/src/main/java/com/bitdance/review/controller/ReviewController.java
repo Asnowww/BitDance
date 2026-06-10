@@ -2,6 +2,7 @@ package com.bitdance.review.controller;
 
 import com.bitdance.common.web.ApiResponse;
 import com.bitdance.iam.security.CurrentUser;
+import com.bitdance.profile.service.ProfileService;
 import com.bitdance.review.dto.CreateReviewRequest;
 import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewListResponse;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @Validated
@@ -31,9 +33,11 @@ import java.util.Map;
 public class ReviewController {
 
     private final ReviewService service;
+    private final ProfileService profileService;
 
-    public ReviewController(ReviewService service) {
+    public ReviewController(ReviewService service, ProfileService profileService) {
         this.service = service;
+        this.profileService = profileService;
     }
 
     @PostMapping("/h5/reviews")
@@ -86,6 +90,9 @@ public class ReviewController {
         @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {
-        return ApiResponse.ok(service.listByUser(userId, page, pageSize));
+        if (!profileService.canViewContent(userId, CurrentUser.getIdOrNull())) {
+            return ApiResponse.ok(new ReviewListResponse(List.of(), page, pageSize, 0L));
+        }
+        return ApiResponse.ok(service.listByUserPublic(userId, page, pageSize));
     }
 }

@@ -10,6 +10,7 @@ import com.bitdance.community.dto.ReportRequest;
 import com.bitdance.community.dto.TopicDto;
 import com.bitdance.community.service.CommunityService;
 import com.bitdance.iam.security.CurrentUser;
+import com.bitdance.profile.service.ProfileService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,9 +29,11 @@ import java.util.Map;
 public class CommunityController {
 
     private final CommunityService service;
+    private final ProfileService profileService;
 
-    public CommunityController(CommunityService service) {
+    public CommunityController(CommunityService service, ProfileService profileService) {
         this.service = service;
+        this.profileService = profileService;
     }
 
     // ---------- Post ----------
@@ -78,6 +81,9 @@ public class CommunityController {
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(defaultValue = "20") int pageSize
     ) {
+        if (!profileService.canViewContent(userId, CurrentUser.getIdOrNull())) {
+            return ApiResponse.ok(new PostListResponse(List.of(), Math.max(1, page), Math.max(1, pageSize), 0L));
+        }
         return ApiResponse.ok(service.publicPostsByAuthor(
             userId, page, pageSize, CurrentUser.getIdOrNull()));
     }

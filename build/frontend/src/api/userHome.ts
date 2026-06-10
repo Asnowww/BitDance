@@ -66,6 +66,42 @@ export interface ListResponse<T> {
   total: number;
 }
 
+export interface PublicUserAccess {
+  profileVisible: boolean;
+  contentVisible: boolean;
+  practiceVisible: boolean;
+  growthVisible: boolean;
+}
+
+export interface PublicUserStyle {
+  danceStyleId?: number;
+  name?: string;
+  skillLevel?: string;
+  isPrimary?: boolean;
+}
+
+export interface PublicUserProfile {
+  userId: number;
+  nickname?: string;
+  avatarAssetId?: number;
+  bio?: string;
+  cityId?: number;
+  currentLevel?: string;
+  learningGoal?: string;
+  styles?: PublicUserStyle[];
+  access: PublicUserAccess;
+}
+
+export type PublicUserSearchResponse = ListResponse<PublicUserProfile>;
+
+export const searchPublicUsers = (q = '', page = 1, pageSize = 20) =>
+  request.get<unknown, PublicUserSearchResponse>('/public/users/search', {
+    params: { q, page, pageSize }
+  });
+
+export const fetchPublicUserProfile = (userId: number) =>
+  request.get<unknown, PublicUserProfile>(`/public/users/${userId}/profile`);
+
 export const fetchUserPosts = (userId: number, page = 1, pageSize = 10) =>
   request.get<unknown, ListResponse<UserContentPost>>(`/public/users/${userId}/community/posts`, {
     params: { page, pageSize }

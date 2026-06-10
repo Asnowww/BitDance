@@ -134,16 +134,13 @@ public class ReviewService {
             : dimRepo.findByReviewIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
         // 评价媒体按本页 reviewId 一次性取回，避免列表每条评价重复查附件。
-        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
-            mediaService.mediaForReviews(ids);
-        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
 
         List<ReviewDto> items = p.getContent().stream()
             .map(r -> toDto(
                 r,
                 byReview.getOrDefault(r.getId(), List.of()),
-                mediaByReview.getOrDefault(r.getId(), List.of()),
-                latestAppealByReview.get(r.getId())
+                List.of(),
+                null
             ))
             .toList();
 
@@ -173,6 +170,31 @@ public class ReviewService {
                 byReview.getOrDefault(r.getId(), List.of()),
                 mediaByReview.getOrDefault(r.getId(), List.of()),
                 latestAppealByReview.get(r.getId())
+            ))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewListResponse listByUserPublic(Long userId, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 50);
+        Page<Review> p = reviewRepo.findByUserIdAndReviewStatusOrderByPublishedAtDesc(
+            userId, "published", PageRequest.of(safePage - 1, safeSize));
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                List.of(),
+                null
             ))
             .toList();
 

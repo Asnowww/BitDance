@@ -4,8 +4,16 @@ import { useRoute, useRouter } from 'vue-router';
 import { ChevronLeft, ExternalLink, MessageCircle, Share2, ShieldCheck, User, UserPlus } from 'lucide-vue-next';
 import { fetchPublicSocialAccounts } from '@/api/social';
 import type { SocialAccount } from '@/api/social';
-import { fetchUserPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
-import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
+import {
+  fetchPublicUserProfile,
+  fetchUserPosts,
+  fetchUserPractices,
+  fetchUserReviews,
+  type PublicUserProfile,
+  type UserContentPost,
+  type UserPracticePost,
+  type UserReviewItem
+} from '@/api/userHome';
 
 const router = useRouter();
 const route = useRoute();
@@ -13,6 +21,7 @@ const route = useRoute();
 type ContentTab = 'posts' | 'reviews' | 'practices';
 
 const activeTab = ref<ContentTab>('posts');
+const profile = ref<PublicUserProfile>();
 const posts = ref<UserContentPost[]>([]);
 const reviews = ref<UserReviewItem[]>([]);
 const practices = ref<UserPracticePost[]>([]);
@@ -21,7 +30,19 @@ const totals = ref({ posts: 0, reviews: 0, practices: 0 });
 const loading = ref(false);
 
 const userId = computed(() => Number(route.params.id || 0));
-const displayName = computed(() => `用户 ${userId.value || '-'}`);
+const access = computed(() => profile.value?.access);
+const profileVisible = computed(() => Boolean(access.value?.profileVisible));
+const contentVisible = computed(() => Boolean(access.value?.contentVisible));
+const practiceVisible = computed(() => Boolean(access.value?.practiceVisible));
+const displayName = computed(() =>
+  profileVisible.value && profile.value?.nickname ? profile.value.nickname : `用户 ${userId.value || '-'}`
+);
+const styleTags = computed(() =>
+  (profile.value?.styles ?? [])
+    .map((style) => style.name || style.skillLevel)
+    .filter(Boolean)
+    .slice(0, 4) as string[]
+);
 
 const topicLabel = (topic: string | { name?: string; topicName?: string }) =>
   typeof topic === 'string' ? topic : topic.topicName || topic.name || '话题';
@@ -39,28 +60,48 @@ const practiceMeta = (item: UserPracticePost) => {
   return [date, item.locationName, item.skillLevel].filter(Boolean).join(' · ');
 };
 
+const resetLists = () => {
+  posts.value = [];
+  reviews.value = [];
+  practices.value = [];
+  socials.value = [];
+  totals.value = { posts: 0, reviews: 0, practices: 0 };
+};
+
 const loadHomeData = async () => {
   if (!userId.value) return;
   loading.value = true;
+  resetLists();
   try {
-    socials.value = await fetchPublicSocialAccounts(userId.value);
-    const [postResp, reviewResp, practiceResp] = await Promise.allSettled([
-      fetchUserPosts(userId.value, 1, 20),
-      fetchUserReviews(userId.value, 1, 20),
-      fetchUserPractices(userId.value)
-    ]);
-    if (postResp.status === 'fulfilled') {
-      posts.value = postResp.value.list ?? [];
-      totals.value.posts = postResp.value.total ?? posts.value.length;
+    const profileResp = await fetchPublicUserProfile(userId.value);
+    profile.value = profileResp;
+
+    if (profileResp.access.profileVisible) {
+      socials.value = await fetchPublicSocialAccounts(userId.value).catch(() => []);
     }
-    if (reviewResp.status === 'fulfilled') {
-      reviews.value = reviewResp.value.list ?? [];
-      totals.value.reviews = reviewResp.value.total ?? reviews.value.length;
+
+    const tasks: Promise<void>[] = [];
+    if (profileResp.access.contentVisible) {
+      tasks.push(
+        fetchUserPosts(userId.value, 1, 5).then((resp) => {
+          posts.value = resp.list ?? [];
+          totals.value.posts = resp.total ?? posts.value.length;
+        }),
+        fetchUserReviews(userId.value, 1, 5).then((resp) => {
+          reviews.value = resp.list ?? [];
+          totals.value.reviews = resp.total ?? reviews.value.length;
+        })
+      );
     }
-    if (practiceResp.status === 'fulfilled') {
-      practices.value = practiceResp.value ?? [];
-      totals.value.practices = practices.value.length;
+    if (profileResp.access.practiceVisible) {
+      tasks.push(
+        fetchUserPractices(userId.value).then((resp) => {
+          practices.value = resp ?? [];
+          totals.value.practices = practices.value.length;
+        })
+      );
     }
+    await Promise.allSettled(tasks);
   } finally {
     loading.value = false;
   }
@@ -90,11 +131,18 @@ watch(userId, loadHomeData);
           </div>
           <div class="hero-card__copy">
             <h2>{{ displayName }}</h2>
-            <p>公开主页只展示对方允许公开的内容和社交账号。</p>
+            <p v-if="profileVisible">
+              {{ profile?.bio || profile?.learningGoal || '公开主页只展示对方允许公开的内容和社交账号。' }}
+            </p>
+            <p v-else>对方未公开个人资料，只显示必要的用户编号。</p>
             <div class="chips">
-              <span class="chip chip--active">公开内容</span>
-              <span class="chip">动态 {{ totals.posts }}</span>
-              <span class="chip">评价 {{ totals.reviews }}</span>
+              <span class="chip" :class="{ 'chip--active': profileVisible }">
+                {{ profileVisible ? '资料可见' : '资料未公开' }}
+              </span>
+              <span v-if="contentVisible" class="chip">动态 {{ totals.posts }}</span>
+              <span v-if="contentVisible" class="chip">评价 {{ totals.reviews }}</span>
+              <span v-if="practiceVisible" class="chip">约练 {{ totals.practices }}</span>
+              <span v-for="tag in styleTags" :key="tag" class="chip">{{ tag }}</span>
             </div>
           </div>
         </div>
@@ -121,12 +169,14 @@ watch(userId, loadHomeData);
             <ExternalLink :size="18" />
           </a>
         </article>
-        <p v-if="!socials.length" class="empty-state">对方暂未公开社交账号</p>
+        <p v-if="!socials.length" class="empty-state">
+          {{ profileVisible ? '对方暂未公开社交账号' : '对方未公开个人资料，社交账号不可见' }}
+        </p>
       </section>
 
       <section class="notice">
         <ShieldCheck :size="20" />
-        <span>对方未公开或未绑定的账号不会在这里显示。</span>
+        <span>这里的数据由后端按对方隐私设置裁剪：资料、动态评价、约练可以分别设置可见范围。</span>
       </section>
 
       <nav class="segment" aria-label="主页内容筛选">
@@ -144,27 +194,30 @@ watch(userId, loadHomeData);
       <section class="content-list" aria-live="polite">
         <p v-if="loading" class="empty-state">加载中...</p>
         <template v-else-if="activeTab === 'posts'">
-          <article v-for="item in posts" :key="item.id" class="content-card">
+          <p v-if="!contentVisible" class="empty-state">对方未公开动态</p>
+          <article v-for="item in posts" v-else :key="item.id" class="content-card">
             <h3>最近动态</h3>
             <p>{{ postText(item) }}</p>
             <div v-if="postTopics(item).length" class="chips">
               <span v-for="topic in postTopics(item)" :key="topic" class="chip">{{ topic }}</span>
             </div>
           </article>
-          <p v-if="!posts.length" class="empty-state">还没有公开动态</p>
+          <p v-if="contentVisible && !posts.length" class="empty-state">还没有公开动态</p>
         </template>
         <template v-else-if="activeTab === 'reviews'">
-          <article v-for="item in reviews" :key="item.id" class="content-card">
+          <p v-if="!contentVisible" class="empty-state">对方未公开评价</p>
+          <article v-for="item in reviews" v-else :key="item.id" class="content-card">
             <h3>{{ reviewTarget(item) }} · {{ reviewScore(item) }}</h3>
             <p>{{ item.contentText }}</p>
             <div class="chips">
               <span class="chip" :class="{ 'chip--active': item.isVerified }">{{ item.isVerified ? '已验证' : '普通评价' }}</span>
             </div>
           </article>
-          <p v-if="!reviews.length" class="empty-state">还没有公开评价</p>
+          <p v-if="contentVisible && !reviews.length" class="empty-state">还没有公开评价</p>
         </template>
         <template v-else>
-          <article v-for="item in practices" :key="item.id" class="content-card">
+          <p v-if="!practiceVisible" class="empty-state">对方未公开约练</p>
+          <article v-for="item in practices" v-else :key="item.id" class="content-card">
             <h3>{{ practiceTitle(item) }}</h3>
             <p>{{ practiceMeta(item) }}</p>
             <div class="chips">
@@ -172,7 +225,7 @@ watch(userId, loadHomeData);
               <span class="chip">{{ item.currentPeopleCount ?? item.takenCount ?? 1 }}/{{ item.expectedPeopleMax ?? item.capacity ?? 4 }} 人</span>
             </div>
           </article>
-          <p v-if="!practices.length" class="empty-state">还没有公开约练</p>
+          <p v-if="practiceVisible && !practices.length" class="empty-state">还没有公开约练</p>
         </template>
       </section>
     </section>
