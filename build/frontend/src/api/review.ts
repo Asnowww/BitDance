@@ -112,6 +112,15 @@ export interface ReviewAppealDto {
   createdAt: string;
 }
 
+export interface ReviewReplyDto {
+  id: number;
+  reviewId: number;
+  replierUserId: number;
+  replyContent: string;
+  isOfficial: boolean;
+  createdAt: string;
+}
+
 export const fetchReviews = (q: ReviewListQuery) =>
   request.get<unknown, ReviewListResp>('/public/reviews', { params: q });
 
@@ -127,6 +136,10 @@ export const fetchMyReviews = (params: { page?: number; pageSize?: number } = {}
   // M2 风控验收：本人列表读取 h5 接口，保留 pending/folded 等审核状态用于前端可视化。
   request.get<unknown, ReviewListResp>('/h5/reviews/mine', { params });
 
+export const fetchReviewReplyQueue = (params: { page?: number; pageSize?: number } = {}) =>
+  // M2 回复治理：教练/商家端读取真实评价队列，替代静态样例数据。
+  request.get<unknown, ReviewListResp>('/h5/reviews/reply-queue', { params });
+
 export const deleteReview = (id: number) =>
   request.delete<unknown, { deleted: boolean }>(`/h5/reviews/${id}`);
 
@@ -136,3 +149,10 @@ export const createReviewAppeal = (body: { reviewId: number; appealReason: strin
 
 export const fetchMyReviewAppeals = () =>
   request.get<unknown, ReviewAppealDto[]>('/h5/review-appeals/mine');
+
+export const fetchReviewReplies = (reviewId: number) =>
+  request.get<unknown, ReviewReplyDto[]>('/public/review-replies', { params: { reviewId } });
+
+export const createReviewReply = (body: { reviewId: number; replyContent: string; isOfficial?: boolean }) =>
+  // M2 回复治理：商家/教练回复写入 review_reply，公开详情页可继续读取。
+  request.post<unknown, ReviewReplyDto>('/h5/review-replies', body);

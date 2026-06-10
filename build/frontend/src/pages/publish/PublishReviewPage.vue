@@ -71,14 +71,15 @@ const sourceRefId = computed(() => Number(route.query.sourceRefId) || undefined)
 const targetId = computed(() => (activeType.value === routeTargetType.value ? routeTargetId.value : 0));
 const targetName = computed(() => targetNameState.value || targetNames[activeType.value]);
 const sourceLabel = computed(() => {
-  if (sourceType.value === 'order') return '订单来源待核验';
-  if (sourceType.value === 'checkin') return '签到来源待核验';
+  if (sourceType.value === 'order') return 'Workshop 订单来源';
+  if (sourceType.value === 'checkin') return 'Workshop 签到来源';
   return '已完成试听';
 });
 const sourceGuide = computed(() => {
   if (!hasFixedTarget.value) return '请先从舞室、老师或课程详情页进入，再提交评价。';
-  if (sourceType.value === 'order') return '订单来源会在后端核验完成后决定是否提升权重。';
-  if (sourceType.value === 'checkin') return '签到来源会在后端核验完成后决定是否提升权重。';
+  // M2 来源验证：后端已接入 trial/order/checkin，页面文案直接说明真实可信来源。
+  if (sourceType.value === 'order') return '已带入 Workshop 订单，提交后会按订单事实判断权重。';
+  if (sourceType.value === 'checkin') return '已带入 Workshop 签到，提交后会按签到事实判断权重。';
   return '试听来源已带入，提交后会按真实风控状态展示。';
 });
 const lockedTargetNote = computed(() =>

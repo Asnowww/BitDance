@@ -56,6 +56,15 @@ public class ReviewController {
         return ApiResponse.ok(service.listMine(CurrentUser.getId(), page, pageSize));
     }
 
+    @GetMapping("/h5/reviews/reply-queue")
+    public ApiResponse<ReviewListResponse> replyQueue(
+        @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
+    ) {
+        // M2 回复治理验收：教练/商家端读取真实可回复评价队列。
+        return ApiResponse.ok(service.replyQueue(page, pageSize));
+    }
+
     @GetMapping("/public/reviews")
     public ApiResponse<ReviewListResponse> list(
         @RequestParam @NotBlank String targetType,
