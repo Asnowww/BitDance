@@ -23,6 +23,7 @@ import java.util.List;
 public class WechatOAuthClient {
 
     private static final String AUTHORIZE_ENDPOINT = "https://open.weixin.qq.com/connect/oauth2/authorize";
+    private static final String QRCONNECT_ENDPOINT = "https://open.weixin.qq.com/connect/qrconnect";
     private static final String TOKEN_ENDPOINT = "https://api.weixin.qq.com/sns/oauth2/access_token";
 
     private final ObjectMapper objectMapper;
@@ -54,7 +55,8 @@ public class WechatOAuthClient {
 
     public String authorizeUrl(String state) {
         validateConfig();
-        return UriComponentsBuilder.fromUriString(AUTHORIZE_ENDPOINT)
+        String endpoint = "snsapi_login".equals(scope) ? QRCONNECT_ENDPOINT : AUTHORIZE_ENDPOINT;
+        return UriComponentsBuilder.fromUriString(endpoint)
             .queryParam("appid", appId)
             .queryParam("redirect_uri", redirectUri)
             .queryParam("response_type", "code")

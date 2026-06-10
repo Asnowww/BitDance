@@ -16,6 +16,8 @@ bitdance:
     app-id: REPLACE_ME
     app-secret: REPLACE_ME
     redirect-uri: https://your-public-domain.example/api/auth/wechat/callback
+    # snsapi_userinfo: official-account H5 auth, open inside WeChat mobile client.
+    # snsapi_login: open-platform website QR login, open in desktop browser.
     scope: snsapi_userinfo
     frontend-callback-uri: http://localhost:5173/#/login
     auto-create-user: false
