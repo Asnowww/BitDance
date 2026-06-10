@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Heart, MessageCircle, Share2 } from 'lucide-vue-next';
+import CommunityMediaGallery from '@/components/community/CommunityMediaGallery.vue';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { fetchTopicDetail, fetchTopicPosts, sharePost, togglePostLike, type CommunityTopic, type ContentPost } from '@/api/community';
 
@@ -95,23 +96,7 @@ onMounted(load);
             </div>
           </header>
           <p class="post__text">{{ p.text }}</p>
-          <div v-if="p.mediaAssets.length" class="post__media">
-            <video
-              v-if="p.hasVideo && p.mediaAssets[0]"
-              :src="p.mediaAssets[0].url"
-              muted
-              playsinline
-              preload="metadata"
-            />
-            <template v-else>
-              <img
-                v-for="image in p.mediaAssets.filter((item) => item.mediaType === 'image').slice(0, 4)"
-                :key="image.id"
-                :src="image.url"
-                :alt="image.originalFilename || '动态图片'"
-              />
-            </template>
-          </div>
+          <CommunityMediaGallery v-if="p.mediaAssets.length" :assets="p.mediaAssets" />
           <div class="post__actions">
             <button type="button" @click.stop="onLike(p)">
               <Heart :size="17" :stroke-width="2" :fill="p.liked ? 'currentColor' : 'none'" />{{ p.likeCount }}
@@ -174,28 +159,6 @@ onMounted(load);
   &__name { font-size: 14px; font-weight: 900; line-height: $pen-lh; }
   &__time { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
   &__text { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.4; }
-  &__media {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
-    overflow: hidden;
-    min-height: 130px;
-    border-radius: 14px;
-    background: $pen-soft;
-
-    img,
-    video {
-      width: 100%;
-      min-height: 130px;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    video {
-      grid-column: 1 / -1;
-    }
-  }
-
   &__actions {
     display: flex;
     gap: 18px;
