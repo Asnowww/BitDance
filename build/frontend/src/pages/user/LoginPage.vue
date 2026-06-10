@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast, showToast } from 'vant';
 import { KeyRound, Lock, LockKeyhole, MessageSquareCode, Smartphone } from 'lucide-vue-next';
@@ -26,6 +26,8 @@ const smsError = ref('');
 const loginError = ref('');
 const submitting = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
+const WECHAT_STATE_KEY = 'bitdance_wechat_state';
+const WECHAT_REDIRECT_KEY = 'bitdance_wechat_redirect';
 
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
 const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0 && !sendingCode.value);
@@ -104,16 +106,55 @@ const onSubmit = async () => {
 const onWechat = async () => {
   submitting.value = true;
   try {
-    await userStore.loginWithWechat('dev_mock_coach');
-    showSuccessToast('微信授权登录成功');
     const redirect = (route.query.redirect as string) || '/home';
-    router.replace(redirect);
-  } catch {
+    const state = createWechatState();
+    sessionStorage.setItem(WECHAT_STATE_KEY, state);
+    sessionStorage.setItem(WECHAT_REDIRECT_KEY, redirect);
+    const url = await userStore.getWechatAuthorizeUrl(state);
+    window.location.href = url;
+  } catch (error) {
+    loginError.value = getErrorMessage(error);
     showToast('微信授权登录暂不可用，请使用手机号登录');
   } finally {
     submitting.value = false;
   }
 };
+
+const createWechatState = () => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+};
+
+const consumeWechatCallback = async () => {
+  const wechatCode = route.query.wechatCode as string | undefined;
+  if (!wechatCode) return;
+
+  const expectedState = sessionStorage.getItem(WECHAT_STATE_KEY);
+  const actualState = (route.query.wechatState as string | undefined) ?? '';
+  if (expectedState && actualState !== expectedState) {
+    showFailToast('微信授权状态校验失败，请重试');
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    await userStore.loginWithWechat(wechatCode);
+    showSuccessToast('微信授权登录成功');
+    const redirect = sessionStorage.getItem(WECHAT_REDIRECT_KEY) || '/home';
+    sessionStorage.removeItem(WECHAT_STATE_KEY);
+    sessionStorage.removeItem(WECHAT_REDIRECT_KEY);
+    router.replace(redirect);
+  } catch (error) {
+    loginError.value = getErrorMessage(error);
+  } finally {
+    submitting.value = false;
+  }
+};
+
+onMounted(() => {
+  consumeWechatCallback();
+});
 
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer);

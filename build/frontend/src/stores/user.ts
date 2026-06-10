@@ -161,6 +161,13 @@ export const useUserStore = defineStore('user', () => {
     return profile.value;
   };
 
+  const getWechatAuthorizeUrl = async (state: string) => {
+    const data = await request.get<unknown, { url: string }>('/auth/wechat/authorize-url', {
+      params: { state }
+    });
+    return data.url;
+  };
+
   const logout = () => {
     token.value = '';
     profile.value = null;
@@ -186,6 +193,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     loginWithPassword,
     loginWithWechat,
+    getWechatAuthorizeUrl,
     refreshProfile,
     saveProfileDetail,
     logout,

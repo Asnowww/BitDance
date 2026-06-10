@@ -12,6 +12,13 @@ spring:
 bitdance:
   jwt:
     secret: REPLACE_WITH_32_BYTE_RANDOM_STRING
+  wechat:
+    app-id: REPLACE_ME
+    app-secret: REPLACE_ME
+    redirect-uri: https://your-public-domain.example/api/auth/wechat/callback
+    scope: snsapi_userinfo
+    frontend-callback-uri: http://localhost:5173/#/login
+    auto-create-user: false
   sms:
     mock: true
     provider: aliyun

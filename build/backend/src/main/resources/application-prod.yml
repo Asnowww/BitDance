@@ -27,6 +27,13 @@ spring:
 bitdance:
   jwt:
     secret: ${BITDANCE_JWT_SECRET}
+  wechat:
+    app-id: ${BITDANCE_WECHAT_APP_ID}
+    app-secret: ${BITDANCE_WECHAT_APP_SECRET}
+    redirect-uri: ${BITDANCE_WECHAT_REDIRECT_URI}
+    scope: ${BITDANCE_WECHAT_SCOPE:snsapi_userinfo}
+    frontend-callback-uri: ${BITDANCE_WECHAT_FRONTEND_CALLBACK_URI}
+    auto-create-user: ${BITDANCE_WECHAT_AUTO_CREATE_USER:false}
   sms:
     mock: ${BITDANCE_SMS_MOCK:false}
     provider: ${BITDANCE_SMS_PROVIDER:aliyun}
