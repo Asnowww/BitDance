@@ -15,10 +15,12 @@ import {
 } from '@/api/community';
 import { reverseGeocodeTencentLocation, searchTencentPlaces, type MapPlace } from '@/api/maps';
 import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
+import { captureVideoPoster } from '@/utils/videoPoster';
 
 interface UploadedMedia extends MediaAsset {
   id: number;
   previewUrl?: string;
+  posterUrl?: string;
 }
 
 type Visibility = 'public' | 'followers' | 'private';
@@ -131,7 +133,9 @@ const uploadFiles = async (files: File[]) => {
     for (const file of files) {
       const previewUrl = URL.createObjectURL(file);
       try {
-        uploaded.push({ ...(await uploadPostMedia(file)), previewUrl });
+        const asset = await uploadPostMedia(file);
+        const posterUrl = file.type.startsWith('video/') ? (await captureVideoPoster(previewUrl)) ?? undefined : undefined;
+        uploaded.push({ ...asset, previewUrl, posterUrl });
       } catch (error) {
         URL.revokeObjectURL(previewUrl);
         throw error;
@@ -171,6 +175,7 @@ const removeMedia = (id: number) => {
 };
 
 const mediaPreviewUrl = (item: UploadedMedia) => item.previewUrl || item.url;
+const mediaPosterUrl = (item: UploadedMedia) => item.posterUrl;
 
 const clearPreviewUrls = () => {
   uploadedMedia.value.forEach((item) => {
@@ -431,6 +436,11 @@ onMounted(async () => {
     const detail = await fetchPostDetail(editPostId.value);
     content.value = detail.text;
     uploadedMedia.value = detail.mediaAssets;
+    for (const item of uploadedMedia.value) {
+      if (item.mediaType === 'video') {
+        item.posterUrl = (await captureVideoPoster(item.url)) ?? undefined;
+      }
+    }
     selectedTopics.value = detail.topics.length ? detail.topics : selectedTopics.value;
     selectedStyle.value = detail.style || selectedStyle.value;
     selectedLocation.value = detail.location || selectedLocation.value;
@@ -492,7 +502,7 @@ onUnmounted(clearPreviewUrls);
         </div>
 
         <div v-if="video" class="video-preview">
-          <video :src="mediaPreviewUrl(video)" controls playsinline preload="metadata" />
+          <video :src="mediaPreviewUrl(video)" :poster="mediaPosterUrl(video)" controls playsinline preload="auto" />
           <button class="media-remove" type="button" aria-label="删除视频" @click="removeMedia(video.id)">
             <Trash2 :size="14" :stroke-width="2" />
           </button>
