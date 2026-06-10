@@ -51,6 +51,12 @@ bitdance:
     mock: ${BITDANCE_SMS_MOCK:true}
     fixed-code: "123456"
     cooldown-seconds: 60
+  maps:
+    tencent:
+      # M1 腾讯地图 WebService Key 只在后端读取；真实值放环境变量或 application-local.yml。
+      key: ${BITDANCE_TENCENT_MAP_KEY:}
+      base-url: ${BITDANCE_TENCENT_MAP_BASE_URL:https://apis.map.qq.com}
+      referer: ${BITDANCE_TENCENT_MAP_REFERER:BitDance}
   cors:
     allowed-origins:
       - http://localhost:5173

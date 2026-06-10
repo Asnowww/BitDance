@@ -1,91 +1,198 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Heart, Image as ImageIcon } from 'lucide-vue-next';
+import { showToast } from 'vant';
+import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { fetchCoachDetail, fetchCourseDetail } from '@/api/course';
 import { fetchFavorites, type FavoriteDto, type FavoriteTargetType } from '@/api/favorite';
+import { fetchStudioDetail } from '@/api/studio';
+import { fetchWorkshopDetail } from '@/api/workshop';
 
 const router = useRouter();
-const active = ref<FavoriteTargetType | 'all'>('all');
-const loading = ref(false);
-const favorites = ref<FavoriteDto[]>([]);
 
-const tabs: Array<{ key: FavoriteTargetType | 'all'; label: string }> = [
-  { key: 'all', label: '全部' },
-  { key: 'studio', label: '舞室' },
-  { key: 'course', label: '课程' },
-  { key: 'coach', label: '老师' },
-  { key: 'workshop', label: '活动' },
-  { key: 'content_post', label: '动态' }
+const stats = [
+  { value: '126', label: '累计天数' },
+  { value: '43h', label: '训练时长' },
+  { value: '5', label: '尝试舞种' }
 ];
 
-const titleOf = (item: FavoriteDto) => item.card?.title || `${item.targetType} #${item.targetId}`;
-const subtitleOf = (item: FavoriteDto) => item.card?.subtitle || '暂无摘要';
-const actionOf = (item: FavoriteDto) => item.card?.actionText || '查看';
-const pathOf = (item: FavoriteDto) => item.card?.path || '/';
-const createdLabel = (item: FavoriteDto) => item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '刚刚收藏';
+const trend = [
+  { day: '周一', ratio: 0.6 },
+  { day: '周二', ratio: 0.85 },
+  { day: '周三', ratio: 0.5 },
+  { day: '周四', ratio: 1 },
+  { day: '周五', ratio: 0.7 }
+];
 
-const filtered = computed(() =>
-  active.value === 'all' ? favorites.value : favorites.value.filter((item) => item.targetType === active.value)
-);
+interface FavoriteCard {
+  id: string;
+  title: string;
+  meta: string;
+  tag: string;
+  action: string;
+  to: string;
+}
 
-const load = async () => {
-  loading.value = true;
+const favorites = ref<FavoriteCard[]>([]);
+const loading = ref(false);
+const favoriteStatus = ref('');
+const favoriteCountText = computed(() => (loading.value ? '同步中' : `${favorites.value.length} 项`));
+
+const typeLabel: Record<FavoriteTargetType, string> = {
+  studio: '舞室',
+  course: '课程',
+  coach: '老师',
+  workshop: '活动',
+  content_post: '动态'
+};
+
+const typeAction: Record<FavoriteTargetType, string> = {
+  studio: '预约试听',
+  course: '查看课程',
+  coach: '查看老师',
+  workshop: '查看活动',
+  content_post: '查看动态'
+};
+
+const routeForFavorite = (item: FavoriteDto) => {
+  if (item.targetType === 'studio') return `/studio/${item.targetId}`;
+  if (item.targetType === 'course') return `/course/${item.targetId}`;
+  if (item.targetType === 'coach') return `/coach/${item.targetId}`;
+  if (item.targetType === 'content_post') return '/community/post/' + item.targetId;
+  return `/workshop/${item.targetId}`;
+};
+
+const formatCreatedAt = (value: string) =>
+  new Date(value).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+
+const fallbackCard = (item: FavoriteDto): FavoriteCard => ({
+  id: String(item.id),
+  title: `${typeLabel[item.targetType] ?? item.targetType} #${item.targetId}`,
+  meta: `收藏于 ${formatCreatedAt(item.createdAt)} · 详情待补全`,
+  tag: typeLabel[item.targetType] ?? item.targetType,
+  action: typeAction[item.targetType] ?? '查看',
+  to: routeForFavorite(item)
+});
+
+const buildFavoriteCard = async (item: FavoriteDto): Promise<FavoriteCard> => {
   try {
-    favorites.value = await fetchFavorites();
+    // M1 收藏管理：收藏接口只返回类型和 ID，这里按对象类型补详情，不完整时降级显示。
+    if (item.targetType === 'studio') {
+      const detail = await fetchStudioDetail(item.targetId);
+      return {
+        id: String(item.id),
+        title: detail.name,
+        meta: `收藏于 ${formatCreatedAt(item.createdAt)} · ${detail.address || '地址待补'}`,
+        tag: typeLabel[item.targetType],
+        action: typeAction[item.targetType],
+        to: routeForFavorite(item)
+      };
+    }
+    if (item.targetType === 'course') {
+      const detail = await fetchCourseDetail(item.targetId);
+      return {
+        id: String(item.id),
+        title: detail.courseName,
+        meta: `收藏于 ${formatCreatedAt(item.createdAt)} · ¥${detail.priceAmount} · ${detail.difficultyLevel}`,
+        tag: typeLabel[item.targetType],
+        action: typeAction[item.targetType],
+        to: routeForFavorite(item)
+      };
+    }
+    if (item.targetType === 'coach') {
+      const detail = await fetchCoachDetail(item.targetId);
+      return {
+        id: String(item.id),
+        title: detail.displayName,
+        meta: `收藏于 ${formatCreatedAt(item.createdAt)} · 评分 ${Number(detail.avgRating ?? 0).toFixed(1)}`,
+        tag: typeLabel[item.targetType],
+        action: typeAction[item.targetType],
+        to: routeForFavorite(item)
+      };
+    }
+    const detail = await fetchWorkshopDetail(item.targetId);
+    return {
+      id: String(item.id),
+      title: detail.title,
+      meta: `收藏于 ${formatCreatedAt(item.createdAt)} · ${detail.city} · ${detail.coachName}`,
+      tag: typeLabel[item.targetType],
+      action: typeAction[item.targetType],
+      to: routeForFavorite(item)
+    };
+  } catch {
+    return fallbackCard(item);
+  }
+};
+
+const loadFavorites = async () => {
+  loading.value = true;
+  favoriteStatus.value = '';
+  try {
+    const list = await fetchFavorites();
+    favorites.value = await Promise.all(list.map(buildFavoriteCard));
+    favoriteStatus.value = favorites.value.length ? '' : '暂无收藏，可先在舞室、课程或老师详情页点收藏';
+  } catch {
+    favorites.value = [];
+    favoriteStatus.value = '收藏接口暂不可用，请检查登录态或后端服务';
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(load);
+onMounted(loadFavorites);
 </script>
 
 <template>
   <main class="pen-page">
-    <PenTopBar title="收藏管理" :show-share="false" />
+    <!-- M1 收藏页：页头必须先告诉用户这里是收藏管理，再把训练概览作为次级信息展示。 -->
+    <PenTopBar title="收藏管理" @share="showToast('收藏清单链接已复制')" />
 
     <section class="pen-scroll">
-      <section class="hero">
-        <div>
-          <p>GROWTH FAVORITES</p>
-          <h1>{{ favorites.length }} 个真实收藏</h1>
+      <div class="stats">
+        <div v-for="stat in stats" :key="stat.label" class="stat">
+          <strong class="stat__value">{{ stat.value }}</strong>
+          <span class="stat__label">{{ stat.label }}</span>
         </div>
-        <Heart :size="30" />
-      </section>
-
-      <div class="chips">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          class="chip"
-          :class="{ 'chip--on': active === tab.key }"
-          type="button"
-          @click="active = tab.key"
-        >
-          {{ tab.label }}
-        </button>
       </div>
 
-      <p v-if="loading" class="empty">正在加载收藏...</p>
-
-      <article v-for="item in filtered" v-else :key="item.id" class="fav" @click="router.push(pathOf(item))">
-        <img v-if="item.card?.coverUrl" class="cover cover--image" :src="item.card.coverUrl" :alt="titleOf(item)" />
-        <div v-else class="cover"><ImageIcon :size="24" /></div>
-        <div class="body">
-          <div class="body__top">
-            <strong>{{ titleOf(item) }}</strong>
-            <span>{{ createdLabel(item) }}</span>
-          </div>
-          <p>{{ subtitleOf(item) }}</p>
-          <div class="foot">
-            <em>{{ item.targetType }}</em>
-            <button type="button" @click.stop="router.push(pathOf(item))">{{ actionOf(item) }}</button>
+      <section class="trend">
+        <h3 class="trend__title">训练概览</h3>
+        <div class="trend__rows">
+          <div v-for="item in trend" :key="item.day" class="trend-row">
+            <span class="trend-row__day">{{ item.day }}</span>
+            <span class="trend-row__bar" :style="{ width: `${item.ratio * 100}%` }" />
           </div>
         </div>
-      </article>
+      </section>
 
-      <p v-if="!loading && !filtered.length" class="empty">还没有这个分类的收藏，去舞室、课程或 Workshop 详情页点收藏即可出现。</p>
+      <section class="favorites">
+        <header class="favorites__head">
+          <h3>收藏管理</h3>
+          <span class="favorites__sub">{{ favoriteCountText }}</span>
+        </header>
+
+        <p v-if="favoriteStatus" class="favorites__empty">{{ favoriteStatus }}</p>
+
+        <article
+          v-for="item in favorites"
+          :key="item.id"
+          class="fav"
+          @click="router.push(item.to)"
+        >
+          <div class="fav__cover" aria-hidden="true">
+            <Music :size="28" :stroke-width="2" />
+          </div>
+          <div class="fav__body">
+            <strong class="fav__title">{{ item.title }}</strong>
+            <p class="fav__meta">{{ item.meta }}</p>
+            <span class="tag">{{ item.tag }}</span>
+            <button class="fav__action" type="button" @click.stop="router.push(item.to)">
+              {{ item.action }}
+            </button>
+          </div>
+        </article>
+      </section>
     </section>
   </main>
 </template>
@@ -93,23 +200,185 @@ onMounted(load);
 <style lang="scss" scoped>
 @import '@/styles/pen-nike.scss';
 
-.pen-page { @include pen-page; }
-.pen-scroll { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px calc(24px + env(safe-area-inset-bottom)); }
-.hero { display: flex; justify-content: space-between; align-items: center; padding: 18px; border-radius: 8px; background: $pen-ink; color: $pen-on-primary; }
-.hero p { margin: 0 0 5px; color: $pen-subtle-text; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
-.hero h1 { margin: 0; font-size: 25px; font-weight: 900; line-height: 1.05; }
-.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
-.chip { flex: none; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: $pen-soft; color: $pen-ink; font-weight: 900; }
-.chip--on { background: $pen-ink; color: $pen-on-primary; }
-.fav { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid $pen-hairline; cursor: pointer; }
-.cover { flex: none; width: 82px; height: 82px; border-radius: 8px; background: $pen-soft; color: $pen-ink; display: grid; place-items: center; object-fit: cover; }
-.cover--image { display: block; }
-.body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
-.body__top { display: flex; justify-content: space-between; gap: 8px; }
-.body strong { font-size: 16px; font-weight: 900; line-height: $pen-lh; }
-.body__top span, .body p { margin: 0; color: $pen-mute; font-size: 12px; font-weight: 700; line-height: 1.4; }
-.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.foot em { font-style: normal; color: $pen-mute; font-size: 11px; font-weight: 900; text-transform: uppercase; }
-.foot button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary; font-weight: 900; }
-.empty { padding: 22px 8px; color: $pen-mute; text-align: center; font-size: 13px; font-weight: 700; }
+.pen-page {
+  @include pen-page;
+}
+
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  height: 112px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: $pen-soft;
+
+  &__value {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__label {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.trend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__title {
+    @include pen-h3-section;
+  }
+
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.trend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+
+  &__day {
+    flex: none;
+    width: 36px;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+
+  &__bar {
+    height: 10px;
+    border-radius: 999px;
+    background: $pen-ink;
+  }
+}
+
+.favorites {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__head h3 {
+    @include pen-h3-section;
+    flex: 1;
+  }
+
+  &__sub {
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+
+  &__empty {
+    margin: 0;
+    padding: 14px;
+    border: 1px solid $pen-hairline;
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.fav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 124px;
+  cursor: pointer;
+
+  &__cover {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 112px;
+    align-self: stretch;
+    border-radius: 14px;
+    background: $pen-soft;
+    color: $pen-ink;
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
+  }
+
+  &__title {
+    font-size: 16px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__meta {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: $pen-lh;
+  }
+
+  &__action {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $pen-success;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+  }
+}
+
+.tag {
+  align-self: flex-start;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid $pen-hairline;
+  border-radius: 999px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+}
 </style>

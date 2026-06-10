@@ -7,12 +7,15 @@ import com.bitdance.common.exception.BizException;
 import com.bitdance.iam.domain.AppUser;
 import com.bitdance.iam.repository.AppUserRepository;
 import com.bitdance.review.domain.Review;
+import com.bitdance.review.domain.ReviewAppeal;
 import com.bitdance.review.domain.ReviewDimensionScore;
 import com.bitdance.review.dto.CreateReviewRequest;
 import com.bitdance.review.dto.DimensionScoreDto;
+import com.bitdance.review.dto.ReviewAppealDto;
 import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewListResponse;
 import com.bitdance.review.dto.ReviewSummary;
+import com.bitdance.review.repository.ReviewAppealRepository;
 import com.bitdance.review.repository.ReviewDimensionScoreRepository;
 import com.bitdance.review.repository.ReviewRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -38,7 +41,9 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepo;
     private final ReviewDimensionScoreRepository dimRepo;
+    private final ReviewAppealRepository appealRepo;
     private final ReviewRiskService riskService;
+    private final ReviewMediaService mediaService;
     private final TrialBookingRepository trialRepo;
     private final AppUserRepository userRepo;
     private final BadgeRuleEngine badgeRuleEngine;
@@ -46,14 +51,18 @@ public class ReviewService {
     public ReviewService(
         ReviewRepository reviewRepo,
         ReviewDimensionScoreRepository dimRepo,
+        ReviewAppealRepository appealRepo,
         ReviewRiskService riskService,
+        ReviewMediaService mediaService,
         TrialBookingRepository trialRepo,
         AppUserRepository userRepo,
         BadgeRuleEngine badgeRuleEngine
     ) {
         this.reviewRepo = reviewRepo;
         this.dimRepo = dimRepo;
+        this.appealRepo = appealRepo;
         this.riskService = riskService;
+        this.mediaService = mediaService;
         this.trialRepo = trialRepo;
         this.userRepo = userRepo;
         this.badgeRuleEngine = badgeRuleEngine;
@@ -66,20 +75,62 @@ public class ReviewService {
         AppUser author = userRepo.findById(userId)
             .orElseThrow(() -> new BizException("USER_NOT_FOUND", "用户不存在"));
 
-        validateDimensionCodes(req.dimensions());
+        // 维度分数代码不重复
+        Set<String> codes = new HashSet<>();
+        for (DimensionScoreDto d : req.dimensions()) {
+            if (!codes.add(d.code())) {
+                throw new BizException("INVALID_ARGUMENT",
+                    "维度代码重复: " + d.code());
+            }
+        }
+
         boolean verified = verifySource(userId, req);
 
         ReviewRiskService.Verdict verdict = riskService.assess(
             author, verified, req.targetType(), req.targetId()
         );
 
-        Review saved = reviewRepo.save(buildReview(userId, req, verified, verdict));
-        List<ReviewDimensionScore> dims = buildDimensionScores(saved.getId(), req.dimensions());
+        Review r = new Review();
+        r.setUserId(userId);
+        r.setTargetType(req.targetType());
+        r.setTargetId(req.targetId());
+        r.setOverallScore(req.overallScore());
+        r.setContentText(req.contentText());
+        if (verified) {
+            r.setVerifiedSourceType(req.sourceType());
+            r.setVerifiedSourceRefId(req.sourceRefId());
+            r.setIsVerified(true);
+        }
+        r.setWeightFactor(verdict.weightFactor());
+        r.setReviewStatus(verdict.status());
+        r.setRiskLevel(verdict.riskLevel());
+        r.setPublishedAt(OffsetDateTime.now());
+        Review saved = reviewRepo.save(r);
+
+        List<ReviewDimensionScore> dims = new ArrayList<>();
+        for (DimensionScoreDto d : req.dimensions()) {
+            ReviewDimensionScore s = new ReviewDimensionScore();
+            s.setReviewId(saved.getId());
+            s.setDimensionCode(d.code());
+            s.setDimensionName(d.name());
+            s.setScore(d.score());
+            dims.add(s);
+        }
         dimRepo.saveAll(dims);
 
-        awardReviewBadge(userId, saved.getId());
+        // 徽章引擎：用户当前评价总数
+        long totalReviews = reviewRepo.count(); // 简化：BE-016 改 countByUserId 后再细化
+        badgeRuleEngine.evaluate(userId, "review",
+            java.util.Map.of("totalCount", totalReviews),
+            "review", saved.getId());
 
-        return toDto(saved, dims);
+        // 评价主体先落库，再把前端提交的外链/模拟媒体绑定到 review 目标。
+        return toDto(
+            saved,
+            dims,
+            mediaService.attachReviewMedia(saved.getId(), userId, req.mediaAssets()),
+            null
+        );
     }
 
     @Transactional
@@ -100,8 +151,39 @@ public class ReviewService {
         String safeStatus = validatePublicStatus(status);
         int safePage = Math.max(1, page);
         int safeSize = Math.min(Math.max(1, pageSize), 100);
-        Page<Review> p = findReviews(targetType, targetId, safeStatus, sort, safePage, safeSize);
-        return toReviewListResponse(p, safePage, safeSize);
+        PageRequest pr = PageRequest.of(safePage - 1, safeSize);
+        Page<Review> p = switch (sort == null ? "latest" : sort) {
+            case "helpful" -> reviewRepo
+                .findByTargetTypeAndTargetIdAndReviewStatusOrderByHelpfulCountDescPublishedAtDesc(
+                    targetType, targetId, safeStatus, pr);
+            case "verified" -> reviewRepo
+                .findByTargetTypeAndTargetIdAndReviewStatusAndIsVerifiedOrderByPublishedAtDesc(
+                    targetType, targetId, safeStatus, true, pr);
+            default -> reviewRepo
+                .findByTargetTypeAndTargetIdAndReviewStatusOrderByPublishedAtDesc(
+                    targetType, targetId, safeStatus, pr);
+        };
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+        // 评价媒体按本页 reviewId 一次性取回，避免列表每条评价重复查附件。
+        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
+            mediaService.mediaForReviews(ids);
+        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                mediaByReview.getOrDefault(r.getId(), List.of()),
+                latestAppealByReview.get(r.getId())
+            ))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -110,7 +192,56 @@ public class ReviewService {
         int safeSize = Math.min(Math.max(1, pageSize), 100);
         Page<Review> p = reviewRepo.findByUserIdAndReviewStatusOrderByPublishedAtDesc(
             userId, "published", PageRequest.of(safePage - 1, safeSize));
-        return toReviewListResponse(p, safePage, safeSize);
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+        // 用户主页评价同样批量取媒体，保持公开主页与详情页附件展示一致。
+        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
+            mediaService.mediaForReviews(ids);
+        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                mediaByReview.getOrDefault(r.getId(), List.of()),
+                latestAppealByReview.get(r.getId())
+            ))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewListResponse listMine(Long userId, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 100);
+        // M2 风控验收：本人列表展示 pending/folded/hidden 等审核状态，方便用户侧观察异常评价处理结果。
+        Page<Review> p = reviewRepo.findMineByUserId(
+            userId, PageRequest.of(safePage - 1, safeSize));
+
+        List<Long> ids = p.getContent().stream().map(Review::getId).toList();
+        Map<Long, List<ReviewDimensionScore>> byReview = ids.isEmpty()
+            ? Map.of()
+            : dimRepo.findByReviewIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
+        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
+            mediaService.mediaForReviews(ids);
+        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
+
+        List<ReviewDto> items = p.getContent().stream()
+            .map(r -> toDto(
+                r,
+                byReview.getOrDefault(r.getId(), List.of()),
+                mediaByReview.getOrDefault(r.getId(), List.of()),
+                latestAppealByReview.get(r.getId())
+            ))
+            .toList();
+
+        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -122,14 +253,34 @@ public class ReviewService {
             return new ReviewSummary(targetType, targetId, 0L, 0L, BigDecimal.ZERO, Map.of());
         }
 
-        return new ReviewSummary(
-            targetType,
-            targetId,
-            reviews.size(),
-            countVerifiedReviews(reviews),
-            calculateWeightedAverage(reviews),
-            calculateDimensionAverages(targetType, targetId)
-        );
+        BigDecimal weightSum = BigDecimal.ZERO;
+        BigDecimal weightedTotal = BigDecimal.ZERO;
+        long verified = 0;
+        for (Review r : reviews) {
+            BigDecimal w = r.getWeightFactor();
+            weightSum = weightSum.add(w);
+            weightedTotal = weightedTotal.add(r.getOverallScore().multiply(w));
+            if (Boolean.TRUE.equals(r.getIsVerified())) verified++;
+        }
+        BigDecimal avg = weightSum.signum() == 0
+            ? BigDecimal.ZERO
+            : weightedTotal.divide(weightSum, 2, RoundingMode.HALF_UP);
+
+        List<ReviewDimensionScore> dims = dimRepo.findPublishedDimensionsFor(targetType, targetId);
+        Map<String, long[]> agg = new HashMap<>();
+        for (ReviewDimensionScore d : dims) {
+            agg.computeIfAbsent(d.getDimensionCode(), k -> new long[]{0L, 0L});
+            long[] pair = agg.get(d.getDimensionCode());
+            pair[0] += d.getScore();
+            pair[1] += 1L;
+        }
+        Map<String, BigDecimal> dimAvg = new HashMap<>();
+        agg.forEach((k, pair) -> dimAvg.put(
+            k,
+            BigDecimal.valueOf(pair[0]).divide(BigDecimal.valueOf(pair[1]), 2, RoundingMode.HALF_UP)
+        ));
+
+        return new ReviewSummary(targetType, targetId, reviews.size(), verified, avg, dimAvg);
     }
 
     private boolean verifySource(Long userId, CreateReviewRequest req) {
@@ -158,133 +309,6 @@ public class ReviewService {
         };
     }
 
-    private void validateDimensionCodes(List<DimensionScoreDto> dimensions) {
-        Set<String> codes = new HashSet<>();
-        for (DimensionScoreDto d : dimensions) {
-            if (!codes.add(d.code())) {
-                throw new BizException("INVALID_ARGUMENT", "维度代码重复: " + d.code());
-            }
-        }
-    }
-
-    private Page<Review> findReviews(
-        String targetType, Long targetId, String status, String sort, int page, int pageSize
-    ) {
-        PageRequest pr = PageRequest.of(page - 1, pageSize);
-        return switch (sort == null ? "latest" : sort) {
-            case "helpful" -> reviewRepo
-                .findByTargetTypeAndTargetIdAndReviewStatusOrderByHelpfulCountDescPublishedAtDesc(
-                    targetType, targetId, status, pr);
-            case "verified" -> reviewRepo
-                .findByTargetTypeAndTargetIdAndReviewStatusAndIsVerifiedOrderByPublishedAtDesc(
-                    targetType, targetId, status, true, pr);
-            default -> reviewRepo
-                .findByTargetTypeAndTargetIdAndReviewStatusOrderByPublishedAtDesc(
-                    targetType, targetId, status, pr);
-        };
-    }
-
-    private ReviewListResponse toReviewListResponse(Page<Review> page, int safePage, int safeSize) {
-        List<ReviewDto> items = toReviewDtos(page.getContent());
-        return new ReviewListResponse(items, safePage, safeSize, page.getTotalElements());
-    }
-
-    private List<ReviewDto> toReviewDtos(List<Review> reviews) {
-        Map<Long, List<ReviewDimensionScore>> byReview = loadDimensionScores(reviews);
-        return reviews.stream()
-            .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
-            .toList();
-    }
-
-    private Map<Long, List<ReviewDimensionScore>> loadDimensionScores(List<Review> reviews) {
-        List<Long> ids = reviews.stream().map(Review::getId).toList();
-        return ids.isEmpty()
-            ? Map.of()
-            : dimRepo.findByReviewIdIn(ids).stream()
-                .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
-    }
-
-    private long countVerifiedReviews(List<Review> reviews) {
-        long verified = 0;
-        for (Review r : reviews) {
-            if (Boolean.TRUE.equals(r.getIsVerified())) {
-                verified++;
-            }
-        }
-        return verified;
-    }
-
-    private BigDecimal calculateWeightedAverage(List<Review> reviews) {
-        BigDecimal weightSum = BigDecimal.ZERO;
-        BigDecimal weightedTotal = BigDecimal.ZERO;
-        for (Review r : reviews) {
-            BigDecimal w = r.getWeightFactor();
-            weightSum = weightSum.add(w);
-            weightedTotal = weightedTotal.add(r.getOverallScore().multiply(w));
-        }
-        return weightSum.signum() == 0
-            ? BigDecimal.ZERO
-            : weightedTotal.divide(weightSum, 2, RoundingMode.HALF_UP);
-    }
-
-    private Map<String, BigDecimal> calculateDimensionAverages(String targetType, Long targetId) {
-        List<ReviewDimensionScore> dims = dimRepo.findPublishedDimensionsFor(targetType, targetId);
-        Map<String, long[]> agg = new HashMap<>();
-        for (ReviewDimensionScore d : dims) {
-            agg.computeIfAbsent(d.getDimensionCode(), k -> new long[]{0L, 0L});
-            long[] pair = agg.get(d.getDimensionCode());
-            pair[0] += d.getScore();
-            pair[1] += 1L;
-        }
-        Map<String, BigDecimal> dimAvg = new HashMap<>();
-        agg.forEach((k, pair) -> dimAvg.put(
-            k,
-            BigDecimal.valueOf(pair[0]).divide(BigDecimal.valueOf(pair[1]), 2, RoundingMode.HALF_UP)
-        ));
-        return dimAvg;
-    }
-
-    private Review buildReview(Long userId, CreateReviewRequest req, boolean verified,
-                               ReviewRiskService.Verdict verdict) {
-        Review r = new Review();
-        r.setUserId(userId);
-        r.setTargetType(req.targetType());
-        r.setTargetId(req.targetId());
-        r.setOverallScore(req.overallScore());
-        r.setContentText(req.contentText());
-        if (verified) {
-            r.setVerifiedSourceType(req.sourceType());
-            r.setVerifiedSourceRefId(req.sourceRefId());
-            r.setIsVerified(true);
-        }
-        r.setWeightFactor(verdict.weightFactor());
-        r.setReviewStatus(verdict.status());
-        r.setRiskLevel(verdict.riskLevel());
-        r.setPublishedAt(OffsetDateTime.now());
-        return r;
-    }
-
-    private List<ReviewDimensionScore> buildDimensionScores(Long reviewId, List<DimensionScoreDto> dimensions) {
-        List<ReviewDimensionScore> dims = new ArrayList<>();
-        for (DimensionScoreDto d : dimensions) {
-            ReviewDimensionScore s = new ReviewDimensionScore();
-            s.setReviewId(reviewId);
-            s.setDimensionCode(d.code());
-            s.setDimensionName(d.name());
-            s.setScore(d.score());
-            dims.add(s);
-        }
-        return dims;
-    }
-
-    private void awardReviewBadge(Long userId, Long reviewId) {
-        // 徽章引擎：用户当前评价总数
-        long totalReviews = reviewRepo.count(); // 简化：BE-016 改 countByUserId 后再细化
-        badgeRuleEngine.evaluate(userId, "review",
-            java.util.Map.of("totalCount", totalReviews),
-            "review", reviewId);
-    }
-
     private void validateTargetType(String targetType) {
         if (!Set.of("studio", "course", "coach").contains(targetType)) {
             throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach");
@@ -299,7 +323,12 @@ public class ReviewService {
         return status;
     }
 
-    private ReviewDto toDto(Review r, List<ReviewDimensionScore> dims) {
+    private ReviewDto toDto(
+        Review r,
+        List<ReviewDimensionScore> dims,
+        List<com.bitdance.review.dto.ReviewMediaDto> mediaAssets,
+        ReviewAppealDto latestAppeal
+    ) {
         List<DimensionScoreDto> dimDtos = dims.stream()
             .map(d -> new DimensionScoreDto(d.getDimensionCode(), d.getDimensionName(), d.getScore()))
             .toList();
@@ -309,7 +338,27 @@ public class ReviewService {
             r.getIsVerified(), r.getVerifiedSourceType(),
             r.getWeightFactor(), r.getReviewStatus(), r.getRiskLevel(),
             r.getHelpfulCount(), r.getIsPinned(),
-            r.getPublishedAt(), dimDtos
+            r.getPublishedAt(), dimDtos, mediaAssets, latestAppeal
         );
+    }
+
+    private Map<Long, ReviewAppealDto> latestAppealsFor(List<Long> reviewIds) {
+        if (reviewIds == null || reviewIds.isEmpty()) return Map.of();
+        Map<Long, ReviewAppealDto> result = new HashMap<>();
+        for (ReviewAppeal appeal : appealRepo.findByReviewIdInOrderByIdDesc(reviewIds)) {
+            result.putIfAbsent(appeal.getReviewId(), new ReviewAppealDto(
+                appeal.getId(),
+                appeal.getReviewId(),
+                appeal.getAppellantUserId(),
+                appeal.getAppealReason(),
+                appeal.getAppealStatus(),
+                appeal.getEvidenceNote(),
+                appeal.getReviewedByUserId(),
+                appeal.getReviewedAt(),
+                appeal.getReviewRemark(),
+                appeal.getCreatedAt()
+            ));
+        }
+        return result;
     }
 }

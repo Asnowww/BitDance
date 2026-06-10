@@ -32,6 +32,14 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         Long userId, String status, Pageable pageable
     );
 
+    // M2 风控验收：本人列表要看到 pending/folded 等非公开状态，这里显式写 JPQL，避免派生查询在当前数据环境下漏数。
+    @Query("""
+        select r from Review r
+        where r.userId = :userId
+        order by r.publishedAt desc
+        """)
+    Page<Review> findMineByUserId(@Param("userId") Long userId, Pageable pageable);
+
     @Query("""
         select r from Review r
         where r.targetType = :targetType and r.targetId = :targetId

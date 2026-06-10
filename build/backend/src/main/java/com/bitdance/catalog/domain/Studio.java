@@ -76,10 +76,15 @@ public class Studio {
     public Long getCityId() { return cityId; }
     public Long getBusinessDistrictId() { return businessDistrictId; }
     public String getAddress() { return address; }
+    public void setAddress(String v) { this.address = v; }
     public String getTransportInfo() { return transportInfo; }
+    public void setTransportInfo(String v) { this.transportInfo = v; }
     public BigDecimal getLongitude() { return longitude; }
+    public void setLongitude(BigDecimal v) { this.longitude = v; }
     public BigDecimal getLatitude() { return latitude; }
+    public void setLatitude(BigDecimal v) { this.latitude = v; }
     public String getGeoHash() { return geoHash; }
+    public void setGeoHash(String v) { this.geoHash = v; }
     public String getContactPhone() { return contactPhone; }
     public String getIntro() { return intro; }
     public String getSourceType() { return sourceType; }

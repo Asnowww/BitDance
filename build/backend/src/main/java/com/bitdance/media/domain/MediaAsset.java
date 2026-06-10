@@ -24,10 +24,10 @@ public class MediaAsset {
     private String bizType;
 
     @Column(name = "storage_provider", nullable = false, length = 32)
-    private String storageProvider = "local";
+    private String storageProvider = "external";
 
     @Column(name = "bucket_name", nullable = false, length = 128)
-    private String bucketName = "uploads";
+    private String bucketName = "external-url";
 
     @Column(name = "object_key", nullable = false, length = 255)
     private String objectKey;
@@ -39,7 +39,16 @@ public class MediaAsset {
     private String mimeType;
 
     @Column(name = "file_size", nullable = false)
-    private Long fileSize;
+    private Long fileSize = 0L;
+
+    @Column(name = "image_width")
+    private Integer imageWidth;
+
+    @Column(name = "image_height")
+    private Integer imageHeight;
+
+    @Column(name = "duration_seconds")
+    private java.math.BigDecimal durationSeconds;
 
     @Column(name = "sha256", length = 64)
     private String sha256;
@@ -51,7 +60,7 @@ public class MediaAsset {
     private String auditStatus = "approved";
 
     @Column(name = "is_public", nullable = false)
-    private Boolean isPublic = true;
+    private Boolean isPublic = Boolean.TRUE;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -73,6 +82,12 @@ public class MediaAsset {
     public void setMimeType(String v) { this.mimeType = v; }
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long v) { this.fileSize = v; }
+    public Integer getImageWidth() { return imageWidth; }
+    public void setImageWidth(Integer v) { this.imageWidth = v; }
+    public Integer getImageHeight() { return imageHeight; }
+    public void setImageHeight(Integer v) { this.imageHeight = v; }
+    public java.math.BigDecimal getDurationSeconds() { return durationSeconds; }
+    public void setDurationSeconds(java.math.BigDecimal v) { this.durationSeconds = v; }
     public String getSha256() { return sha256; }
     public void setSha256(String v) { this.sha256 = v; }
     public Long getUploaderUserId() { return uploaderUserId; }

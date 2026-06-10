@@ -27,6 +27,7 @@ mock('get', /\/studios\/nearby/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   const page = Number(p.page ?? 1);
   const pageSize = Number(p.pageSize ?? 20);
+  const cityId = Number(p.cityId ?? 0);
   const keyword = (p.keyword as string) ?? '';
   const distanceMax = Number(p.distanceKm ?? 0);
   const danceStyleId = Number(p.danceStyleId ?? 0);
@@ -35,6 +36,7 @@ mock('get', /\/studios\/nearby/, ({ params }) => {
   const timeSlot = (p.timeSlot as string) ?? '';
 
   let pool = allStudios.slice();
+  if (cityId) pool = pool.filter((s) => s.cityId === cityId);
   if (keyword) pool = pool.filter((s) => s.name.includes(keyword) || s.address.includes(keyword));
   if (distanceMax) pool = pool.filter((s) => s.distanceKm <= distanceMax);
   if (danceStyleId) pool = pool.filter((s) => s.danceStyleId === danceStyleId);
