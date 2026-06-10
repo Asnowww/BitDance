@@ -191,7 +191,8 @@ const apply = () => {
   position: fixed;
   top: 0;
   right: 0;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  /* M1 搜索筛选：遮罩覆盖到底部，避免抽屉打开时地图区域仍可被误操作。 */
+  bottom: 0;
   left: 0;
   z-index: 120;
   background: rgb(17 17 17 / 42%);
@@ -201,7 +202,8 @@ const apply = () => {
 .filter-drawer {
   position: fixed;
   right: 0;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  /* M1 搜索筛选：抽屉贴底，和全屏遮罩形成同一可操作范围。 */
+  bottom: 0;
   left: 0;
   z-index: 130;
   display: flex;

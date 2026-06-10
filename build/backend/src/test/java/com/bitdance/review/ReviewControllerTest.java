@@ -7,6 +7,7 @@ import com.bitdance.review.dto.CreateReviewRequest;
 import com.bitdance.review.dto.DimensionScoreDto;
 import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewListResponse;
+import com.bitdance.review.dto.ReviewMediaDto;
 import com.bitdance.review.dto.ReviewSummary;
 import com.bitdance.review.service.ReviewService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,7 +62,16 @@ class ReviewControllerTest {
             weight, status, (short) 0, 0, false,
             OffsetDateTime.now(),
             List.of(new DimensionScoreDto("traffic", "交通", (short) 5),
-                new DimensionScoreDto("ambience", "氛围", (short) 4))
+                new DimensionScoreDto("ambience", "氛围", (short) 4)),
+            // M2 媒体评价：fixture 带一张图片，保护控制层响应里的 mediaAssets 序列化。
+            List.of(new ReviewMediaDto(
+                900L,
+                "image",
+                "https://images.unsplash.com/photo-1547153760-18fc86324498?w=960&q=80&auto=format&fit=crop",
+                "review-media.jpg",
+                180000L
+            )),
+            null
         );
     }
 
@@ -70,7 +80,7 @@ class ReviewControllerTest {
             "studio", 1L, new BigDecimal("4.50"), "环境不错",
             List.of(new DimensionScoreDto("traffic", "交通", (short) 5),
                 new DimensionScoreDto("ambience", "氛围", (short) 4)),
-            "trial", 999L
+            "trial", 999L, List.of()
         );
     }
 
@@ -86,7 +96,8 @@ class ReviewControllerTest {
             .andExpect(jsonPath("$.data.reviewStatus").value("published"))
             .andExpect(jsonPath("$.data.isVerified").value(true))
             .andExpect(jsonPath("$.data.weightFactor").value(1.5))
-            .andExpect(jsonPath("$.data.dimensions.length()").value(2));
+            .andExpect(jsonPath("$.data.dimensions.length()").value(2))
+            .andExpect(jsonPath("$.data.mediaAssets.length()").value(1));
     }
 
     @Test
@@ -105,7 +116,7 @@ class ReviewControllerTest {
         var bad = new CreateReviewRequest(
             "studio", 1L, new BigDecimal("6.00"), "x",
             List.of(new DimensionScoreDto("a", "交通", (short) 5)),
-            null, null
+            null, null, List.of()
         );
         mvc.perform(post("/h5/reviews")
                 .header("Authorization", "Bearer fake")
@@ -120,7 +131,7 @@ class ReviewControllerTest {
         var bad = new CreateReviewRequest(
             "workshop", 1L, new BigDecimal("4.0"), null,
             List.of(new DimensionScoreDto("a", "交通", (short) 5)),
-            null, null
+            null, null, List.of()
         );
         mvc.perform(post("/h5/reviews")
                 .header("Authorization", "Bearer fake")
@@ -133,7 +144,7 @@ class ReviewControllerTest {
     @Test
     void create_emptyDimensions_returns400() throws Exception {
         var bad = new CreateReviewRequest(
-            "studio", 1L, new BigDecimal("4.0"), null, List.of(), null, null
+            "studio", 1L, new BigDecimal("4.0"), null, List.of(), null, null, List.of()
         );
         mvc.perform(post("/h5/reviews")
                 .header("Authorization", "Bearer fake")

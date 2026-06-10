@@ -47,6 +47,15 @@ public class ReviewController {
         return ApiResponse.ok(Map.of("deleted", true));
     }
 
+    @GetMapping("/h5/reviews/mine")
+    public ApiResponse<ReviewListResponse> listMine(
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        // M2 风控验收：本人可见待审核评价，公开列表仍只暴露 published/folded。
+        return ApiResponse.ok(service.listMine(CurrentUser.getId(), page, pageSize));
+    }
+
     @GetMapping("/public/reviews")
     public ApiResponse<ReviewListResponse> list(
         @RequestParam @NotBlank String targetType,

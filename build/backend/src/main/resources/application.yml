@@ -106,6 +106,12 @@ bitdance:
       call-timeout-ms: ${ALIYUN_PNVS_CALL_TIMEOUT_MS:15000}
       max-attempts: ${ALIYUN_PNVS_MAX_ATTEMPTS:2}
       retry-backoff-ms: ${ALIYUN_PNVS_RETRY_BACKOFF_MS:300}
+  maps:
+    tencent:
+      # M1 腾讯地图 WebService Key 只在后端读取；真实值放环境变量或 application-local.yml。
+      key: ${BITDANCE_TENCENT_MAP_KEY:}
+      base-url: ${BITDANCE_TENCENT_MAP_BASE_URL:https://apis.map.qq.com}
+      referer: ${BITDANCE_TENCENT_MAP_REFERER:BitDance}
   cors:
     allowed-origins:
       - http://localhost:5173

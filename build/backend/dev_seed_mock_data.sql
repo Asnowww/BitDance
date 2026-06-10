@@ -54,10 +54,21 @@ DECLARE
     seed_id bigint;
     next_user_id bigint;
     style_names text[] := ARRAY['HipHop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waacking', 'Urban', 'House', '中国舞'];
+    anchor_lats numeric[] := ARRAY[39.984000, 39.995000, 39.828000, 39.903000, 40.067000, 39.914000, 39.804000, 40.074000, 39.735000, 39.941000];
+    anchor_lons numeric[] := ARRAY[116.316000, 116.469000, 116.289000, 116.654000, 116.333000, 116.190000, 116.506000, 116.562000, 116.143000, 116.101000];
+    lat_jitter numeric;
+    lon_jitter numeric;
+    seeded_lat numeric;
+    seeded_lon numeric;
 BEGIN
     FOR i IN 1..10 LOOP
         seed_id := 100000 + i;
         next_user_id := 100000 + CASE WHEN i = 10 THEN 1 ELSE i + 1 END;
+        -- 舞室定位随机化：使用北京多片区锚点加小幅抖动，避开故宫周边中心区。
+        lat_jitter := (((i * 37) % 7) - 3) * 0.003500;
+        lon_jitter := (((i * 53) % 7) - 3) * 0.004500;
+        seeded_lat := anchor_lats[i] + lat_jitter;
+        seeded_lon := anchor_lons[i] + lon_jitter;
 
         -- app_user: 10 seed accounts for login, reviews, orders, and social content.
         INSERT INTO app_user (id, created_at, updated_at, open_id, phone, status, union_id)
@@ -148,13 +159,13 @@ BEGIN
             now(),
             'wx4g0' || i,
             '用于开发联调的模拟舞室，包含课程、评价、约练和活动数据。',
-            39.900000 + i * 0.010000,
-            116.300000 + i * 0.010000,
+            seeded_lat,
+            seeded_lon,
             'dev_seed',
             'active',
             'SEED_STUDIO_' || lpad(i::text, 3, '0'),
             'BitDance 模拟舞室 ' || i,
-            '地铁步行约 ' || (3 + i) || ' 分钟'
+            '地铁步行约 ' || (5 + (i % 6)) || ' 分钟'
         )
         ON CONFLICT (id) DO UPDATE SET
             studio_name = EXCLUDED.studio_name,
