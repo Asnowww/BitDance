@@ -7,6 +7,8 @@ import PenActionBar from '@/components/pen/PenActionBar.vue';
 import ReviewAggregatePanel from '@/components/review/ReviewAggregatePanel.vue';
 import { fetchCourseDetail, type CourseDetail } from '@/api/course';
 import { toggleFavorite } from '@/api/favorite';
+import request from '@/utils/request';
+import { createCourseOrder, type ScheduleItem } from '@/api/coachOps';
 
 const route = useRoute();
 const router = useRouter();
@@ -23,8 +25,40 @@ const toggleCourseFavorite = async () => {
   showToast(result.favored ? '已收藏' : '已取消收藏');
 };
 
+// ---------- 正式课购买 ----------
+const schedules = ref<ScheduleItem[]>([]);
+const ordering = ref<number | null>(null);
+
+const fmtSchedule = (s: ScheduleItem) => {
+  const d = new Date(s.startAt);
+  const e = new Date(s.endAt);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}-${pad(e.getHours())}:${pad(e.getMinutes())}`;
+};
+
+const buySchedule = async (s: ScheduleItem) => {
+  if (ordering.value) return;
+  ordering.value = s.id;
+  try {
+    await createCourseOrder({ courseId, courseScheduleId: s.id });
+    showToast('下单成功,请完成支付');
+    router.push('/me/course-orders');
+  } finally {
+    ordering.value = null;
+  }
+};
+
 onMounted(async () => {
   detail.value = await fetchCourseDetail(courseId);
+  try {
+    const list = await request.get<unknown, ScheduleItem[]>(`/public/courses/${courseId}/schedules`);
+    const now = Date.now();
+    schedules.value = (list ?? [])
+      .filter((s) => new Date(s.startAt).getTime() > now && s.status !== 'canceled')
+      .slice(0, 8);
+  } catch {
+    schedules.value = [];
+  }
 });
 </script>
 
@@ -51,6 +85,27 @@ onMounted(async () => {
         <h3 class="block__title">适合人群</h3>
         <div class="chip-row">
           <span v-for="item in audiences" :key="item" class="tag">{{ item }}</span>
+        </div>
+      </section>
+
+      <section v-if="schedules.length" class="block">
+        <h3 class="block__title">可报名场次</h3>
+        <div class="schedule-list">
+          <div v-for="s in schedules" :key="s.id" class="schedule-row">
+            <div class="schedule-info">
+              <strong>{{ fmtSchedule(s) }}</strong>
+              <small>
+                {{ s.classroomName || '教室待定' }} · {{ s.bookedCount ?? 0 }}/{{ s.capacity ?? '∞' }} 已约
+              </small>
+            </div>
+            <button
+              class="schedule-buy"
+              :disabled="ordering === s.id || (s.capacity != null && (s.bookedCount ?? 0) >= s.capacity)"
+              @click="buySchedule(s)"
+            >
+              {{ s.capacity != null && (s.bookedCount ?? 0) >= s.capacity ? '已满' : ordering === s.id ? '下单中…' : `¥${detail?.priceAmount ?? '-'} 报名` }}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -187,6 +242,53 @@ onMounted(async () => {
 .rows {
   display: flex;
   flex-direction: column;
+}
+
+.schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 18px;
+  background: $pen-soft;
+  padding: 12px 14px;
+}
+
+.schedule-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  strong {
+    font-size: 14px;
+    font-weight: 900;
+  }
+  small {
+    color: $pen-mute;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+}
+
+.schedule-buy {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: $pen-ink;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.45;
+  }
 }
 
 .tag {

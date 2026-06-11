@@ -10,7 +10,7 @@ const route = useRoute();
 const userStore = useUserStore();
 
 type Mode = 'code' | 'password';
-const mode = ref<Mode>('code');
+const mode = ref<Mode>('password');
 const methods = [
   { key: 'password' as Mode, label: '密码登录', icon: LockKeyhole },
   { key: 'code' as Mode, label: '验证码登录', icon: MessageSquareCode }
@@ -56,7 +56,7 @@ const onSendCode = async () => {
     showSuccessToast('验证码已发送');
     startCooldown();
   } catch {
-    /* request 拦截器已弹错误 toast */
+    /* request interceptor shows toast */
   }
 };
 
@@ -73,10 +73,13 @@ const onSubmit = async () => {
       await userStore.login(phone.value, code.value);
     }
     showSuccessToast('登录成功');
-    const redirect = (route.query.redirect as string) || '/home';
+    const roles = userStore.profile?.roles ?? [];
+    const isOps = roles.some((r) => ['PLATFORM_ADMIN', 'STUDIO_ADMIN', 'COACH'].includes(r));
+    // 运营角色(商家/教练/平台)登录后直达管理端;普通用户走 redirect 或首页
+    const redirect = isOps ? '/coach/dashboard' : (route.query.redirect as string) || '/home';
     router.replace(redirect);
   } catch {
-    /* toast 已弹 */
+    /* request interceptor shows toast */
   } finally {
     submitting.value = false;
   }
@@ -158,7 +161,7 @@ onBeforeUnmount(() => {
       </div>
 
       <button class="btn btn--dark" type="button" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '登录中…' : mode === 'code' ? '登录 / 注册' : '登录' }}
+        {{ submitting ? '登录中...' : mode === 'code' ? '登录 / 注册' : '登录' }}
       </button>
       <button class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
     </main>

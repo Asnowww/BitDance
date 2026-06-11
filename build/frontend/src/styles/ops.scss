@@ -1,0 +1,286 @@
+// M7 运营端共享样式 — 基于 pen-nike 设计系统(黑白灰、pill、8px 栅格、无阴影)
+@import './pen-nike.scss';
+
+@mixin ops-page {
+  @include pen-page;
+  padding-bottom: 96px;
+}
+
+@mixin ops-body {
+  padding: 16px 18px 0;
+}
+
+// 横滑筛选 chips
+@mixin ops-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 18px;
+  -webkit-overflow-scrolling: touch;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  button {
+    @include pen-chip;
+    border: 1px solid $pen-hairline;
+    background: $pen-canvas;
+    color: $pen-ink;
+    white-space: nowrap;
+    &.active {
+      border-color: $pen-ink;
+      background: $pen-ink;
+      color: $pen-on-primary;
+    }
+  }
+}
+
+// 列表卡片(扁平、soft 背景、24px 圆角)
+@mixin ops-card {
+  border-radius: 24px;
+  background: $pen-soft;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+// 卡片头:标题 + 状态徽标
+@mixin ops-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1.3;
+  }
+}
+
+// 状态徽标(文字色语义,无底色噪音)
+@mixin ops-badge {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: $pen-canvas;
+  font-size: 11px;
+  font-weight: 800;
+  color: $pen-mute;
+  white-space: nowrap;
+  &.ok {
+    color: $pen-success;
+  }
+  &.warn {
+    color: #b45309;
+  }
+  &.bad {
+    color: #d30005;
+  }
+  &.ink {
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+}
+
+// 卡片内 meta 行
+@mixin ops-meta {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: $pen-mute;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+// 卡片底部操作行(小 pill 按钮)
+@mixin ops-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  button {
+    height: 36px;
+    padding: 0 16px;
+    border: 1px solid $pen-hairline-strong;
+    border-radius: 999px;
+    background: $pen-canvas;
+    color: $pen-ink;
+    font-size: 12.5px;
+    font-weight: 800;
+    cursor: pointer;
+    &.primary {
+      border-color: $pen-ink;
+      background: $pen-ink;
+      color: $pen-on-primary;
+    }
+    &.danger {
+      color: #d30005;
+    }
+    &:disabled {
+      opacity: 0.45;
+    }
+  }
+}
+
+// 表单区
+@mixin ops-form {
+  .form-section {
+    margin: 20px 0 8px;
+    font-size: 13px;
+    font-weight: 900;
+    color: $pen-mute;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .field {
+    margin-bottom: 14px;
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 800;
+      color: $pen-ink;
+      em {
+        color: #d30005;
+        font-style: normal;
+      }
+    }
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid $pen-hairline;
+      border-radius: 16px;
+      background: $pen-soft;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: $pen-ink;
+      font-family: inherit;
+      outline: none;
+      box-sizing: border-box;
+      &:focus {
+        border-color: $pen-ink;
+        background: $pen-canvas;
+      }
+    }
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+    .hint {
+      margin-top: 4px;
+      font-size: 11.5px;
+      color: $pen-mute;
+    }
+  }
+  .field-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .seg {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    button {
+      height: 38px;
+      padding: 0 16px;
+      border: 1px solid $pen-hairline;
+      border-radius: 999px;
+      background: $pen-canvas;
+      color: $pen-ink;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      &.active {
+        border-color: $pen-ink;
+        background: $pen-ink;
+        color: $pen-on-primary;
+      }
+    }
+  }
+  .switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid $pen-hairline;
+    span {
+      font-size: 14px;
+      font-weight: 800;
+    }
+  }
+}
+
+// 底部固定提交栏
+@mixin ops-submit-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: $pen-canvas;
+  box-shadow: inset 0 1px 0 $pen-hairline;
+  box-sizing: border-box;
+  z-index: 10;
+  button {
+    @include pen-primary-btn;
+    width: 100%;
+  }
+}
+
+// 上传缩略
+@mixin ops-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  .upload-tile {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: $pen-soft;
+    display: grid;
+    place-items: center;
+    border: 1px dashed $pen-hairline-strong;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(17, 17, 17, 0.78);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+  }
+}
+
+// 加载/骨架
+@mixin ops-loading {
+  padding: 48px 0;
+  text-align: center;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
+}

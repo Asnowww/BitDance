@@ -278,10 +278,100 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '训练目标', requiresAuth: true }
   },
   {
+    path: '/me/course-orders',
+    name: 'my-course-orders',
+    component: () => import('@/pages/user/MyCourseOrdersPage.vue'),
+    meta: { title: '我的课程订单', requiresAuth: true }
+  },
+  {
     path: '/coach/appeal',
     name: 'coach-appeal',
     component: () => import('@/pages/coach/AppealPage.vue'),
     meta: { title: '评价申诉', requiresAuth: true }
+  },
+  {
+    path: '/coach/studio-claim',
+    name: 'studio-claim',
+    component: () => import('@/pages/coach/StudioClaimPage.vue'),
+    meta: { title: '舞室入驻 / 认领', requiresAuth: true }
+  },
+  {
+    path: '/coach/studio-claim/status',
+    name: 'studio-claim-status',
+    component: () => import('@/pages/coach/StudioClaimStatusPage.vue'),
+    meta: { title: '入驻审核进度', requiresAuth: true }
+  },
+  {
+    path: '/coach/courses',
+    name: 'merchant-courses',
+    component: () => import('@/pages/coach/MerchantCoursesPage.vue'),
+    meta: { title: '课程管理', requiresAuth: true }
+  },
+  {
+    path: '/coach/course-edit/:id?',
+    name: 'course-edit',
+    component: () => import('@/pages/coach/CourseEditPage.vue'),
+    meta: { title: '课程编辑', requiresAuth: true }
+  },
+  {
+    path: '/coach/schedule',
+    name: 'merchant-schedule',
+    component: () => import('@/pages/coach/MerchantSchedulePage.vue'),
+    meta: { title: '周课表', requiresAuth: true }
+  },
+  {
+    path: '/coach/schedule-edit/:id?',
+    name: 'schedule-edit',
+    component: () => import('@/pages/coach/ScheduleEditPage.vue'),
+    meta: { title: '场次编辑', requiresAuth: true }
+  },
+  {
+    path: '/coach/schedule/:id/bookings',
+    name: 'schedule-bookings',
+    component: () => import('@/pages/coach/ScheduleBookingsPage.vue'),
+    meta: { title: '预约名单', requiresAuth: true }
+  },
+  {
+    path: '/coach/checkin',
+    name: 'coach-checkin',
+    component: () => import('@/pages/coach/CheckinPage.vue'),
+    meta: { title: '签到核销', requiresAuth: true }
+  },
+  {
+    path: '/coach/workshops',
+    name: 'merchant-workshops',
+    component: () => import('@/pages/coach/MerchantWorkshopsPage.vue'),
+    meta: { title: 'Workshop 管理', requiresAuth: true }
+  },
+  {
+    path: '/coach/coaches',
+    name: 'merchant-coaches',
+    component: () => import('@/pages/coach/MerchantCoachesPage.vue'),
+    meta: { title: '教练管理', requiresAuth: true }
+  },
+  {
+    path: '/coach/invitations',
+    name: 'coach-invitations',
+    component: () => import('@/pages/coach/CoachInvitationsPage.vue'),
+    meta: { title: '我的合作邀请', requiresAuth: true }
+  },
+  {
+    path: '/coach/certification',
+    name: 'coach-certification',
+    component: () => import('@/pages/coach/CoachCertificationPage.vue'),
+    meta: { title: '教练资质', requiresAuth: true }
+  },
+  {
+    path: '/coach/settlement',
+    name: 'coach-settlement',
+    component: () => import('@/pages/coach/SettlementPage.vue'),
+    meta: { title: '收益统计', requiresAuth: true }
+  },
+  {
+    path: '/coach/platform/reviews',
+    name: 'platform-reviews',
+    component: () => import('@/pages/coach/PlatformReviewPage.vue'),
+    meta: { title: '平台审核中心', requiresAuth: true }
   },
   {
     path: '/coach/workshop-create',
@@ -323,9 +413,24 @@ const router = createRouter({
   }
 });
 
-router.beforeEach((to) => {
+const hasOpsRole = () => {
+  try {
+    const profile = JSON.parse(localStorage.getItem('bitdance_profile') ?? 'null');
+    const roles: string[] = profile?.roles ?? [];
+    return roles.some((r) => ['PLATFORM_ADMIN', 'STUDIO_ADMIN', 'COACH'].includes(r));
+  } catch {
+    return false;
+  }
+};
+
+router.beforeEach((to, from) => {
   if (to.meta?.requiresAuth && !getToken()) {
     return { path: '/login', query: { redirect: to.fullPath } };
+  }
+  // 应用入口分流:已登录的运营角色打开 App 时直达管理端(站内点击 tab 回首页不受影响)
+  const isAppEntry = from.matched.length === 0;
+  if (isAppEntry && to.path === '/home' && getToken() && hasOpsRole()) {
+    return { path: '/coach/dashboard' };
   }
   return true;
 });

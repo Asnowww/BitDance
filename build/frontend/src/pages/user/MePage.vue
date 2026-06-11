@@ -5,12 +5,13 @@ import {
   Bell,
   CalendarDays,
   Heart,
+  LogOut,
   PackageCheck,
   Shield,
   Star,
   UserRound
 } from 'lucide-vue-next';
-import { showToast } from 'vant';
+import { showConfirmDialog, showToast } from 'vant';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
@@ -20,18 +21,18 @@ const profileName = computed(() => user.profile?.nickname || '顾同学');
 const profileMeta = computed(() => '普通用户 · Jazz 初级 · 连续打卡 12 天');
 
 const quickActions = [
-  { label: '订单', icon: PackageCheck, path: '/me/workshop-orders' },
+  { label: '课程订单', icon: PackageCheck, path: '/me/course-orders' },
+  { label: '活动订单', icon: PackageCheck, path: '/me/workshop-orders' },
   { label: '预约', icon: CalendarDays, path: '/me/trials' },
   { label: '评价', icon: Star, path: '/me/reviews' },
   { label: '消息', icon: Bell, path: '/messages' },
-  { label: '收藏', icon: Heart, path: '/favorites' },
-  { label: '隐私', icon: Shield, path: '/me/privacy' }
+  { label: '收藏', icon: Heart, path: '/favorites' }
 ];
 
 const workbench = [
-  { title: '申请成为教练', status: '待认证', path: '/me/coach-home' },
-  { title: '申请舞室管理员', status: '待认证', path: '/coach/appeal' },
-  { title: '平台管理员入口', status: '待认证', path: '' }
+  { title: '运营工作台', status: '商家 / 教练 / 平台', path: '/coach/dashboard' },
+  { title: '舞室入驻 / 认领', status: '开通商家后台', path: '/coach/studio-claim' },
+  { title: '教练资质申请', status: '成为认证教练', path: '/coach/certification' }
 ];
 
 const goProfileHome = () => {
@@ -50,6 +51,15 @@ const goWorkbench = (path: string) => {
     return;
   }
   router.push(path);
+};
+
+const onLogout = async () => {
+  await showConfirmDialog({ title: '退出登录', message: '确认退出当前账号?' });
+  user.logout();
+  localStorage.removeItem('bitdance_ops_role');
+  localStorage.removeItem('bitdance_ops_studio');
+  showToast('已退出登录');
+  router.replace('/login');
 };
 </script>
 
@@ -107,6 +117,11 @@ const goWorkbench = (path: string) => {
           <em>{{ item.status }} &gt;</em>
         </button>
       </section>
+
+      <button class="logout-btn" type="button" @click="onLogout">
+        <LogOut :size="18" :stroke-width="2" />
+        退出登录
+      </button>
     </section>
   </main>
 </template>
@@ -327,6 +342,22 @@ const goWorkbench = (path: string) => {
     font-weight: 700;
     white-space: nowrap;
   }
+}
+
+.logout-btn {
+  min-height: 48px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--canvas);
+  color: #d30005;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 @media (max-width: 360px) {

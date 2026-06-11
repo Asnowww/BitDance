@@ -1,116 +1,228 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchCoachDashboard, type CoachDashboard } from '@/api/coachOps';
+import { storeToRefs } from 'pinia';
+import { useOpsStore, type OpsRole } from '@/stores/ops';
+import { fetchOpsDashboard, type OpsDashboard } from '@/api/coachOps';
 
 const router = useRouter();
-const data = ref<CoachDashboard | null>(null);
+const ops = useOpsStore();
+const { activeRole, studioId, approvedStudioIds, availableRoles, isCertifiedCoach } =
+  storeToRefs(ops);
 
-const quickActions = [
-  { title: '发布课程', path: '/coach/workshop-create' },
-  { title: '发布 Workshop', path: '/coach/workshop-create' },
-  { title: '签到核销', path: '/coach/orders' },
-  { title: '回复评价', path: '/coach/replies' }
+const data = ref<OpsDashboard | null>(null);
+const loading = ref(false);
+const loadError = ref(false);
+
+const roleLabels: Record<OpsRole, string> = {
+  studio_admin: '舞室管理员',
+  coach: '教练',
+  platform: '平台管理员'
+};
+
+const heroTitle = computed(() => {
+  if (activeRole.value === 'studio_admin') return '商家工作台';
+  if (activeRole.value === 'platform') return '平台审核台';
+  return '教练工作台';
+});
+
+const metrics = computed(() => {
+  const d = data.value;
+  const money = (v?: number | null) =>
+    v == null ? '—' : v >= 10000 ? `¥${(v / 10000).toFixed(1)}w` : `¥${Number(v).toFixed(0)}`;
+  return [
+    { label: '本月收入', value: money(d?.monthIncome) },
+    { label: '本月订单', value: d?.monthOrderCount ?? '—' },
+    { label: '核销数', value: d?.checkinCount ?? '—' },
+    { label: '退款数', value: d?.refundCount ?? '—' },
+    { label: '课程预约', value: d?.courseBookingCount ?? '—' },
+    { label: 'Workshop 报名', value: d?.workshopSignupCount ?? '—' },
+    { label: '待回复评价', value: d?.pendingReviewReplies ?? '—' },
+    { label: '平均评分', value: d?.avgRating != null ? Number(d.avgRating).toFixed(1) : '—' }
+  ];
+});
+
+interface Entry {
+  title: string;
+  desc: string;
+  path: string;
+}
+
+const studioEntries: Entry[] = [
+  { title: '课程管理', desc: '课程创建 / 发布 / 下架', path: '/coach/courses' },
+  { title: '周课表', desc: '排期与预约名单', path: '/coach/schedule' },
+  { title: '订单中心', desc: '正式课 / Workshop / 退款', path: '/coach/orders' },
+  { title: '签到核销', desc: '8 位核销码 / 扫码', path: '/coach/checkin' },
+  { title: 'Workshop 管理', desc: '发布与审批', path: '/coach/workshops' },
+  { title: '教练管理', desc: '邀请 / 分成 / 终止', path: '/coach/coaches' },
+  { title: '评价回复', desc: '回复与申诉', path: '/coach/replies' },
+  { title: '收益统计', desc: '应归属收入', path: '/coach/settlement' },
+  { title: '舞室信息', desc: '入驻与认领进度', path: '/coach/studio-claim/status' }
 ];
 
-const manageRows = [
-  { title: '舞室入驻认领', path: '/me/coach-home' },
-  { title: '课表管理', path: '/coach/workshop-create' },
-  { title: '教练账号管理', path: '/me/profile' },
-  { title: '订单与退款', path: '/coach/orders' },
-  { title: '数据看板', path: '/coach/dashboard' },
-  { title: '收益结算', path: '/coach/dashboard' }
+const coachEntries: Entry[] = [
+  { title: '我的邀请', desc: '舞室合作邀请确认', path: '/coach/invitations' },
+  { title: '教练资质', desc: '资质提交与进度', path: '/coach/certification' },
+  { title: 'Workshop 管理', desc: '创建与报名情况', path: '/coach/workshops' },
+  { title: '签到核销', desc: '核销自己负责的订单', path: '/coach/checkin' },
+  { title: '评价回复', desc: '回复自己相关评价', path: '/coach/replies' },
+  { title: '收益统计', desc: '我的应归属收入', path: '/coach/settlement' },
+  { title: '教练主页', desc: '介绍 / 风格 / 可约时段', path: '/me/coach-home' }
 ];
 
-const overview = computed(() => [
-  { value: data.value?.monthStudents ?? 18, label: '预约' },
-  { value: data.value?.monthSessions ?? 11, label: '核销' },
-  { value: data.value?.pendingReplies ?? 3, label: '待评价' },
-  { value: data.value ? `¥${(data.value.monthIncome / 1000).toFixed(1)}k` : '¥2.4k', label: '营收' }
-]);
+const platformEntries: Entry[] = [
+  { title: '平台审核中心', desc: '舞室 / 教练 / Workshop / 申诉', path: '/coach/platform/reviews' }
+];
+
+const entries = computed(() => {
+  if (activeRole.value === 'studio_admin') return studioEntries;
+  if (activeRole.value === 'platform') return platformEntries;
+  return coachEntries;
+});
+
+/** 工作台未开通时的引导 */
+const onboarding = computed(() => {
+  if (activeRole.value === 'studio_admin' && approvedStudioIds.value.length === 0) {
+    return {
+      title: '尚未开通商家后台',
+      desc: '提交舞室认领或新舞室入驻,通过平台审核后即可管理舞室。',
+      action: '去入驻 / 认领',
+      path: '/coach/studio-claim'
+    };
+  }
+  if (activeRole.value === 'coach' && !isCertifiedCoach.value) {
+    return {
+      title: '尚未获得教练身份',
+      desc: '提交教练资质审核,或等待舞室管理员邀请绑定。',
+      action: '提交教练资质',
+      path: '/coach/certification'
+    };
+  }
+  return null;
+});
+
+const loadDashboard = async () => {
+  if (activeRole.value === 'platform') return;
+  loading.value = true;
+  loadError.value = false;
+  try {
+    data.value = await fetchOpsDashboard({
+      role: activeRole.value,
+      studioId: activeRole.value === 'studio_admin' ? (studioId.value ?? undefined) : undefined
+    });
+  } catch {
+    loadError.value = true;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const switchRole = (role: OpsRole) => {
+  ops.setRole(role);
+};
+
+watch([activeRole, studioId], loadDashboard);
 
 onMounted(async () => {
-  data.value = await fetchCoachDashboard();
+  await ops.refresh();
+  await loadDashboard();
 });
 </script>
 
 <template>
-  <main class="dashboard-page">
+  <main class="dash">
     <header class="hero">
-      <button class="icon-btn" aria-label="返回" @click="router.back()">‹</button>
-      <p>ROLE WORKSPACE</p>
-      <h1>舞室管理员工作台</h1>
-    </header>
-
-    <section class="metric-grid">
-      <article v-for="item in overview" :key="item.label" class="metric">
-        <strong>{{ item.value }}</strong>
-        <span>{{ item.label }}</span>
-      </article>
-    </section>
-
-    <section class="panel">
-      <div class="section-head">
-        <h2>快捷操作</h2>
-        <span>QUICK</span>
-      </div>
-      <div class="quick-grid">
-        <button v-for="item in quickActions" :key="item.title" @click="router.push(item.path)">
-          <span>{{ item.title.slice(0, 2) }}</span>
-          {{ item.title }}
+      <button class="back" aria-label="返回" @click="router.push('/me')">‹</button>
+      <p>OPERATIONS WORKSPACE</p>
+      <h1>{{ heroTitle }}</h1>
+      <div class="role-switch">
+        <button
+          v-for="r in availableRoles"
+          :key="r"
+          :class="{ active: activeRole === r }"
+          @click="switchRole(r)"
+        >
+          {{ roleLabels[r] }}
         </button>
       </div>
+    </header>
+
+    <section v-if="onboarding" class="onboard">
+      <h2>{{ onboarding.title }}</h2>
+      <p>{{ onboarding.desc }}</p>
+      <button @click="router.push(onboarding.path)">{{ onboarding.action }}</button>
     </section>
 
+    <template v-else-if="activeRole !== 'platform'">
+      <section v-if="activeRole === 'studio_admin' && approvedStudioIds.length > 1" class="studio-pick">
+        <button
+          v-for="id in approvedStudioIds"
+          :key="id"
+          :class="{ active: studioId === id }"
+          @click="ops.setStudio(id)"
+        >
+          舞室 #{{ id }}
+        </button>
+      </section>
+
+      <section class="metrics" :class="{ dim: loading }">
+        <article v-for="m in metrics" :key="m.label">
+          <strong>{{ m.value }}</strong>
+          <span>{{ m.label }}</span>
+        </article>
+      </section>
+      <p v-if="loadError" class="load-error">
+        看板数据加载失败
+        <button @click="loadDashboard">重试</button>
+      </p>
+    </template>
+
     <section class="panel">
-      <div class="section-head">
-        <h2>管理页面</h2>
+      <div class="panel-head">
+        <h2>管理入口</h2>
         <span>MANAGE</span>
       </div>
-      <button v-for="item in manageRows" :key="item.title" class="manage-row" @click="router.push(item.path)">
-        <span>{{ item.title }}</span>
-        <em>进入</em>
+      <button v-for="e in entries" :key="e.title" class="entry" @click="router.push(e.path)">
+        <span class="entry-main">
+          <strong>{{ e.title }}</strong>
+          <small>{{ e.desc }}</small>
+        </span>
+        <em>›</em>
       </button>
     </section>
   </main>
 </template>
 
 <style lang="scss" scoped>
-.dashboard-page {
-  min-height: 100vh;
-  padding: 18px 18px 28px;
-  background: #fff;
-  color: #111;
+@import '@/styles/ops.scss';
+
+.dash {
+  @include ops-page;
+  padding: 18px 18px 40px;
 }
 
 .hero {
   position: relative;
-  min-height: 160px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 18px;
   border-radius: 30px;
-  background:
-    linear-gradient(135deg, rgba(17, 17, 17, 0.05), rgba(17, 17, 17, 0.74)),
-    linear-gradient(135deg, #e5e5e5, #9e9ea0);
+  padding: 64px 20px 20px;
+  background: linear-gradient(150deg, #2b2b2d, #111);
   color: #fff;
   p {
-    margin: 0 0 8px;
-    color: #e5e5e5;
+    margin: 0 0 6px;
+    color: #9e9ea0;
     font-size: 11px;
     font-weight: 900;
+    letter-spacing: 0.08em;
   }
   h1 {
-    width: 260px;
     margin: 0;
-    font-size: 36px;
-    line-height: 0.95;
+    font-size: 34px;
     font-weight: 900;
+    line-height: 1;
   }
 }
 
-.icon-btn {
+.back {
   position: absolute;
   top: 14px;
   left: 14px;
@@ -118,97 +230,147 @@ onMounted(async () => {
   height: 40px;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #111;
-  font-size: 30px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.metric-grid {
+.role-switch {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  button {
+    height: 36px;
+    padding: 0 16px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 800;
+    cursor: pointer;
+    &.active {
+      border-color: #fff;
+      background: #fff;
+      color: $pen-ink;
+    }
+  }
+}
+
+.onboard {
+  margin-top: 16px;
+  border-radius: 24px;
+  background: $pen-soft;
+  padding: 24px 20px;
+  h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 900;
+  }
+  p {
+    margin: 8px 0 16px;
+    color: $pen-mute;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  button {
+    @include pen-primary-btn;
+  }
+}
+
+.studio-pick {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-top: 14px;
+  button {
+    @include pen-chip;
+    border: 1px solid $pen-hairline;
+    background: $pen-canvas;
+    color: $pen-ink;
+    &.active {
+      border-color: $pen-ink;
+      background: $pen-ink;
+      color: #fff;
+    }
+  }
+}
+
+.metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   overflow: hidden;
   margin-top: 16px;
-  border-radius: 28px;
-  background: #111;
+  border-radius: 24px;
+  background: $pen-hairline;
+  transition: opacity 0.2s;
+  &.dim {
+    opacity: 0.5;
+  }
+  article {
+    min-height: 76px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px 6px;
+    background: $pen-soft;
+    text-align: center;
+    strong {
+      font-size: 17px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+    span {
+      margin-top: 6px;
+      color: $pen-mute;
+      font-size: 10.5px;
+      font-weight: 800;
+    }
+  }
 }
 
-.metric {
-  min-height: 80px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 10px 8px;
-  background: #111;
-  color: #fff;
-  strong {
-    font-size: 24px;
-    line-height: 1;
-    font-weight: 900;
-  }
-  span {
-    margin-top: 8px;
-    color: #cacacb;
-    font-size: 11px;
+.load-error {
+  margin: 10px 0 0;
+  color: #d30005;
+  font-size: 12.5px;
+  font-weight: 700;
+  button {
+    margin-left: 8px;
+    border: 0;
+    border-radius: 999px;
+    padding: 4px 12px;
+    background: $pen-ink;
+    color: #fff;
+    font-size: 12px;
     font-weight: 800;
+    cursor: pointer;
   }
 }
 
 .panel {
-  margin-top: 24px;
+  margin-top: 26px;
 }
 
-.section-head {
+.panel-head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   margin-bottom: 12px;
   h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 900;
+    @include pen-h3-section;
   }
   span {
-    color: #707072;
+    color: $pen-mute;
     font-size: 11px;
     font-weight: 900;
   }
 }
 
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  button {
-    min-height: 64px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 0;
-    border-radius: 24px;
-    padding: 12px;
-    background: #f5f5f5;
-    color: #111;
-    font-size: 14px;
-    font-weight: 900;
-    text-align: left;
-    span {
-      width: 36px;
-      height: 36px;
-      display: grid;
-      place-items: center;
-      flex: 0 0 auto;
-      border-radius: 999px;
-      background: #111;
-      color: #fff;
-      font-size: 12px;
-    }
-  }
-}
-
-.manage-row {
+.entry {
   width: 100%;
-  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -216,22 +378,29 @@ onMounted(async () => {
   margin-bottom: 8px;
   border: 0;
   border-radius: 22px;
-  padding: 0 14px 0 18px;
-  background: #f5f5f5;
-  color: #111;
+  padding: 14px 16px;
+  background: $pen-soft;
   text-align: left;
-  span {
-    font-size: 15px;
-    font-weight: 900;
+  cursor: pointer;
+  .entry-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    strong {
+      font-size: 15px;
+      font-weight: 900;
+      color: $pen-ink;
+    }
+    small {
+      font-size: 12px;
+      font-weight: 600;
+      color: $pen-mute;
+    }
   }
   em {
-    padding: 7px 12px;
-    border-radius: 999px;
-    background: #fff;
-    color: #111;
-    font-size: 12px;
     font-style: normal;
-    font-weight: 900;
+    color: $pen-mute;
+    font-size: 20px;
   }
 }
 </style>

@@ -1,120 +1,331 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { showToast } from 'vant';
-import { ScanLine } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { showConfirmDialog, showSuccessToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import EmptyState from '@/components/EmptyState.vue';
+import { useOpsStore } from '@/stores/ops';
+import {
+  fetchMerchantCourseOrders,
+  fetchMerchantWorkshopOrders,
+  fetchCourseRefunds,
+  fetchCourseCheckinHistory,
+  fetchWorkshopCheckinHistory,
+  checkinCourseOrder,
+  checkinWorkshopOrder,
+  approveCourseRefund,
+  rejectCourseRefund,
+  type CourseOrder,
+  type WorkshopOrder,
+  type CourseRefund
+} from '@/api/coachOps';
 
-const cats = ['待核销', '已核销', '已退款'];
-const activeCat = ref('待核销');
+type Tab = 'course' | 'workshop' | 'refund' | 'history';
 
-const orders = [
-  { id: '1', name: '小李', meta: 'Locking 大师课 · 5/30 14:00', price: '¥199', done: false },
-  { id: '2', name: '阿 May', meta: 'K-pop 入门 · 5/28 19:30', price: '¥79', done: false },
-  { id: '3', name: 'Leo', meta: 'Hiphop 中级 · 5/25 20:00', price: '¥128', done: true }
+const router = useRouter();
+const ops = useOpsStore();
+const tab = ref<Tab>('course');
+const loading = ref(true);
+const statusFilter = ref('');
+
+const courseOrders = ref<CourseOrder[]>([]);
+const workshopOrders = ref<WorkshopOrder[]>([]);
+const refunds = ref<CourseRefund[]>([]);
+const courseHistory = ref<CourseOrder[]>([]);
+const workshopHistory = ref<WorkshopOrder[]>([]);
+
+const tabs: Array<{ key: Tab; label: string }> = [
+  { key: 'course', label: '课程订单' },
+  { key: 'workshop', label: 'Workshop 订单' },
+  { key: 'refund', label: '退款审核' },
+  { key: 'history', label: '核销历史' }
 ];
+
+const orderStatusMeta: Record<string, { label: string; cls: string }> = {
+  pending_payment: { label: '待支付', cls: 'warn' },
+  paid: { label: '已支付', cls: 'ok' },
+  refund_requested: { label: '退款审核中', cls: 'warn' },
+  refunded: { label: '已退款', cls: 'bad' },
+  refund_rejected: { label: '退款被拒', cls: '' },
+  checked_in: { label: '已核销', cls: 'ink' },
+  completed: { label: '已完成', cls: '' },
+  canceled: { label: '已取消', cls: '' }
+};
+
+const refundStatusMeta: Record<string, { label: string; cls: string }> = {
+  pending: { label: '待审核', cls: 'warn' },
+  approved: { label: '已退款', cls: 'ok' },
+  rejected: { label: '已拒绝', cls: 'bad' }
+};
+
+const statusOptions = computed(() => {
+  if (tab.value === 'course') {
+    return ['', 'pending_payment', 'paid', 'refund_requested', 'checked_in', 'refunded'];
+  }
+  if (tab.value === 'workshop') return ['', 'pending_payment', 'paid', 'checked_in', 'refunded'];
+  return [];
+});
+
+const fmt = (t?: string | null) =>
+  t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '—';
+
+const load = async () => {
+  await ops.refresh();
+  const sid = ops.studioId;
+  if (!sid) {
+    loading.value = false;
+    return;
+  }
+  loading.value = true;
+  try {
+    if (tab.value === 'course') {
+      courseOrders.value = await fetchMerchantCourseOrders(sid, statusFilter.value || undefined);
+    } else if (tab.value === 'workshop') {
+      workshopOrders.value = await fetchMerchantWorkshopOrders({
+        studioId: sid,
+        status: statusFilter.value || undefined
+      });
+    } else if (tab.value === 'refund') {
+      refunds.value = await fetchCourseRefunds(sid);
+    } else {
+      const [c, w] = await Promise.all([
+        fetchCourseCheckinHistory(sid),
+        fetchWorkshopCheckinHistory(sid).catch(() => [])
+      ]);
+      courseHistory.value = c;
+      workshopHistory.value = w;
+    }
+  } finally {
+    loading.value = false;
+  }
+};
+
+const switchTab = (t: Tab) => {
+  tab.value = t;
+  statusFilter.value = '';
+  load();
+};
+
+const setStatusFilter = (s: string) => {
+  statusFilter.value = s;
+  load();
+};
+
+const checkinCourse = async (o: CourseOrder) => {
+  await showConfirmDialog({ title: '核销确认', message: `确认核销课程订单 ${o.orderNo}?` });
+  await checkinCourseOrder(o.id, o.checkinCode ?? '');
+  showSuccessToast('核销成功');
+  load();
+};
+
+const checkinWorkshop = async (o: WorkshopOrder) => {
+  await showConfirmDialog({ title: '核销确认', message: `确认核销 Workshop 订单 ${o.orderNo}?` });
+  await checkinWorkshopOrder(o.id, o.checkinCode ?? '');
+  showSuccessToast('核销成功');
+  load();
+};
+
+const handleRefund = async (r: CourseRefund, action: 'approve' | 'reject') => {
+  await showConfirmDialog({
+    title: action === 'approve' ? '同意退款' : '拒绝退款',
+    message:
+      action === 'approve'
+        ? `确认同意订单 #${r.courseOrderId} 的退款申请?款项将原路退回。`
+        : `确认拒绝订单 #${r.courseOrderId} 的退款申请?`
+  });
+  if (action === 'approve') await approveCourseRefund(r.id);
+  else await rejectCourseRefund(r.id);
+  showSuccessToast('已处理');
+  load();
+};
+
+onMounted(load);
 </script>
 
 <template>
-  <main class="pen-page pen-page--with-bar">
-    <PenTopBar title="学员订单" :show-share="false" />
+  <main class="orders-page">
+    <PenTopBar title="订单中心" :show-share="false" />
 
-    <section class="pen-scroll">
-      <div class="chip-row">
-        <button
-          v-for="c in cats"
-          :key="c"
-          class="chip"
-          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
-          type="button"
-          @click="activeCat = c"
-        >
-          {{ c }}
-        </button>
-      </div>
+    <nav class="chips">
+      <button
+        v-for="t in tabs"
+        :key="t.key"
+        :class="{ active: tab === t.key }"
+        @click="switchTab(t.key)"
+      >
+        {{ t.label }}
+      </button>
+    </nav>
 
-      <article v-for="o in orders" :key="o.id" class="order">
-        <span class="order__avatar" aria-hidden="true" />
-        <div class="order__copy">
-          <strong class="order__name">{{ o.name }}</strong>
-          <span class="order__meta">{{ o.meta }}</span>
-          <strong class="order__price">{{ o.price }}</strong>
-        </div>
-        <span v-if="o.done" class="order__done">已核销</span>
-        <button v-else class="order__btn" type="button" @click="showToast('已核销')">核销</button>
-      </article>
+    <nav v-if="statusOptions.length" class="chips sub">
+      <button
+        v-for="s in statusOptions"
+        :key="s"
+        :class="{ active: statusFilter === s }"
+        @click="setStatusFilter(s)"
+      >
+        {{ s === '' ? '全部状态' : orderStatusMeta[s]?.label ?? s }}
+      </button>
+    </nav>
+
+    <section class="body">
+      <p v-if="loading" class="loading">加载中…</p>
+
+      <EmptyState
+        v-else-if="!ops.studioId"
+        title="尚未开通商家后台"
+        desc="完成舞室入驻或认领后查看订单"
+        action-text="去入驻 / 认领"
+        @action="router.push('/coach/studio-claim')"
+      />
+
+      <!-- 课程订单 -->
+      <template v-else-if="tab === 'course'">
+        <EmptyState v-if="!courseOrders.length" title="暂无课程订单" />
+        <article v-for="o in courseOrders" :key="o.id" class="card">
+          <div class="head">
+            <h3>课程订单 · 学员 #{{ o.userId }}</h3>
+            <span class="badge" :class="orderStatusMeta[o.orderStatus]?.cls">
+              {{ orderStatusMeta[o.orderStatus]?.label ?? o.orderStatus }}
+            </span>
+          </div>
+          <p class="meta">
+            <span>{{ o.orderNo }}</span>
+            <span>¥{{ o.amountPayable }}</span>
+            <span>课程 #{{ o.courseId }} / 场次 #{{ o.courseScheduleId }}</span>
+            <span>下单 {{ fmt(o.createdAt) }}</span>
+          </p>
+          <div v-if="o.orderStatus === 'paid'" class="actions">
+            <button class="primary" @click="checkinCourse(o)">核销</button>
+          </div>
+        </article>
+      </template>
+
+      <!-- Workshop 订单 -->
+      <template v-else-if="tab === 'workshop'">
+        <EmptyState v-if="!workshopOrders.length" title="暂无 Workshop 订单" />
+        <article v-for="o in workshopOrders" :key="o.id" class="card">
+          <div class="head">
+            <h3>Workshop 订单 · 学员 #{{ o.userId }}</h3>
+            <span class="badge" :class="orderStatusMeta[o.orderStatus]?.cls">
+              {{ orderStatusMeta[o.orderStatus]?.label ?? o.orderStatus }}
+            </span>
+          </div>
+          <p class="meta">
+            <span>{{ o.orderNo }}</span>
+            <span>¥{{ o.amountPayable }}</span>
+            <span>Workshop #{{ o.workshopId }}</span>
+            <span>下单 {{ fmt(o.createdAt) }}</span>
+          </p>
+          <div v-if="o.orderStatus === 'paid'" class="actions">
+            <button class="primary" @click="checkinWorkshop(o)">核销</button>
+          </div>
+        </article>
+      </template>
+
+      <!-- 退款审核 -->
+      <template v-else-if="tab === 'refund'">
+        <EmptyState v-if="!refunds.length" title="暂无退款申请" />
+        <article v-for="r in refunds" :key="r.id" class="card">
+          <div class="head">
+            <h3>退款申请 · 订单 #{{ r.courseOrderId }}</h3>
+            <span class="badge" :class="refundStatusMeta[r.requestStatus]?.cls">
+              {{ refundStatusMeta[r.requestStatus]?.label ?? r.requestStatus }}
+            </span>
+          </div>
+          <p class="meta">
+            <span>申请人 #{{ r.requesterUserId }}</span>
+            <span>{{ fmt(r.createdAt) }}</span>
+          </p>
+          <p v-if="r.refundReason" class="reason">理由:{{ r.refundReason }}</p>
+          <p v-if="r.reviewRemark" class="reason">处理备注:{{ r.reviewRemark }}</p>
+          <div v-if="r.requestStatus === 'pending'" class="actions">
+            <button class="primary" @click="handleRefund(r, 'approve')">同意退款</button>
+            <button class="danger" @click="handleRefund(r, 'reject')">拒绝</button>
+          </div>
+        </article>
+      </template>
+
+      <!-- 核销历史 -->
+      <template v-else>
+        <EmptyState
+          v-if="!courseHistory.length && !workshopHistory.length"
+          title="暂无核销记录"
+        />
+        <article v-for="o in courseHistory" :key="`c${o.id}`" class="card">
+          <div class="head">
+            <h3>课程核销 · 学员 #{{ o.userId }}</h3>
+            <span class="badge ink">已核销</span>
+          </div>
+          <p class="meta">
+            <span>{{ o.orderNo }}</span>
+            <span>¥{{ o.amountPaid }}</span>
+            <span>完成 {{ fmt(o.completedAt ?? o.paidAt) }}</span>
+          </p>
+        </article>
+        <article v-for="o in workshopHistory" :key="`w${o.id}`" class="card">
+          <div class="head">
+            <h3>Workshop 核销 · 学员 #{{ o.userId }}</h3>
+            <span class="badge ink">已核销</span>
+          </div>
+          <p class="meta">
+            <span>{{ o.orderNo }}</span>
+            <span>¥{{ o.amountPaid }}</span>
+          </p>
+        </article>
+      </template>
     </section>
 
-    <footer class="save-bar">
-      <button class="save-bar__btn" type="button" @click="showToast('打开扫码核销')">
-        <ScanLine :size="20" :stroke-width="2" />
-        扫码核销
-      </button>
+    <footer v-if="ops.studioId" class="submit-bar">
+      <button @click="router.push('/coach/checkin')">输入核销码 / 扫码核销</button>
     </footer>
   </main>
 </template>
 
 <style lang="scss" scoped>
-@import '@/styles/pen-nike.scss';
+@import '@/styles/ops.scss';
 
-.pen-page {
-  @include pen-page;
-  &--with-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+.orders-page {
+  @include ops-page;
 }
-
-.pen-scroll { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; }
-
-.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { @include pen-chip; }
-
-.order {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid $pen-hairline;
-
-  &__avatar { flex: none; width: 44px; height: 44px; border-radius: 999px; background: $pen-ink; }
-  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  &__name { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
-  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
-  &__price { font-size: 13px; font-weight: 800; line-height: $pen-lh; }
-
-  &__done { flex: none; color: $pen-mute; font-size: 13px; font-weight: 700; line-height: $pen-lh; }
-  &__btn {
-    flex: none; height: 36px; padding: 8px 16px;
-    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
-    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
+.chips {
+  @include ops-chip-row;
+  &.sub {
+    padding-top: 0;
+    button {
+      height: 34px;
+      font-size: 12px;
+    }
   }
 }
-
-.save-bar {
-  position: fixed;
-  right: 0; bottom: var(--app-tabbar-offset, 0px); left: 0;
-  z-index: 10;
-  width: 100%;
-  max-width: 480px;
-  height: 76px;
-  margin: 0 auto;
-  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
-  background: $pen-canvas;
-  border-top: 1px solid $pen-hairline;
-  box-sizing: border-box;
-
-  &__btn {
-    width: 100%;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border: 0;
-    border-radius: 999px;
-    background: $pen-ink;
-    color: $pen-on-primary;
-    font-size: 15px;
-    font-weight: 800;
-    line-height: $pen-lh;
-    cursor: pointer;
-  }
+.body {
+  @include ops-body;
+}
+.loading {
+  @include ops-loading;
+}
+.card {
+  @include ops-card;
+}
+.head {
+  @include ops-card-head;
+}
+.badge {
+  @include ops-badge;
+}
+.meta {
+  @include ops-meta;
+}
+.actions {
+  @include ops-actions;
+}
+.reason {
+  margin: 10px 0 0;
+  color: $pen-charcoal;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.submit-bar {
+  @include ops-submit-bar;
 }
 </style>

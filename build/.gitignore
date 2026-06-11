@@ -66,6 +66,7 @@ $RECYCLE.BIN/
 
 # ---- 日志与临时 ----
 *.log
+*.pid
 logs/
 tmp/
 temp/
