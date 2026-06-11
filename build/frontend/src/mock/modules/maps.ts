@@ -65,6 +65,9 @@ const distance = (aLat?: number, aLng?: number, bLat?: number, bLng?: number) =>
 const nearestPlace = (latitude: number, longitude: number) =>
   PLACES.slice().sort((a, b) => distance(latitude, longitude, a.latitude, a.longitude) - distance(latitude, longitude, b.latitude, b.longitude))[0];
 
+const nearbyPlaces = (latitude: number, longitude: number) =>
+  PLACES.slice().sort((a, b) => distance(latitude, longitude, a.latitude, a.longitude) - distance(latitude, longitude, b.latitude, b.longitude)).slice(0, 10);
+
 const districtOf = (place: (typeof PLACES)[number]) => {
   if (place.address.includes('通州')) return '通州区';
   if (place.address.includes('朝阳')) return '朝阳区';
@@ -73,7 +76,7 @@ const districtOf = (place: (typeof PLACES)[number]) => {
   return '北京市';
 };
 
-mock('get', /\/admin\/maps\/tencent\/places$/, ({ params }) => {
+mock('get', /\/(?:admin|h5)\/maps\/tencent\/places$/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   const keyword = String(p.keyword ?? '').trim().toLowerCase();
   const lat = Number(p.latitude);
@@ -89,7 +92,7 @@ mock('get', /\/admin\/maps\/tencent\/places$/, ({ params }) => {
   };
 });
 
-mock('get', /\/admin\/maps\/tencent\/geocode$/, ({ params }) => {
+mock('get', /\/(?:admin|h5)\/maps\/tencent\/geocode$/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   const address = String(p.address ?? '').trim();
   const matched =
@@ -108,11 +111,12 @@ mock('get', /\/admin\/maps\/tencent\/geocode$/, ({ params }) => {
   };
 });
 
-mock('get', /\/admin\/maps\/tencent\/reverse-geocode$/, ({ params }) => {
+mock('get', /\/(?:admin|h5)\/maps\/tencent\/reverse-geocode$/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   const latitude = Number(p.latitude);
   const longitude = Number(p.longitude);
   const matched = nearestPlace(latitude, longitude);
+  const pois = nearbyPlaces(latitude, longitude);
   const district = districtOf(matched);
   return {
     title: matched.title,
@@ -122,6 +126,22 @@ mock('get', /\/admin\/maps\/tencent\/reverse-geocode$/, ({ params }) => {
     adcode: matched.adcode,
     province: latitude > 30 && latitude < 32 && longitude > 120 && longitude < 122 ? '上海市' : '北京市',
     city: latitude > 30 && latitude < 32 && longitude > 120 && longitude < 122 ? '上海市' : '北京市',
-    district
+    district,
+    pois
+  };
+});
+
+mock('get', /\/h5\/maps\/tencent\/ip-location$/, () => {
+  const matched = PLACES[0];
+  return {
+    title: '通州区',
+    address: '北京市通州区',
+    latitude: matched.latitude,
+    longitude: matched.longitude,
+    adcode: matched.adcode,
+    province: '北京市',
+    city: '北京市',
+    district: '通州区',
+    pois: []
   };
 });
