@@ -3,6 +3,8 @@ package com.bitdance.review.service;
 import com.bitdance.badge.service.BadgeRuleEngine;
 import com.bitdance.booking.domain.TrialBooking;
 import com.bitdance.booking.repository.TrialBookingRepository;
+import com.bitdance.catalog.domain.Course;
+import com.bitdance.catalog.repository.CourseRepository;
 import com.bitdance.common.exception.BizException;
 import com.bitdance.iam.domain.AppUser;
 import com.bitdance.iam.repository.AppUserRepository;
@@ -18,6 +20,12 @@ import com.bitdance.review.dto.ReviewSummary;
 import com.bitdance.review.repository.ReviewAppealRepository;
 import com.bitdance.review.repository.ReviewDimensionScoreRepository;
 import com.bitdance.review.repository.ReviewRepository;
+import com.bitdance.workshop.domain.Workshop;
+import com.bitdance.workshop.domain.WorkshopCheckin;
+import com.bitdance.workshop.domain.WorkshopOrder;
+import com.bitdance.workshop.repository.WorkshopCheckinRepository;
+import com.bitdance.workshop.repository.WorkshopOrderRepository;
+import com.bitdance.workshop.repository.WorkshopRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -45,6 +53,10 @@ public class ReviewService {
     private final ReviewRiskService riskService;
     private final ReviewMediaService mediaService;
     private final TrialBookingRepository trialRepo;
+    private final CourseRepository courseRepo;
+    private final WorkshopOrderRepository workshopOrderRepo;
+    private final WorkshopCheckinRepository workshopCheckinRepo;
+    private final WorkshopRepository workshopRepo;
     private final AppUserRepository userRepo;
     private final BadgeRuleEngine badgeRuleEngine;
 
@@ -55,6 +67,10 @@ public class ReviewService {
         ReviewRiskService riskService,
         ReviewMediaService mediaService,
         TrialBookingRepository trialRepo,
+        CourseRepository courseRepo,
+        WorkshopOrderRepository workshopOrderRepo,
+        WorkshopCheckinRepository workshopCheckinRepo,
+        WorkshopRepository workshopRepo,
         AppUserRepository userRepo,
         BadgeRuleEngine badgeRuleEngine
     ) {
@@ -64,6 +80,10 @@ public class ReviewService {
         this.riskService = riskService;
         this.mediaService = mediaService;
         this.trialRepo = trialRepo;
+        this.courseRepo = courseRepo;
+        this.workshopOrderRepo = workshopOrderRepo;
+        this.workshopCheckinRepo = workshopCheckinRepo;
+        this.workshopRepo = workshopRepo;
         this.userRepo = userRepo;
         this.badgeRuleEngine = badgeRuleEngine;
     }
@@ -212,6 +232,18 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
+    public ReviewListResponse replyQueue(int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(1, pageSize), 100);
+        // M2 治理闭环：教练/商家回复页读取真实公开/折叠评价，替换前端静态样例。
+        Page<Review> p = reviewRepo.findByReviewStatusInOrderByPublishedAtDesc(
+            List.of("published", "folded"),
+            PageRequest.of(safePage - 1, safeSize)
+        );
+        return toReviewListResponse(p, safePage, safeSize, true);
+    }
+
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "review:summary", key = "#targetType + ':' + #targetId")
     public ReviewSummary summary(String targetType, Long targetId) {
         validateTargetType(targetType);
@@ -232,15 +264,43 @@ public class ReviewService {
 
     private boolean verifySource(Long userId, CreateReviewRequest req) {
         if (req.sourceType() == null || req.sourceRefId() == null) return false;
-        if ("trial".equals(req.sourceType())) {
-            return trialRepo.findById(req.sourceRefId())
+        return switch (req.sourceType()) {
+            case "trial" -> verifyTrialSource(userId, req);
+            case "order" -> verifyWorkshopOrderSource(userId, req);
+            case "checkin" -> verifyWorkshopCheckinSource(userId, req);
+            default -> false;
+        };
+    }
+
+    private boolean verifyTrialSource(Long userId, CreateReviewRequest req) {
+        // M2 复杂闭环：试听来源可证明课程、舞室，以及该课程绑定老师的评价来源。
+        return trialRepo.findById(req.sourceRefId())
                 .map(b -> b.getUserId().equals(userId)
                     && isVerifiableTrial(b)
                     && matchesTrialTarget(b, req.targetType(), req.targetId()))
                 .orElse(false);
-        }
-        // order / checkin 待 Workshop 模块上线后补
-        return false;
+    }
+
+    private boolean verifyWorkshopOrderSource(Long userId, CreateReviewRequest req) {
+        // M2/M6 联验：已支付或已完成 Workshop 订单可证明对应舞室/老师评价来源。
+        return workshopOrderRepo.findById(req.sourceRefId())
+            .map(o -> o.getUserId().equals(userId)
+                && List.of("paid", "completed").contains(o.getOrderStatus())
+                && matchesWorkshopTarget(o, req.targetType(), req.targetId()))
+            .orElse(false);
+    }
+
+    private boolean verifyWorkshopCheckinSource(Long userId, CreateReviewRequest req) {
+        // M2/M6 联验：签到来源比订单更强，sourceRefId 兼容 checkinId 与 orderId，便于 UI 和补库验收。
+        WorkshopCheckin c = workshopCheckinRepo.findById(req.sourceRefId())
+            .or(() -> workshopCheckinRepo.findByWorkshopOrderId(req.sourceRefId()))
+            .orElse(null);
+        if (c == null || !userId.equals(c.getCheckedInByUserId())) return false;
+        return workshopOrderRepo.findById(c.getWorkshopOrderId())
+            .map(o -> o.getUserId().equals(userId)
+                && List.of("paid", "completed").contains(o.getOrderStatus())
+                && matchesWorkshopTarget(o, req.targetType(), req.targetId()))
+            .orElse(false);
     }
 
     private boolean isVerifiableTrial(TrialBooking b) {
@@ -252,7 +312,25 @@ public class ReviewService {
         return switch (targetType) {
             case "course" -> b.getCourseId().equals(targetId);
             case "studio" -> b.getStudioId().equals(targetId);
-            default -> false; // 试听不直接证明 coach 评价（留待 BE-013 互评接入）
+            case "coach" -> courseRepo.findById(b.getCourseId())
+                .map(Course::getCoachId)
+                .filter(targetId::equals)
+                .isPresent();
+            default -> false;
+        };
+    }
+
+    private boolean matchesWorkshopTarget(WorkshopOrder order, String targetType, Long targetId) {
+        return workshopRepo.findById(order.getWorkshopId())
+            .map(w -> matchesWorkshopTarget(w, targetType, targetId))
+            .orElse(false);
+    }
+
+    private boolean matchesWorkshopTarget(Workshop workshop, String targetType, Long targetId) {
+        return switch (targetType) {
+            case "studio" -> targetId.equals(workshop.getStudioId());
+            case "coach" -> targetId.equals(workshop.getCoachId());
+            default -> false;
         };
     }
 
