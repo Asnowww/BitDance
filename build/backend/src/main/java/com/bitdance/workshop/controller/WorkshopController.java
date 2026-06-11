@@ -4,6 +4,7 @@ import com.bitdance.common.web.ApiResponse;
 import com.bitdance.iam.security.CurrentUser;
 import com.bitdance.workshop.dto.CheckinRequest;
 import com.bitdance.workshop.dto.CreateOrderRequest;
+import com.bitdance.workshop.dto.WorkshopCalendarEventDto;
 import com.bitdance.workshop.dto.OrderDto;
 import com.bitdance.workshop.dto.RefundRequest;
 import com.bitdance.workshop.dto.WorkshopDetail;
@@ -75,6 +76,16 @@ public class WorkshopController {
     @GetMapping("/h5/workshop-orders/mine")
     public ApiResponse<List<OrderDto>> mine() {
         return ApiResponse.ok(service.listMyOrders(CurrentUser.getId()));
+    }
+
+    @GetMapping("/h5/workshop-orders/{id}")
+    public ApiResponse<OrderDto> myOrder(@PathVariable Long id) {
+        return ApiResponse.ok(service.getMyOrder(CurrentUser.getId(), id));
+    }
+
+    @GetMapping("/h5/workshop-calendar")
+    public ApiResponse<List<WorkshopCalendarEventDto>> calendar() {
+        return ApiResponse.ok(service.listMyCalendar(CurrentUser.getId()));
     }
 
     @PostMapping("/h5/workshop-orders/{id}/checkin")

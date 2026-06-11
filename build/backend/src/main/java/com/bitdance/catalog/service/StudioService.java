@@ -60,7 +60,6 @@ public class StudioService {
             safePage, safeSize
         );
         List<StudioNearbyRow> rows = searchRepo.searchNearby(p);
-        long total = searchRepo.countNearby(p);
 
         Set<Long> favored = currentUserId == null
             ? Set.of()
@@ -72,26 +71,7 @@ public class StudioService {
             r.coverAssetId(), r.distanceKm(), r.latitude(), r.longitude(),
             favored.contains(r.id())
         )).toList();
-        return new StudioListResponse(list, safePage, safeSize, total);
-    }
-
-    @Transactional
-    @CacheEvict(cacheNames = "studio:detail", allEntries = true)
-    public StudioDetail updateLocation(Long id, UpdateStudioLocationRequest req) {
-        Studio s = studioRepo.findById(id)
-            .orElseThrow(() -> new BizException("STUDIO_NOT_FOUND", "舞室不存在"));
-        // M1 腾讯地图标注：后端只保存标准经纬度，不保存地图平台密钥。
-        if (req.address() != null && !req.address().isBlank()) {
-            s.setAddress(req.address().trim());
-        }
-        if (req.transportInfo() != null) {
-            s.setTransportInfo(req.transportInfo().trim());
-        }
-        s.setLongitude(req.longitude());
-        s.setLatitude(req.latitude());
-        s.setGeoHash(null);
-        Studio saved = studioRepo.save(s);
-        return detail(saved.getId(), null);
+        return new StudioListResponse(list, safePage, safeSize);
     }
 
     @Transactional(readOnly = true)
@@ -117,5 +97,22 @@ public class StudioService {
             s.getCoverAssetId(), s.getClaimStatus(),
             styleIds, favored
         );
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "studio:detail", allEntries = true)
+    public StudioDetail updateLocation(Long id, UpdateStudioLocationRequest req) {
+        Studio s = studioRepo.findById(id)
+            .orElseThrow(() -> new BizException("STUDIO_NOT_FOUND", "舞室不存在"));
+        if (req.address() != null && !req.address().isBlank()) {
+            s.setAddress(req.address().trim());
+        }
+        if (req.transportInfo() != null) {
+            s.setTransportInfo(req.transportInfo().trim().isEmpty() ? null : req.transportInfo().trim());
+        }
+        s.setLongitude(req.longitude());
+        s.setLatitude(req.latitude());
+        Studio saved = studioRepo.save(s);
+        return detail(saved.getId(), null);
     }
 }

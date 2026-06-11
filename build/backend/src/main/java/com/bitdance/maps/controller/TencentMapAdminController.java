@@ -37,6 +37,14 @@ public class TencentMapAdminController {
         return ApiResponse.ok(tencentMapService.geocode(address));
     }
 
+    @GetMapping("/reverse-geocode")
+    public ApiResponse<MapGeocodeResult> reverseGeocode(
+        @RequestParam @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitude,
+        @RequestParam @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude
+    ) {
+        return ApiResponse.ok(tencentMapService.reverseGeocode(latitude, longitude));
+    }
+
     @GetMapping("/places")
     public ApiResponse<MapPlaceListResponse> searchPlaces(
         @RequestParam @NotBlank @Size(max = 100) String keyword,

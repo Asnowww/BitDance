@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
@@ -54,7 +53,7 @@ public class TrialBooking {
     @Column(name = "cancel_reason", columnDefinition = "text")
     private String cancelReason;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     public Long getId() { return id; }
@@ -83,10 +82,4 @@ public class TrialBooking {
     public String getCancelReason() { return cancelReason; }
     public void setCancelReason(String v) { this.cancelReason = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
-
-    @PrePersist
-    void fillCreatedAt() {
-        // M1 试听预约验收：远端旧表没有稳定默认时间时，由实体补 created_at，避免前端出现 1970 兜底日期。
-        if (createdAt == null) createdAt = OffsetDateTime.now();
-    }
 }

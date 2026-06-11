@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ChevronLeft, ExternalLink, MessageCircle, Share2, ShieldCheck, User, UserPlus } from 'lucide-vue-next';
+import { showToast } from 'vant';
 import { fetchPublicSocialAccounts } from '@/api/social';
 import type { SocialAccount } from '@/api/social';
 import {
@@ -14,6 +15,7 @@ import {
   type UserPracticePost,
   type UserReviewItem
 } from '@/api/userHome';
+import { fetchFollowStatus, toggleFollow } from '@/api/community';
 
 const router = useRouter();
 const route = useRoute();
@@ -27,6 +29,8 @@ const reviews = ref<UserReviewItem[]>([]);
 const practices = ref<UserPracticePost[]>([]);
 const socials = ref<SocialAccount[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
+const following = ref(false);
+const followCounts = ref({ followers: 0, following: 0 });
 const loading = ref(false);
 
 const userId = computed(() => Number(route.params.id || 0));
@@ -101,10 +105,26 @@ const loadHomeData = async () => {
         })
       );
     }
+    const statusResp = await fetchFollowStatus(userId.value).catch(() => null);
+    following.value = Boolean(statusResp?.following);
+    followCounts.value = {
+      followers: statusResp?.followerCount ?? 0,
+      following: statusResp?.followeeCount ?? 0
+    };
     await Promise.allSettled(tasks);
   } finally {
     loading.value = false;
   }
+};
+
+const onFollow = async () => {
+  const next = await toggleFollow(userId.value);
+  following.value = next.following;
+  followCounts.value = {
+    followers: next.followerCount,
+    following: followCounts.value.following
+  };
+  showToast(next.following ? '已关注' : '已取消关注');
 };
 
 onMounted(loadHomeData);
@@ -147,15 +167,21 @@ watch(userId, loadHomeData);
           </div>
         </div>
         <div class="hero-actions">
-          <button class="hero-actions__follow" type="button">
+          <button class="hero-actions__follow" type="button" @click="onFollow">
             <UserPlus :size="18" />
-            <span>关注</span>
+            <span>{{ following ? '已关注' : '关注' }}</span>
           </button>
           <button class="hero-actions__message" type="button">
             <MessageCircle :size="18" />
             <span>私信</span>
           </button>
         </div>
+      </section>
+
+      <section class="stats" aria-label="社交数据">
+        <span><strong>{{ totals.posts }}</strong><em>动态</em></span>
+        <span><strong>{{ followCounts.followers }}</strong><em>粉丝</em></span>
+        <span><strong>{{ followCounts.following }}</strong><em>关注</em></span>
       </section>
 
       <section class="section">
@@ -195,7 +221,13 @@ watch(userId, loadHomeData);
         <p v-if="loading" class="empty-state">加载中...</p>
         <template v-else-if="activeTab === 'posts'">
           <p v-if="!contentVisible" class="empty-state">对方未公开动态</p>
-          <article v-for="item in posts" v-else :key="item.id" class="content-card">
+          <article
+            v-for="item in posts"
+            v-else
+            :key="item.id"
+            class="content-card"
+            @click="router.push(`/community/post/${item.id}`)"
+          >
             <h3>最近动态</h3>
             <p>{{ postText(item) }}</p>
             <div v-if="postTopics(item).length" class="chips">
@@ -373,6 +405,38 @@ watch(userId, loadHomeData);
   }
 }
 
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  span {
+    min-height: 56px;
+    border: 1px solid $pen-hairline;
+    border-radius: 14px;
+    background: $pen-canvas;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  em {
+    color: $pen-mute;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+}
+
 .social-card {
   display: flex;
   align-items: center;
@@ -501,6 +565,7 @@ watch(userId, loadHomeData);
   border: 1px solid $pen-hairline;
   border-radius: 14px;
   background: $pen-canvas;
+  cursor: pointer;
 
   h3,
   p {

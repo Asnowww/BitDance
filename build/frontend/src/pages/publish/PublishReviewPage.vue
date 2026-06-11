@@ -6,6 +6,7 @@ import { Image, Music, Plus, ShieldCheck, Trash2, Video } from 'lucide-vue-next'
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { fetchCourseDetail, fetchCoachDetail } from '@/api/course';
 import { fetchStudioDetail } from '@/api/studio';
+import { fetchWorkshopDetail } from '@/api/workshop';
 import {
   createReview,
   REVIEW_DIMENSIONS,
@@ -20,17 +21,19 @@ const router = useRouter();
 const targetTypes: Array<{ type: ReviewTargetType; label: string }> = [
   { type: 'studio', label: '舞室' },
   { type: 'coach', label: '老师' },
-  { type: 'course', label: '课程' }
+  { type: 'course', label: '课程' },
+  { type: 'workshop', label: 'Workshop' }
 ];
 
 const targetNames: Record<ReviewTargetType, string> = {
   studio: 'Urban Flow 舞室',
   coach: 'Mia 老师',
-  course: 'K-pop 入门课'
+  course: 'K-pop 入门课',
+  workshop: 'Workshop 活动'
 };
 
 const normalizeTargetType = (raw: unknown): ReviewTargetType =>
-  raw === 'coach' || raw === 'course' || raw === 'studio' ? raw : 'studio';
+  raw === 'coach' || raw === 'course' || raw === 'studio' || raw === 'workshop' ? raw : 'studio';
 
 const draftKey = 'bitdance_review_draft';
 const routeTargetType = computed(() => normalizeTargetType(route.query.targetType));
@@ -205,6 +208,12 @@ const loadTargetContext = async () => {
       targetMetaState.value = `课程 · ¥${detail.priceAmount} · ${detail.difficultyLevel || sourceLabel.value}`;
       return;
     }
+    if (routeTargetType.value === 'workshop') {
+      const detail = await fetchWorkshopDetail(routeTargetId.value);
+      targetNameState.value = detail.title;
+      targetMetaState.value = `Workshop · ${detail.area || detail.studioName || sourceLabel.value}`;
+      return;
+    }
     const detail = await fetchCoachDetail(routeTargetId.value);
     targetNameState.value = detail.displayName;
     targetMetaState.value = `老师 · ${detail.teachingStyle || sourceLabel.value}`;
@@ -215,7 +224,7 @@ const loadTargetContext = async () => {
 
 const submitReview = async () => {
   if (!targetId.value) {
-    showFailToast('请从具体舞室、老师或课程详情页进入写评价');
+    showFailToast('请从具体舞室、老师、课程或 Workshop 详情页进入写评价');
     return;
   }
   if (currentDimensions.value.some((item) => scores[item.key] === undefined)) {

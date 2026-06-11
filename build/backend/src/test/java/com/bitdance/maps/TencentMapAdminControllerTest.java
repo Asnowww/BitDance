@@ -66,4 +66,27 @@ class TencentMapAdminControllerTest {
             .andExpect(jsonPath("$.data.list[0].title").value("舞室 A"))
             .andExpect(jsonPath("$.data.total").value(1));
     }
+
+    @Test
+    void reverseGeocode_returnsAddressFromCoordinates() throws Exception {
+        when(tencentMapService.reverseGeocode(eq(new BigDecimal("39.85362")), eq(new BigDecimal("116.67618"))))
+            .thenReturn(new MapGeocodeResult(
+                "北京市通州区附近",
+                "北京市通州区当前位置附近",
+                new BigDecimal("39.85362"),
+                new BigDecimal("116.67618"),
+                "110112",
+                "北京市",
+                "北京市",
+                "通州区"
+            ));
+
+        mvc.perform(get("/admin/maps/tencent/reverse-geocode")
+                .param("latitude", "39.85362")
+                .param("longitude", "116.67618"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.title").value("北京市通州区附近"))
+            .andExpect(jsonPath("$.data.latitude").value(39.85362))
+            .andExpect(jsonPath("$.data.longitude").value(116.67618));
+    }
 }

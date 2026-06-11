@@ -19,6 +19,10 @@ export interface UserContentPost {
   locationName?: string;
   likeCount?: number;
   commentCount?: number;
+  collectCount?: number;
+  shareCount?: number;
+  mediaAssets?: Array<{ id: number; mediaType: 'image' | 'video'; url: string; originalFilename?: string }>;
+  visibility?: 'public' | 'followers' | 'private';
   createdAt?: number | string;
   publishedAt?: string;
 }
@@ -104,6 +108,11 @@ export const fetchPublicUserProfile = (userId: number) =>
 
 export const fetchUserPosts = (userId: number, page = 1, pageSize = 10) =>
   request.get<unknown, ListResponse<UserContentPost>>(`/public/users/${userId}/community/posts`, {
+    params: { page, pageSize }
+  });
+
+export const fetchMyCommunityPosts = (page = 1, pageSize = 10) =>
+  request.get<unknown, ListResponse<UserContentPost>>('/h5/community/posts/me', {
     params: { page, pageSize }
   });
 

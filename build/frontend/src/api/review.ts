@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 
-export type ReviewTargetType = 'studio' | 'course' | 'coach';
+export type ReviewTargetType = 'studio' | 'course' | 'coach' | 'workshop';
 
 export interface ReviewDimension {
   key: string;
@@ -25,6 +25,12 @@ export const REVIEW_DIMENSIONS: Record<ReviewTargetType, ReviewDimension[]> = {
     { key: 'rhythm', label: '节奏合理性' },
     { key: 'intensity', label: '练习强度' },
     { key: 'gain', label: '实际收获' }
+  ],
+  workshop: [
+    { key: 'organization', label: '活动组织' },
+    { key: 'teaching', label: '教学质量' },
+    { key: 'venue', label: '场地体验' },
+    { key: 'gain', label: '参与收获' }
   ]
 };
 

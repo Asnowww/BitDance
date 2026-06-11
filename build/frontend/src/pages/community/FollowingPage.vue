@@ -1,20 +1,50 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { fetchFollowers, fetchFollowing, toggleFollow, type FollowUser } from '@/api/community';
 
-const tab = ref<'following' | 'fans'>('following');
+const route = useRoute();
+const router = useRouter();
+const tab = ref<'following' | 'fans'>(route.query.tab === 'fans' ? 'fans' : 'following');
+const loading = ref(false);
 
-const users = reactive([
-  { id: '1', name: '小鹿老师', meta: 'Jazz · 认证教练', state: '已关注', followed: true },
-  { id: '2', name: 'A Jen', meta: 'Hiphop · 中级 · 同城', state: '互相关注', followed: true },
-  { id: '3', name: 'Leo', meta: 'Urban · 中级', state: '已关注', followed: true },
-  { id: '4', name: '韩舞研习社', meta: '话题社区 · 8900 成员', state: '关注', followed: false }
-]);
+const following = ref<FollowUser[]>([]);
+const followers = ref<FollowUser[]>([]);
+const visibleUsers = computed(() => (tab.value === 'fans' ? followers.value : following.value));
 
-const toggle = (u: (typeof users)[number]) => {
-  u.followed = !u.followed;
-  u.state = u.followed ? '已关注' : '关注';
+const load = async () => {
+  loading.value = true;
+  try {
+    const [followingData, followerData] = await Promise.all([fetchFollowing(), fetchFollowers()]);
+    following.value = followingData;
+    followers.value = followerData;
+  } finally {
+    loading.value = false;
+  }
 };
+
+const switchTab = (next: 'following' | 'fans') => {
+  tab.value = next;
+};
+
+const toggle = async (u: FollowUser) => {
+  const next = await toggleFollow(u.id);
+  u.followed = next.following;
+  u.followerCount = next.followerCount;
+  if (tab.value === 'following' && !next.following) {
+    following.value = following.value.filter((item) => item.id !== u.id);
+  }
+  followers.value = followers.value.map((item) => (item.id === u.id ? { ...item, followed: next.following } : item));
+};
+
+onMounted(load);
+watch(
+  () => route.query.tab,
+  (next) => {
+    tab.value = next === 'fans' ? 'fans' : 'following';
+  }
+);
 </script>
 
 <template>
@@ -23,23 +53,25 @@ const toggle = (u: (typeof users)[number]) => {
 
     <section class="pen-scroll">
       <div class="seg">
-        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'following' }" type="button" @click="tab = 'following'">关注 86</button>
-        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'fans' }" type="button" @click="tab = 'fans'">粉丝 124</button>
+        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'following' }" type="button" @click="switchTab('following')">关注 {{ following.length }}</button>
+        <button class="seg__btn" :class="{ 'seg__btn--on': tab === 'fans' }" type="button" @click="switchTab('fans')">粉丝 {{ followers.length }}</button>
       </div>
 
-      <article v-for="u in users" :key="u.id" class="user">
+      <p v-if="loading" class="empty">加载中</p>
+      <p v-else-if="visibleUsers.length === 0" class="empty">暂无关注关系</p>
+      <article v-for="u in visibleUsers" :key="u.id" class="user" @click="router.push(`/user/${u.id}`)">
         <span class="user__avatar" aria-hidden="true" />
         <div class="user__copy">
           <strong class="user__name">{{ u.name }}</strong>
-          <span class="user__meta">{{ u.meta }}</span>
+          <span class="user__meta">{{ u.followerCount }} 粉丝 · {{ u.followeeCount }} 关注</span>
         </div>
         <button
           class="user__pill"
           :class="{ 'user__pill--solid': !u.followed }"
           type="button"
-          @click="toggle(u)"
+          @click.stop="toggle(u)"
         >
-          {{ u.state }}
+          {{ u.followed ? '已关注' : '关注' }}
         </button>
       </article>
     </section>
@@ -74,6 +106,14 @@ const toggle = (u: (typeof users)[number]) => {
     cursor: pointer;
     &--on { background: $pen-ink; color: $pen-on-primary; }
   }
+}
+
+.empty {
+  margin: 20px 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
 }
 
 .user {

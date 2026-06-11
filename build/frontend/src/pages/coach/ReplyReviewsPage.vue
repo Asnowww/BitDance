@@ -29,7 +29,7 @@ const filteredReviews = computed(() => {
 });
 
 const targetLabel = (review: ReviewItem) =>
-  ({ studio: '舞室', coach: '老师', course: '课程' }[review.targetType] ?? review.targetType);
+  ({ studio: '舞室', coach: '老师', course: '课程', workshop: 'Workshop' }[review.targetType] ?? review.targetType);
 
 const statusLabel = (review: ReviewItem) => {
   if (review.reviewStatus === 'folded') return '折叠中';

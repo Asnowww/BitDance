@@ -9,15 +9,12 @@ import com.bitdance.common.exception.BizException;
 import com.bitdance.iam.domain.AppUser;
 import com.bitdance.iam.repository.AppUserRepository;
 import com.bitdance.review.domain.Review;
-import com.bitdance.review.domain.ReviewAppeal;
 import com.bitdance.review.domain.ReviewDimensionScore;
 import com.bitdance.review.dto.CreateReviewRequest;
 import com.bitdance.review.dto.DimensionScoreDto;
-import com.bitdance.review.dto.ReviewAppealDto;
 import com.bitdance.review.dto.ReviewDto;
 import com.bitdance.review.dto.ReviewListResponse;
 import com.bitdance.review.dto.ReviewSummary;
-import com.bitdance.review.repository.ReviewAppealRepository;
 import com.bitdance.review.repository.ReviewDimensionScoreRepository;
 import com.bitdance.review.repository.ReviewRepository;
 import com.bitdance.workshop.domain.Workshop;
@@ -49,9 +46,7 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepo;
     private final ReviewDimensionScoreRepository dimRepo;
-    private final ReviewAppealRepository appealRepo;
     private final ReviewRiskService riskService;
-    private final ReviewMediaService mediaService;
     private final TrialBookingRepository trialRepo;
     private final CourseRepository courseRepo;
     private final WorkshopOrderRepository workshopOrderRepo;
@@ -63,9 +58,7 @@ public class ReviewService {
     public ReviewService(
         ReviewRepository reviewRepo,
         ReviewDimensionScoreRepository dimRepo,
-        ReviewAppealRepository appealRepo,
         ReviewRiskService riskService,
-        ReviewMediaService mediaService,
         TrialBookingRepository trialRepo,
         CourseRepository courseRepo,
         WorkshopOrderRepository workshopOrderRepo,
@@ -76,9 +69,7 @@ public class ReviewService {
     ) {
         this.reviewRepo = reviewRepo;
         this.dimRepo = dimRepo;
-        this.appealRepo = appealRepo;
         this.riskService = riskService;
-        this.mediaService = mediaService;
         this.trialRepo = trialRepo;
         this.courseRepo = courseRepo;
         this.workshopOrderRepo = workshopOrderRepo;
@@ -108,13 +99,7 @@ public class ReviewService {
 
         awardReviewBadge(userId, saved.getId());
 
-        // 评价主体先落库，再把前端提交的外链/模拟媒体绑定到 review 目标。
-        return toDto(
-            saved,
-            dims,
-            mediaService.attachReviewMedia(saved.getId(), userId, req.mediaAssets()),
-            null
-        );
+        return toDto(saved, dims);
     }
 
     @Transactional
@@ -155,16 +140,14 @@ public class ReviewService {
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
         // 评价媒体按本页 reviewId 一次性取回，避免列表每条评价重复查附件。
 
-        List<ReviewDto> items = p.getContent().stream()
-            .map(r -> toDto(
-                r,
-                byReview.getOrDefault(r.getId(), List.of()),
-                List.of(),
-                null
-            ))
-            .toList();
-
-        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+        return new ReviewListResponse(
+            p.getContent().stream()
+                .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+                .toList(),
+            safePage,
+            safeSize,
+            p.getTotalElements()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -179,21 +162,14 @@ public class ReviewService {
             ? Map.of()
             : dimRepo.findByReviewIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
-        // 用户主页评价同样批量取媒体，保持公开主页与详情页附件展示一致。
-        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
-            mediaService.mediaForReviews(ids);
-        Map<Long, ReviewAppealDto> latestAppealByReview = latestAppealsFor(ids);
-
-        List<ReviewDto> items = p.getContent().stream()
-            .map(r -> toDto(
-                r,
-                byReview.getOrDefault(r.getId(), List.of()),
-                mediaByReview.getOrDefault(r.getId(), List.of()),
-                latestAppealByReview.get(r.getId())
-            ))
-            .toList();
-
-        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+        return new ReviewListResponse(
+            p.getContent().stream()
+                .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+                .toList(),
+            safePage,
+            safeSize,
+            p.getTotalElements()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -209,16 +185,14 @@ public class ReviewService {
             : dimRepo.findByReviewIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ReviewDimensionScore::getReviewId));
 
-        List<ReviewDto> items = p.getContent().stream()
-            .map(r -> toDto(
-                r,
-                byReview.getOrDefault(r.getId(), List.of()),
-                List.of(),
-                null
-            ))
-            .toList();
-
-        return new ReviewListResponse(items, safePage, safeSize, p.getTotalElements());
+        return new ReviewListResponse(
+            p.getContent().stream()
+                .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
+                .toList(),
+            safePage,
+            safeSize,
+            p.getTotalElements()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -228,7 +202,7 @@ public class ReviewService {
         // M2 风控验收：本人列表展示 pending/folded/hidden 等审核状态，方便用户侧观察异常评价处理结果。
         Page<Review> p = reviewRepo.findMineByUserId(
             userId, PageRequest.of(safePage - 1, safeSize));
-        return toReviewListResponse(p, safePage, safeSize, true);
+        return toReviewListResponse(p, safePage, safeSize);
     }
 
     @Transactional(readOnly = true)
@@ -240,7 +214,7 @@ public class ReviewService {
             List.of("published", "folded"),
             PageRequest.of(safePage - 1, safeSize)
         );
-        return toReviewListResponse(p, safePage, safeSize, true);
+        return toReviewListResponse(p, safePage, safeSize);
     }
 
     @Transactional(readOnly = true)
@@ -328,6 +302,7 @@ public class ReviewService {
 
     private boolean matchesWorkshopTarget(Workshop workshop, String targetType, Long targetId) {
         return switch (targetType) {
+            case "workshop" -> targetId.equals(workshop.getId());
             case "studio" -> targetId.equals(workshop.getStudioId());
             case "coach" -> targetId.equals(workshop.getCoachId());
             default -> false;
@@ -360,27 +335,15 @@ public class ReviewService {
         };
     }
 
-    private ReviewListResponse toReviewListResponse(
-        Page<Review> page, int safePage, int safeSize, boolean includeLatestAppeal
-    ) {
-        List<ReviewDto> items = toReviewDtos(page.getContent(), includeLatestAppeal);
+    private ReviewListResponse toReviewListResponse(Page<Review> page, int safePage, int safeSize) {
+        List<ReviewDto> items = toReviewDtos(page.getContent());
         return new ReviewListResponse(items, safePage, safeSize, page.getTotalElements());
     }
 
-    private List<ReviewDto> toReviewDtos(List<Review> reviews, boolean includeLatestAppeal) {
-        List<Long> ids = reviews.stream().map(Review::getId).toList();
+    private List<ReviewDto> toReviewDtos(List<Review> reviews) {
         Map<Long, List<ReviewDimensionScore>> byReview = loadDimensionScores(reviews);
-        Map<Long, List<com.bitdance.review.dto.ReviewMediaDto>> mediaByReview =
-            mediaService.mediaForReviews(ids);
-        Map<Long, ReviewAppealDto> latestAppealByReview =
-            includeLatestAppeal ? latestAppealsFor(ids) : Map.of();
         return reviews.stream()
-            .map(r -> toDto(
-                r,
-                byReview.getOrDefault(r.getId(), List.of()),
-                mediaByReview.getOrDefault(r.getId(), List.of()),
-                latestAppealByReview.get(r.getId())
-            ))
+            .map(r -> toDto(r, byReview.getOrDefault(r.getId(), List.of())))
             .toList();
     }
 
@@ -474,8 +437,8 @@ public class ReviewService {
     }
 
     private void validateTargetType(String targetType) {
-        if (!Set.of("studio", "course", "coach").contains(targetType)) {
-            throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach");
+        if (!Set.of("studio", "course", "coach", "workshop").contains(targetType)) {
+            throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach/workshop");
         }
     }
 
@@ -487,12 +450,7 @@ public class ReviewService {
         return status;
     }
 
-    private ReviewDto toDto(
-        Review r,
-        List<ReviewDimensionScore> dims,
-        List<com.bitdance.review.dto.ReviewMediaDto> mediaAssets,
-        ReviewAppealDto latestAppeal
-    ) {
+    private ReviewDto toDto(Review r, List<ReviewDimensionScore> dims) {
         List<DimensionScoreDto> dimDtos = dims.stream()
             .map(d -> new DimensionScoreDto(d.getDimensionCode(), d.getDimensionName(), d.getScore()))
             .toList();
@@ -502,27 +460,7 @@ public class ReviewService {
             r.getIsVerified(), r.getVerifiedSourceType(),
             r.getWeightFactor(), r.getReviewStatus(), r.getRiskLevel(),
             r.getHelpfulCount(), r.getIsPinned(),
-            r.getPublishedAt(), dimDtos, mediaAssets, latestAppeal
+            r.getPublishedAt(), dimDtos
         );
-    }
-
-    private Map<Long, ReviewAppealDto> latestAppealsFor(List<Long> reviewIds) {
-        if (reviewIds == null || reviewIds.isEmpty()) return Map.of();
-        Map<Long, ReviewAppealDto> result = new HashMap<>();
-        for (ReviewAppeal appeal : appealRepo.findByReviewIdInOrderByIdDesc(reviewIds)) {
-            result.putIfAbsent(appeal.getReviewId(), new ReviewAppealDto(
-                appeal.getId(),
-                appeal.getReviewId(),
-                appeal.getAppellantUserId(),
-                appeal.getAppealReason(),
-                appeal.getAppealStatus(),
-                appeal.getEvidenceNote(),
-                appeal.getReviewedByUserId(),
-                appeal.getReviewedAt(),
-                appeal.getReviewRemark(),
-                appeal.getCreatedAt()
-            ));
-        }
-        return result;
     }
 }
