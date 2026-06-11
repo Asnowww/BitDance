@@ -45,8 +45,18 @@ const activeOrder = computed(
         !['CANCELED', 'REFUNDED'].includes(order.status)
     ) ?? null
 );
+const isWorkshopEnded = computed(() => Boolean(workshop.value?.ended));
+const isSignupClosed = computed(() => Boolean(workshop.value?.signupClosed));
+const isSelectedSessionEnded = computed(() => Boolean(selectedSession.value?.ended));
+const isSelectedSessionAvailable = computed(
+  () => Boolean(selectedSession.value) && !isSelectedSessionEnded.value
+);
 const ctaLabel = computed(() => {
-  if (!activeOrder.value) return '选择场次并报名';
+  if (!activeOrder.value) {
+    if (isWorkshopEnded.value || isSelectedSessionEnded.value) return '活动已结束';
+    if (isSignupClosed.value) return '报名已截止';
+    return '选择场次并报名';
+  }
   if (activeOrder.value.status === 'UNPAID') return '继续支付';
   return '已报名，查看详情';
 });
@@ -60,9 +70,10 @@ const load = async () => {
     ]);
     workshop.value = data;
     myOrders.value = orders;
+    const defaultSession = data.sessions.find((session) => !session.ended) ?? data.sessions[0] ?? null;
     selectedSessionId.value =
       orders.find((order) => order.workshopId === workshopId && !['CANCELED', 'REFUNDED'].includes(order.status))
-        ?.sessionId ?? data.sessions[0]?.id ?? null;
+        ?.sessionId ?? defaultSession?.id ?? null;
   } finally {
     loading.value = false;
   }
@@ -96,6 +107,14 @@ const goToPayment = () => {
   }
   if (!selectedSessionId.value) {
     showFailToast('请选择场次');
+    return;
+  }
+  if (isWorkshopEnded.value || isSelectedSessionEnded.value) {
+    showFailToast('活动已结束');
+    return;
+  }
+  if (isSignupClosed.value) {
+    showFailToast('报名已截止');
     return;
   }
   router.push({ path: `/workshop/${workshopId}/pay`, query: { sessionId: String(selectedSessionId.value) } });
@@ -160,8 +179,12 @@ onMounted(load);
             v-for="session in workshop?.sessions ?? []"
             :key="session.id"
             class="session-card"
-            :class="{ 'session-card--active': session.id === selectedSessionId }"
+            :class="{
+              'session-card--active': session.id === selectedSessionId,
+              'session-card--disabled': session.ended
+            }"
             type="button"
+            :disabled="session.ended"
             @click="selectedSessionId = session.id"
           >
             <div>
@@ -170,7 +193,7 @@ onMounted(load);
             </div>
             <div class="session-card__side">
               <span>¥{{ session.price }}</span>
-              <em>剩 {{ remaining(session.capacity, session.taken) }} 位</em>
+              <em>{{ session.ended ? '活动已结束' : `剩 ${remaining(session.capacity, session.taken)} 位` }}</em>
             </div>
           </button>
         </div>
@@ -223,7 +246,7 @@ onMounted(load);
     <PenActionBar
       :soft-label="isFav ? '已收藏' : '收藏'"
       :dark-label="ctaLabel"
-      :dark-disabled="(!selectedSessionId && !activeOrder) || loading"
+      :dark-disabled="((!selectedSessionId || !isSelectedSessionAvailable) && !activeOrder) || loading"
       @soft="toggleFavorite"
       @dark="goToPayment"
     />
@@ -439,6 +462,11 @@ onMounted(load);
   &--active {
     border-color: $pen-ink;
     background: $pen-soft;
+  }
+
+  &--disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
   }
 }
 

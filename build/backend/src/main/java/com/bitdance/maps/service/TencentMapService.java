@@ -57,7 +57,8 @@ public class TencentMapService {
                 text(components, "adcode", null),
                 text(components, "province", null),
                 text(components, "city", null),
-                text(components, "district", null)
+                text(components, "district", null),
+                List.of()
             );
         } catch (RestClientException ex) {
             throw new BizException("TENCENT_MAP_UNAVAILABLE", "腾讯地图服务暂不可用");
@@ -78,9 +79,24 @@ public class TencentMapService {
             JsonNode result = requireSuccess(root).path("result");
             JsonNode components = result.path("address_component");
             JsonNode formatted = result.path("formatted_addresses");
-            JsonNode firstPoi = result.path("pois").isArray() && !result.path("pois").isEmpty()
-                ? result.path("pois").get(0)
-                : null;
+            List<MapPlaceResult> pois = new ArrayList<>();
+            JsonNode poiList = result.path("pois");
+            if (poiList.isArray()) {
+                poiList.forEach(item -> {
+                    JsonNode location = item.path("location");
+                    pois.add(new MapPlaceResult(
+                        text(item, "id", null),
+                        text(item, "title", null),
+                        text(item, "address", null),
+                        text(item, "category", null),
+                        decimal(location, "lat"),
+                        decimal(location, "lng"),
+                        text(item, "tel", null),
+                        text(item, "adcode", null)
+                    ));
+                });
+            }
+            JsonNode firstPoi = !pois.isEmpty() ? poiList.get(0) : null;
             String title = text(formatted, "recommend", null);
             if (!StringUtils.hasText(title)) title = text(firstPoi, "title", null);
             if (!StringUtils.hasText(title)) title = text(result, "address", "当前位置");
@@ -92,7 +108,51 @@ public class TencentMapService {
                 text(components, "adcode", null),
                 text(components, "province", null),
                 text(components, "city", null),
-                text(components, "district", null)
+                text(components, "district", null),
+                pois
+            );
+        } catch (RestClientException ex) {
+            throw new BizException("TENCENT_MAP_UNAVAILABLE", "腾讯地图服务暂不可用");
+        }
+    }
+
+    public MapGeocodeResult locateByIp(String ip) {
+        assertConfigured();
+        try {
+            JsonNode root = restClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder.path("/ws/location/v1/ip")
+                        .queryParam("key", key);
+                    if (StringUtils.hasText(ip)) {
+                        builder.queryParam("ip", ip.trim());
+                    }
+                    return builder.build();
+                })
+                .retrieve()
+                .body(JsonNode.class);
+            JsonNode result = requireSuccess(root).path("result");
+            JsonNode location = result.path("location");
+            JsonNode adInfo = result.path("ad_info");
+            BigDecimal latitude = decimal(location, "lat");
+            BigDecimal longitude = decimal(location, "lng");
+            if (latitude == null || longitude == null) {
+                throw new BizException("TENCENT_MAP_LOCATION_MISSING", "腾讯地图未返回有效经纬度");
+            }
+            String district = text(adInfo, "district", null);
+            String city = text(adInfo, "city", null);
+            String province = text(adInfo, "province", null);
+            String title = firstNonBlank(district, city, province, "当前位置");
+            String address = firstNonBlank(joinAddress(province, city, district), title, "当前位置");
+            return new MapGeocodeResult(
+                title,
+                address,
+                latitude,
+                longitude,
+                text(adInfo, "adcode", null),
+                province,
+                city,
+                district,
+                List.of()
             );
         } catch (RestClientException ex) {
             throw new BizException("TENCENT_MAP_UNAVAILABLE", "腾讯地图服务暂不可用");
@@ -184,5 +244,26 @@ public class TencentMapService {
             return null;
         }
         return BigDecimal.valueOf(node.path(field).asDouble());
+    }
+
+    private String joinAddress(String province, String city, String district) {
+        StringBuilder builder = new StringBuilder();
+        if (StringUtils.hasText(province)) builder.append(province.trim());
+        if (StringUtils.hasText(city) && !city.trim().equals(province != null ? province.trim() : null)) {
+            builder.append(city.trim());
+        }
+        if (StringUtils.hasText(district) && !district.trim().equals(city != null ? city.trim() : null)) {
+            builder.append(district.trim());
+        }
+        return builder.toString();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

@@ -8,9 +8,13 @@ export interface WorkshopSession {
   date: string;
   startTime: string;
   endTime: string;
+  startAt?: string;
+  endAt?: string;
   capacity: number;
   taken: number;
   price: number;
+  status?: string;
+  ended?: boolean;
 }
 
 export interface WorkshopBrief {
@@ -23,12 +27,17 @@ export interface WorkshopBrief {
   startDate: string;
   endDate: string;
   nextSessionId?: number;
+  signupDeadline?: string | null;
+  nextSessionStartAt?: string;
+  nextSessionEndAt?: string;
   priceMin: number;
   priceMax: number;
   capacity: number;
   taken: number;
   coachName: string;
   hot: boolean;
+  ended?: boolean;
+  signupClosed?: boolean;
 }
 
 export interface WorkshopDetail extends WorkshopBrief {
@@ -249,9 +258,13 @@ const mapSession = (s: SessionResp, fallbackPrice = 0): WorkshopSession => ({
   date: s.date ?? datePart(s.startAt),
   startTime: s.startTime ?? timePart(s.startAt),
   endTime: s.endTime ?? timePart(s.endAt),
+  startAt: s.startAt,
+  endAt: s.endAt,
   capacity: s.capacity,
   taken: s.soldCount ?? s.taken ?? 0,
-  price: toNumber(s.price ?? fallbackPrice)
+  price: toNumber(s.price ?? fallbackPrice),
+  status: s.sessionStatus ?? undefined,
+  ended: Boolean(s.endAt && Date.parse(s.endAt) < Date.now())
 });
 
 const mapBrief = (w: WorkshopBriefResp): WorkshopBrief => {
@@ -259,6 +272,9 @@ const mapBrief = (w: WorkshopBriefResp): WorkshopBrief => {
   const price = toNumber(w.priceAmount ?? w.priceMin);
   const nextStart = w.nextSessionStartAt ?? undefined;
   const nextEnd = w.nextSessionEndAt ?? undefined;
+  const signupDeadline = w.signupDeadline ?? null;
+  const ended = Boolean(nextEnd && Date.parse(nextEnd) < Date.now());
+  const signupClosed = !ended && Boolean(signupDeadline && Date.parse(signupDeadline) < Date.now());
   return {
     id: w.id,
     title: w.workshopName ?? w.title ?? `Workshop #${w.id}`,
@@ -268,12 +284,17 @@ const mapBrief = (w: WorkshopBriefResp): WorkshopBrief => {
     styles: [styleName],
     startDate: nextStart ? datePart(nextStart) : w.startDate ?? (w.signupDeadline ? `截止 ${datePart(w.signupDeadline)}` : '开放报名'),
     endDate: nextEnd ? datePart(nextEnd) : w.endDate ?? '',
+    signupDeadline,
+    nextSessionStartAt: nextStart,
+    nextSessionEndAt: nextEnd,
     priceMin: price,
     priceMax: toNumber(w.priceMax ?? price),
     capacity: w.capacity ?? 0,
     taken: w.soldCount ?? w.taken ?? 0,
     coachName: w.coachName ?? (w.coachId ? `教练 #${w.coachId}` : '特邀导师'),
-    hot: w.hot ?? (w.publishStatus === 'published' || w.publishStatus === undefined)
+    hot: w.hot ?? (w.publishStatus === 'published' || w.publishStatus === undefined),
+    ended,
+    signupClosed
   };
 };
 
@@ -283,6 +304,10 @@ const mapDetail = (w: WorkshopDetailResp): WorkshopDetail => {
   const taken = sessions.reduce((sum, s) => sum + s.taken, 0);
   const capacity = sessions.reduce((sum, s) => sum + s.capacity, 0);
   const brief = mapBrief(w);
+  const ended = sessions.length > 0
+    ? sessions.every((item) => item.ended)
+    : Boolean(brief.nextSessionEndAt && Date.parse(brief.nextSessionEndAt) < Date.now());
+  const signupClosed = !ended && Boolean((w.signupDeadline ?? null) && Date.parse(w.signupDeadline as string) < Date.now());
   return {
     ...brief,
     startDate: sessions[0]?.date ?? brief.startDate,
@@ -312,7 +337,9 @@ const mapDetail = (w: WorkshopDetailResp): WorkshopDetail => {
       publishedAt: item.publishedAt
     })),
     sessions,
-    status: w.publishStatus === 'published' || w.publishStatus === undefined ? 'PUBLISHED' : 'CLOSED'
+    status: w.publishStatus === 'published' || w.publishStatus === undefined ? 'PUBLISHED' : 'CLOSED',
+    ended,
+    signupClosed
   };
 };
 

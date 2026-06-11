@@ -26,7 +26,7 @@ const load = async () => {
   }
 };
 
-const featured = computed(() => workshops.value[0] ?? null);
+const featured = computed(() => workshops.value.find((item) => !item.ended) ?? workshops.value[0] ?? null);
 const remaining = (item: WorkshopBrief) => Math.max(0, item.capacity - item.taken);
 
 onMounted(load);
@@ -53,7 +53,7 @@ onMounted(load);
           <p class="featured__eyebrow">WORKSHOP LIST</p>
           <h1>{{ featured.title }}</h1>
           <span>{{ featured.startDate }} · {{ featured.area }}</span>
-          <strong>¥{{ featured.priceMin }} 起 · 剩 {{ remaining(featured) }} 位</strong>
+          <strong>{{ featured.ended ? '活动已结束' : `¥${featured.priceMin} 起 · 剩 ${remaining(featured)} 位` }}</strong>
         </div>
         <ChevronRight :size="20" :stroke-width="2" />
       </section>
@@ -93,7 +93,7 @@ onMounted(load);
         </div>
         <div class="workshop-card__side">
           <strong>¥{{ item.priceMin }}</strong>
-          <span>剩 {{ remaining(item) }} 位</span>
+          <span>{{ item.ended ? '活动已结束' : `剩 ${remaining(item)} 位` }}</span>
         </div>
       </article>
     </section>
