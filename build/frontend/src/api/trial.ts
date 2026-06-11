@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 
-export type TrialStatus = 'pending' | 'confirmed' | 'rejected' | 'attended' | 'arrived' | 'noshow' | 'canceled';
+export type TrialStatus = 'pending' | 'confirmed' | 'rejected' | 'arrived' | 'noshow' | 'canceled';
 
 export interface TrialBooking {
   id: number;
@@ -11,7 +11,7 @@ export interface TrialBooking {
   bookingStatus: TrialStatus;
   contactPhone: string;
   bookingNote?: string;
-  createdAt?: string;
+  createdAt: string;
 }
 
 export interface TrialCreateBody {

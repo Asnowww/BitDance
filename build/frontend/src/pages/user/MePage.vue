@@ -1,26 +1,33 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   Bell,
   CalendarDays,
   Heart,
   ImageIcon,
+  LogOut,
+  MessageSquareText,
   PackageCheck,
+  RefreshCw,
   Shield,
   Star,
   Target,
   Users,
   UserRound
 } from 'lucide-vue-next';
-import { showToast } from 'vant';
+import { showConfirmDialog, showSuccessToast, showToast } from 'vant';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
 const user = useUserStore();
 
-const profileName = computed(() => user.profile?.nickname || '顾同学');
-const profileMeta = computed(() => '普通用户 · Jazz 初级 · 连续打卡 12 天');
+const profileName = computed(() => user.profile?.nickname || 'BitDance 用户');
+const profileMeta = computed(() => {
+  const level = user.detail?.currentLevel || '未设置水平';
+  const goal = user.detail?.learningGoal || '未设置目标';
+  return `${(user.profile?.roles ?? ['USER']).join(' / ')} · ${level} · ${goal}`;
+});
 
 const quickActions = [
   { label: '约练', icon: Users, path: '/me/practices' },
@@ -30,15 +37,16 @@ const quickActions = [
   { label: '预约', icon: CalendarDays, path: '/me/trials' },
   { label: '评价', icon: Star, path: '/me/reviews' },
   { label: '消息', icon: Bell, path: '/messages' },
+  { label: '动态', icon: MessageSquareText, path: '/me/home?tab=posts' },
   { label: '收藏', icon: Heart, path: '/favorites' },
   { label: '隐私', icon: Shield, path: '/me/privacy' }
 ];
 
-const workbench = [
-  { title: '申请成为教练', status: '待认证', path: '/me/coach-home' },
-  { title: '申请舞室管理员', status: '待认证', path: '/coach/appeal' },
-  { title: '平台管理员入口', status: '待认证', path: '' }
-];
+const workbench = computed(() => [
+  { title: '教练主页运营', status: user.isCoach ? '已开通' : '未认证', path: '/me/coach-home', enabled: user.isCoach },
+  { title: '舞室管理员入口', status: user.isStudioAdmin ? '已开通' : '未认证', path: '/coach/dashboard', enabled: user.isStudioAdmin },
+  { title: '平台举报后台', status: user.isPlatformAdmin ? '已开通' : '未开通', path: '/admin/reports', enabled: user.isPlatformAdmin }
+]);
 
 const goProfileHome = () => {
   router.push('/me/home');
@@ -46,17 +54,56 @@ const goProfileHome = () => {
 
 const switchRole = () => {
   const next = user.activeRole === 'coach' ? 'user' : 'coach';
-  user.switchRole(next);
+  const ok = user.switchRole(next);
+  if (!ok) {
+    showToast('当前账号没有教练角色，请先完成教练认证');
+    return;
+  }
   showToast(next === 'coach' ? '已切换为教练视角' : '已切换为用户视角');
 };
 
-const goWorkbench = (path: string) => {
-  if (!path) {
-    showToast('管理员入口待开放');
+const goWorkbench = (item: { path: string; enabled: boolean }) => {
+  if (!item.enabled || !item.path) {
+    showToast('该角色尚未开通');
     return;
   }
-  router.push(path);
+  router.push(item.path);
 };
+
+const switchAccount = async () => {
+  try {
+    await showConfirmDialog({
+      title: '切换账号',
+      message: '将退出当前账号并返回登录页。',
+      confirmButtonText: '切换',
+      cancelButtonText: '取消'
+    });
+    user.logout();
+    router.replace({ path: '/login', query: { redirect: '/me' } });
+  } catch {
+    // User canceled.
+  }
+};
+
+const logout = async () => {
+  try {
+    await showConfirmDialog({
+      title: '退出登录',
+      message: '退出后仍可浏览公开内容，需要账号的功能会要求重新登录。',
+      confirmButtonText: '退出',
+      cancelButtonText: '取消'
+    });
+    user.logout();
+    showSuccessToast('已退出登录');
+    router.replace('/home');
+  } catch {
+    // User canceled.
+  }
+};
+
+onMounted(() => {
+  user.refreshProfile();
+});
 </script>
 
 <template>
@@ -80,7 +127,9 @@ const goWorkbench = (path: string) => {
           <strong>{{ profileName }}</strong>
           <em>{{ profileMeta }}</em>
         </span>
-        <button class="profile-card__switch" type="button" @click="switchRole">切换角色</button>
+        <button class="profile-card__switch" type="button" @click="switchRole">
+          {{ user.activeRole === 'coach' ? '用户视角' : '教练视角' }}
+        </button>
       </section>
 
       <section class="quick-grid" aria-label="快捷入口">
@@ -96,10 +145,21 @@ const goWorkbench = (path: string) => {
         </button>
       </section>
 
+      <section class="account-actions" aria-label="账号操作">
+        <button class="account-action" type="button" @click="switchAccount">
+          <RefreshCw :size="20" :stroke-width="2" />
+          <span>切换账号</span>
+        </button>
+        <button class="account-action account-action--danger" type="button" @click="logout">
+          <LogOut :size="20" :stroke-width="2" />
+          <span>退出登录</span>
+        </button>
+      </section>
+
       <section class="workbench" aria-labelledby="workbench-title">
         <div class="section-title">
           <h2 id="workbench-title">角色工作台</h2>
-          <span>已隐藏</span>
+          <span>来自后端 roles</span>
         </div>
 
         <button
@@ -107,7 +167,7 @@ const goWorkbench = (path: string) => {
           :key="item.title"
           class="workbench-row"
           type="button"
-          @click="goWorkbench(item.path)"
+          @click="goWorkbench(item)"
         >
           <span>{{ item.title }}</span>
           <em>{{ item.status }} &gt;</em>
@@ -273,6 +333,37 @@ const goWorkbench = (path: string) => {
     font-size: 12px;
     line-height: 1.2;
     font-weight: 900;
+  }
+}
+
+.account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-action {
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  background: var(--canvas);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 900;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  span {
+    min-width: 0;
+  }
+
+  &--danger {
+    color: #b42318;
   }
 }
 

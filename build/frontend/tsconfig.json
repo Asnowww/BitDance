@@ -1,8 +1,6 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "compilerOptions": {
-    // TypeScript 5.6 only accepts the 5.0 deprecation gate; 6.0 makes vue-tsc fail before checking source files.
-    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]

@@ -7,7 +7,10 @@ import com.bitdance.workshop.domain.Workshop;
 import com.bitdance.workshop.domain.WorkshopCheckin;
 import com.bitdance.workshop.domain.WorkshopOrder;
 import com.bitdance.workshop.domain.WorkshopSession;
+import com.bitdance.workshop.dto.MerchantWorkshopOrderRow;
 import com.bitdance.workshop.dto.OrderDto;
+import com.bitdance.profile.domain.UserProfile;
+import com.bitdance.profile.repository.UserProfileRepository;
 import com.bitdance.workshop.repository.WorkshopCheckinRepository;
 import com.bitdance.workshop.repository.WorkshopOrderRepository;
 import com.bitdance.workshop.repository.WorkshopRepository;
@@ -16,28 +19,65 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class MerchantWorkshopCheckinService {
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final MerchantAccessGuard guard;
     private final WorkshopOrderRepository orderRepo;
     private final WorkshopRepository workshopRepo;
     private final WorkshopSessionRepository sessionRepo;
     private final WorkshopCheckinRepository checkinRepo;
+    private final UserProfileRepository profileRepo;
 
     public MerchantWorkshopCheckinService(
         MerchantAccessGuard guard,
         WorkshopOrderRepository orderRepo,
         WorkshopRepository workshopRepo,
         WorkshopSessionRepository sessionRepo,
-        WorkshopCheckinRepository checkinRepo
+        WorkshopCheckinRepository checkinRepo,
+        UserProfileRepository profileRepo
     ) {
         this.guard = guard;
         this.orderRepo = orderRepo;
         this.workshopRepo = workshopRepo;
         this.sessionRepo = sessionRepo;
         this.checkinRepo = checkinRepo;
+        this.profileRepo = profileRepo;
+    }
+
+    @Transactional(readOnly = true)
+    public List<MerchantWorkshopOrderRow> listOrders(Long actorId) {
+        Set<Long> studioIds = guard.approvedStudioIds(actorId);
+        if (studioIds.isEmpty() && !guard.isPlatformAdmin(actorId)) {
+            return List.of();
+        }
+
+        List<Workshop> workshops = guard.isPlatformAdmin(actorId)
+            ? workshopRepo.findAll()
+            : workshopRepo.findByStudioIdIn(studioIds);
+        if (workshops.isEmpty()) return List.of();
+
+        Map<Long, Workshop> workshopMap = workshops.stream().collect(Collectors.toMap(Workshop::getId, item -> item));
+        Map<Long, WorkshopSession> sessionMap = sessionRepo.findAll().stream()
+            .filter(session -> workshopMap.containsKey(session.getWorkshopId()))
+            .collect(Collectors.toMap(WorkshopSession::getId, item -> item));
+        Map<Long, WorkshopCheckin> checkinMap = checkinRepo.findAll().stream()
+            .filter(checkin -> sessionMap.containsKey(checkin.getWorkshopSessionId()))
+            .collect(Collectors.toMap(WorkshopCheckin::getWorkshopOrderId, item -> item, (left, right) -> left));
+
+        return orderRepo.findAll().stream()
+            .filter(order -> workshopMap.containsKey(order.getWorkshopId()))
+            .sorted((left, right) -> Long.compare(right.getId(), left.getId()))
+            .map(order -> toRow(order, workshopMap.get(order.getWorkshopId()), sessionMap.get(order.getWorkshopSessionId()), checkinMap.get(order.getId())))
+            .toList();
     }
 
     @Transactional
@@ -70,10 +110,12 @@ public class MerchantWorkshopCheckinService {
         if (now.isAfter(session.getEndAt())) {
             throw new BizException("CHECKIN_TOO_LATE", "签到时间已过");
         }
-        c.setCheckedInByUserId(actorId);
+        c.setCheckedInByUserId(o.getUserId());
         c.setCheckedInAt(now);
         c.setCheckinStatus("manual_checked_in"); // 区分用户自助 checked_in 与商家代办
         checkinRepo.save(c);
+        o.setOrderStatus("checked_in");
+        orderRepo.save(o);
         sessionRepo.incrementCheckin(session.getId());
         return buildOrderDto(o, c);
     }
@@ -86,6 +128,31 @@ public class MerchantWorkshopCheckinService {
             c == null ? null : c.getCheckinCode(),
             o.getPaidAt(), o.getCanceledAt(), o.getRefundedAt(),
             o.getCreatedAt()
+        );
+    }
+
+    private MerchantWorkshopOrderRow toRow(
+        WorkshopOrder order,
+        Workshop workshop,
+        WorkshopSession session,
+        WorkshopCheckin checkin
+    ) {
+        UserProfile profile = profileRepo.findById(order.getUserId()).orElse(null);
+        String buyerName = profile != null && profile.getNickname() != null && !profile.getNickname().isBlank()
+            ? profile.getNickname()
+            : "舞者" + String.valueOf(order.getUserId()).substring(Math.max(0, String.valueOf(order.getUserId()).length() - 4));
+        String sessionDate = session == null ? "" : session.getStartAt().format(DATE_FMT);
+        String sessionTime = session == null ? "" : session.getStartAt().format(TIME_FMT) + "-" + session.getEndAt().format(TIME_FMT);
+        return new MerchantWorkshopOrderRow(
+            order.getId(),
+            order.getWorkshopId(),
+            workshop == null ? ("Workshop #" + order.getWorkshopId()) : workshop.getWorkshopName(),
+            buyerName,
+            sessionDate,
+            sessionTime,
+            order.getAmountPaid().signum() > 0 ? order.getAmountPaid() : order.getAmountPayable(),
+            order.getOrderStatus(),
+            checkin == null ? null : checkin.getCheckinCode()
         );
     }
 }

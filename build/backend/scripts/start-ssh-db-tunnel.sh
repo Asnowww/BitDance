@@ -9,8 +9,6 @@ SSH_PORT="${BITDANCE_SSH_PORT:-22}"
 SSH_USER="${BITDANCE_SSH_USER:-root}"
 REMOTE_DB_HOST="${BITDANCE_REMOTE_DB_HOST:-127.0.0.1}"
 REMOTE_DB_PORT="${BITDANCE_REMOTE_DB_PORT:-5432}"
-# 本地联调会长时间挂着后端；给 SSH 隧道加 keepalive，避免空闲一段时间后静默断开。
-SSH_KEEPALIVE_OPTS=(-o TCPKeepAlive=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=10)
 
 if lsof -nP -iTCP:"${LOCAL_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "SSH database tunnel already listening on ${LOCAL_HOST}:${LOCAL_PORT}"
@@ -21,7 +19,7 @@ fi
 if [[ -n "${BITDANCE_SSH_PASSWORD:-}" ]]; then
   expect <<EOF
 set timeout 12
-spawn ssh -fN -o ExitOnForwardFailure=yes -o NumberOfPasswordPrompts=1 -o PreferredAuthentications=password -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new -o TCPKeepAlive=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -p "${SSH_PORT}" -L "${LOCAL_HOST}:${LOCAL_PORT}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}" "${SSH_USER}@${SSH_HOST}"
+spawn ssh -fN -o ExitOnForwardFailure=yes -o NumberOfPasswordPrompts=1 -o PreferredAuthentications=password -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new -p "${SSH_PORT}" -L "${LOCAL_HOST}:${LOCAL_PORT}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}" "${SSH_USER}@${SSH_HOST}"
 expect {
   -re "(?i)password:" { send "\$env(BITDANCE_SSH_PASSWORD)\r"; exp_continue }
   eof
@@ -33,7 +31,6 @@ else
   ssh -fN \
     -o ExitOnForwardFailure=yes \
     -o StrictHostKeyChecking=accept-new \
-    "${SSH_KEEPALIVE_OPTS[@]}" \
     -p "${SSH_PORT}" \
     -L "${LOCAL_HOST}:${LOCAL_PORT}:${REMOTE_DB_HOST}:${REMOTE_DB_PORT}" \
     "${SSH_USER}@${SSH_HOST}"

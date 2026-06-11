@@ -1,24 +1,78 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast } from 'vant';
-import { ChevronLeft, Image, Plus, Trash2, Video } from 'lucide-vue-next';
+import { Check, ChevronLeft, Image, LoaderCircle, Plus, Trash2, Video, X } from 'lucide-vue-next';
 import PenSettingRow from '@/components/pen/PenSettingRow.vue';
+import {
+  createPost,
+  fetchPostDetail,
+  fetchTopics,
+  updatePost,
+  uploadPostMedia,
+  type CommunityTopic,
+  type MediaAsset
+} from '@/api/community';
+import { reverseGeocodeTencentLocation, searchTencentPlaces, type MapPlace } from '@/api/maps';
+import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
+import { captureVideoPoster } from '@/utils/videoPoster';
 
-interface UploadedImage {
+interface UploadedMedia extends MediaAsset {
   id: number;
-  name: string;
+  previewUrl?: string;
+  posterUrl?: string;
 }
+
+type Visibility = 'public' | 'followers' | 'private';
+type SheetKey = 'topic' | 'related' | 'style' | 'location' | 'visibility' | 'work-type' | 'practice-date';
 
 const route = useRoute();
 const router = useRouter();
 const content = ref('');
-const uploadedImages = ref<UploadedImage[]>([]);
-const hasVideo = ref(false);
-const nextImageId = ref(1);
+const uploadedMedia = ref<UploadedMedia[]>([]);
+const imageInput = ref<HTMLInputElement | null>(null);
+const videoInput = ref<HTMLInputElement | null>(null);
+const publishing = ref(false);
+const uploading = ref(false);
+const loading = ref(false);
+const activeSheet = ref<SheetKey | null>(null);
+const topicInput = ref('');
+const topicSuggestions = ref<CommunityTopic[]>([]);
+const topicLoading = ref(false);
+const selectedTopics = ref<string[]>([]);
+const selectedStyle = ref('Locking');
+const selectedLocation = ref('不显示位置');
+const locationInput = ref('');
+const geoPoint = ref<{ longitude: number; latitude: number } | null>(null);
+const locating = ref(false);
+const locationSearching = ref(false);
+const locationCandidates = ref<MapPlace[]>([]);
+const locationError = ref('');
+const selectedVisibility = ref<Visibility>('public');
+const selectedRelated = ref('Urban Flow');
+const selectedWorkType = ref('阶段作品');
+const selectedPracticeDate = ref('今天');
+
+const danceStyles = ['Hiphop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waacking'];
+const relatedOptions = ['Urban Flow', '舞星 Studio', '节奏盒子课程', '小黑老师', '不关联'];
+const visibilityOptions: Array<{ value: Visibility; label: string; desc: string }> = [
+  { value: 'public', label: '公开', desc: '所有人可见' },
+  { value: 'followers', label: '粉丝可见', desc: '关注你的人可见' },
+  { value: 'private', label: '仅自己', desc: '只保存在个人主页' }
+];
+const workTypes = ['阶段作品', '课堂作业', 'Battle 片段', '排练记录'];
+const practiceDates = ['今天', '昨天', '本周', '自定义'];
+const currentLocationLabel = '当前位置';
 
 const isWorkMode = computed(() => route.name === 'publish-work' || route.path.includes('/works/upload'));
-const imageCountLabel = computed(() => `${uploadedImages.value.length}/9`);
+const editPostId = computed(() => Number(route.params.id) || null);
+const isEditMode = computed(() => route.name === 'edit-post' && Boolean(editPostId.value));
+const images = computed(() => uploadedMedia.value.filter((item) => item.mediaType === 'image'));
+const video = computed(() => uploadedMedia.value.find((item) => item.mediaType === 'video'));
+const imageCountLabel = computed(() => `${images.value.length}/9`);
+const hasVideo = computed(() => Boolean(video.value));
+const visibilityLabel = computed(() => visibilityOptions.find((item) => item.value === selectedVisibility.value)?.label ?? '公开');
+const topicLabel = computed(() => selectedTopics.value.length ? selectedTopics.value.map((topic) => `#${topic}`).join(' ') : '未选择');
 
 const pageCopy = computed(() =>
   isWorkMode.value
@@ -31,11 +85,11 @@ const pageCopy = computed(() =>
         draft: '退出后进入作品草稿，可继续修改或删除。'
       }
     : {
-        title: '编辑动态',
+        title: isEditMode.value ? '编辑动态' : '发动态',
         meta: '草稿已自动保存',
-        action: '发布',
+        action: isEditMode.value ? '保存' : '发布',
         placeholder: '分享课堂记录、练舞片段或 Workshop 体验',
-        success: '已发布',
+        success: isEditMode.value ? '已保存' : '已发布',
         draft: '退出后进入草稿箱，可继续修改或删除。'
       }
 );
@@ -43,42 +97,363 @@ const pageCopy = computed(() =>
 const rows = computed(() =>
   isWorkMode.value
     ? [
-        { label: '作品类型', trailing: '阶段作品' },
-        { label: '关联舞种', trailing: 'Locking' },
-        { label: '练习日期', trailing: '今天' },
-        { label: '可见范围', trailing: '仅自己' }
+        { key: 'work-type' as const, label: '作品类型', trailing: selectedWorkType.value },
+        { key: 'style' as const, label: '关联舞种', trailing: selectedStyle.value },
+        { key: 'practice-date' as const, label: '练习日期', trailing: selectedPracticeDate.value },
+        { key: 'visibility' as const, label: '可见范围', trailing: visibilityLabel.value }
       ]
     : [
-        { label: '# 添加话题', trailing: '#Locking入门' },
-        { label: '关联舞室 / 课程 / 老师', trailing: 'Urban Flow' },
-        { label: '所在位置', trailing: '五道口' },
-        { label: '谁可以看', trailing: '公开' }
+        { key: 'topic' as const, label: '# 添加话题', trailing: topicLabel.value },
+        { key: 'related' as const, label: '关联舞室 / 课程 / 老师', trailing: selectedRelated.value },
+        { key: 'location' as const, label: '所在位置', trailing: selectedLocation.value },
+        { key: 'visibility' as const, label: '谁可以看', trailing: visibilityLabel.value }
       ]
 );
 
-const addImage = () => {
-  if (uploadedImages.value.length >= 9) {
+const pickImage = () => imageInput.value?.click();
+const pickVideo = () => videoInput.value?.click();
+
+const ensureCanAddImage = (count: number) => {
+  if (hasVideo.value) {
+    showFailToast('视频动态不能同时添加图片');
+    return false;
+  }
+  if (images.value.length + count > 9) {
     showFailToast('最多添加 9 张图片');
+    return false;
+  }
+  return true;
+};
+
+const uploadFiles = async (files: File[]) => {
+  if (!files.length) return;
+  uploading.value = true;
+  try {
+    const uploaded: UploadedMedia[] = [];
+    for (const file of files) {
+      const previewUrl = URL.createObjectURL(file);
+      try {
+        const asset = await uploadPostMedia(file);
+        const posterUrl = file.type.startsWith('video/') ? (await captureVideoPoster(previewUrl)) ?? undefined : undefined;
+        uploaded.push({ ...asset, previewUrl, posterUrl });
+      } catch (error) {
+        URL.revokeObjectURL(previewUrl);
+        throw error;
+      }
+    }
+    uploadedMedia.value = [...uploadedMedia.value, ...uploaded];
+    showSuccessToast(files.length > 1 ? '媒体已上传' : '媒体已上传');
+  } finally {
+    uploading.value = false;
+  }
+};
+
+const onImagesSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  if (!ensureCanAddImage(files.length)) return;
+  await uploadFiles(files);
+};
+
+const onVideoSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []).slice(0, 1);
+  input.value = '';
+  if (!files.length) return;
+  if (uploadedMedia.value.length > 0) {
+    showFailToast('视频动态只能上传 1 个视频');
     return;
   }
-  const id = nextImageId.value++;
-  uploadedImages.value.push({ id, name: `图片 ${String(id).padStart(2, '0')}` });
-  showSuccessToast('图片已添加');
+  await uploadFiles(files);
 };
 
-const addVideo = () => {
-  hasVideo.value = true;
-  showSuccessToast('视频已添加');
+const removeMedia = (id: number) => {
+  const removed = uploadedMedia.value.find((item) => item.id === id);
+  if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+  uploadedMedia.value = uploadedMedia.value.filter((item) => item.id !== id);
 };
 
-const removeImage = (id: number) => {
-  uploadedImages.value = uploadedImages.value.filter((image) => image.id !== id);
+const mediaPreviewUrl = (item: UploadedMedia) => item.previewUrl || item.url;
+const mediaPosterUrl = (item: UploadedMedia) => item.posterUrl;
+
+const clearPreviewUrls = () => {
+  uploadedMedia.value.forEach((item) => {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+  });
 };
 
-const onPublish = () => {
-  showSuccessToast(pageCopy.value.success);
-  router.replace(isWorkMode.value ? '/me/works' : '/community');
+const normalizeTopic = (value: string) => value.trim().replace(/^#+/, '').trim();
+
+const addTopic = (value: string) => {
+  const name = normalizeTopic(value);
+  if (!name) return;
+  if (selectedTopics.value.includes(name)) return;
+  if (selectedTopics.value.length >= 5) {
+    showFailToast('最多添加 5 个话题');
+    return;
+  }
+  selectedTopics.value = [...selectedTopics.value, name];
+  topicInput.value = '';
 };
+
+const removeTopic = (name: string) => {
+  selectedTopics.value = selectedTopics.value.filter((item) => item !== name);
+};
+
+const loadTopicSuggestions = async () => {
+  topicLoading.value = true;
+  try {
+    topicSuggestions.value = await fetchTopics({ scope: 'hot', keyword: topicInput.value.trim() || undefined, limit: 12 });
+  } finally {
+    topicLoading.value = false;
+  }
+};
+
+const openSheet = async (key: SheetKey) => {
+  activeSheet.value = key;
+  if (key === 'topic') await loadTopicSuggestions();
+};
+
+const closeSheet = () => {
+  activeSheet.value = null;
+};
+
+const chooseRelated = (value: string) => {
+  selectedRelated.value = value;
+  closeSheet();
+};
+
+const chooseStyle = (value: string) => {
+  selectedStyle.value = value;
+  closeSheet();
+};
+
+const chooseLocation = (value: string) => {
+  selectedLocation.value = value;
+  locationInput.value = value === '不显示位置' ? '' : value;
+  if (value === '不显示位置') geoPoint.value = null;
+  locationCandidates.value = [];
+  locationError.value = '';
+  closeSheet();
+};
+
+const applyLocationInput = () => {
+  if (!geoPoint.value) {
+    showFailToast('请先使用当前位置获取真实坐标');
+    return;
+  }
+  const value = locationInput.value.trim();
+  if (!value) {
+    selectedLocation.value = formatCoordinate(geoPoint.value.latitude, geoPoint.value.longitude);
+  } else {
+    selectedLocation.value = value;
+  }
+  closeSheet();
+};
+
+const chooseMapPlace = (place: MapPlace) => {
+  if (!geoPoint.value) {
+    showFailToast('请先获取真实定位');
+    return;
+  }
+  selectedLocation.value = place.title;
+  locationInput.value = place.title;
+  locationCandidates.value = [];
+  locationError.value = '';
+  closeSheet();
+};
+
+const formatCoordinate = (latitude: number, longitude: number) =>
+  `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+
+const reverseGeocodeByTencentJs = async (latitude: number, longitude: number) => {
+  if (!hasTencentMapConfig()) throw new Error('Tencent map key missing');
+  const TMap = await loadTencentMap();
+  const LatLng = TMap.LatLng;
+  const Geocoder = TMap.service?.Geocoder;
+  if (!LatLng || !Geocoder) throw new Error('Tencent map geocoder missing');
+  const geocoder = new Geocoder();
+  const result = await geocoder.getAddress({ location: new LatLng(latitude, longitude) });
+  const detail = result?.result ?? result;
+  return (
+    detail?.formatted_addresses?.recommend ||
+    detail?.address ||
+    detail?.address_component?.street ||
+    formatCoordinate(latitude, longitude)
+  );
+};
+
+const resolveLocationName = async (latitude: number, longitude: number) => {
+  try {
+    return await reverseGeocodeByTencentJs(latitude, longitude);
+  } catch {
+    // Fall through to backend WebService. In mock/dev without a Tencent key this becomes a local fallback.
+  }
+  try {
+    const geo = await reverseGeocodeTencentLocation(latitude, longitude);
+    return geo.title || geo.address;
+  } catch {
+    return currentLocationLabel;
+  }
+};
+
+const useCurrentLocation = async () => {
+  if (!navigator.geolocation) {
+    locationError.value = '当前浏览器不支持系统定位，请用地图搜索选择位置';
+    showFailToast(locationError.value);
+    return;
+  }
+  locating.value = true;
+  locationError.value = '';
+  try {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 60000
+      });
+    });
+    const latitude = Number(position.coords.latitude.toFixed(6));
+    const longitude = Number(position.coords.longitude.toFixed(6));
+    geoPoint.value = { latitude, longitude };
+    selectedLocation.value = await resolveLocationName(latitude, longitude);
+    locationInput.value = selectedLocation.value;
+    showSuccessToast('已通过地图获取当前位置');
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? Number((error as GeolocationPositionError).code) : 0;
+    locationError.value =
+      code === 1
+        ? '定位权限被拒绝，请允许浏览器访问位置，或用地图搜索选择位置'
+        : '定位失败，请检查浏览器定位权限，或用地图搜索选择位置';
+    showFailToast(locationError.value);
+  } finally {
+    locating.value = false;
+  }
+};
+
+const searchLocation = async () => {
+  if (!geoPoint.value) {
+    locationError.value = '请先使用当前位置获取真实经纬度，再搜索附近地点名称';
+    showFailToast(locationError.value);
+    return;
+  }
+  const keyword = locationInput.value.trim();
+  if (!keyword) {
+    showFailToast('请输入要搜索的位置');
+    return;
+  }
+  locationSearching.value = true;
+  locationError.value = '';
+  try {
+    const places = await searchTencentPlaces({
+      keyword,
+      latitude: geoPoint.value?.latitude,
+      longitude: geoPoint.value?.longitude,
+      radiusMeters: 5000,
+      pageSize: 10
+    });
+    locationCandidates.value = places;
+    if (places.length === 0) {
+      locationError.value = '附近没有匹配地点，可直接使用当前名称作为备注';
+      showFailToast(locationError.value);
+      return;
+    }
+    showSuccessToast('已返回附近地点名称');
+  } catch {
+    locationError.value = '地图搜索失败，请检查地图 Key 或稍后再试';
+    showFailToast(locationError.value);
+  } finally {
+    locationSearching.value = false;
+  }
+};
+
+const chooseVisibility = (value: Visibility) => {
+  selectedVisibility.value = value;
+  closeSheet();
+};
+
+const chooseWorkType = (value: string) => {
+  selectedWorkType.value = value;
+  closeSheet();
+};
+
+const choosePracticeDate = (value: string) => {
+  selectedPracticeDate.value = value;
+  closeSheet();
+};
+
+const onPublish = async () => {
+  if (!content.value.trim()) {
+    showFailToast('请输入内容');
+    return;
+  }
+  if (publishing.value) return;
+  publishing.value = true;
+  try {
+    if (!isWorkMode.value) {
+      if (selectedLocation.value !== '不显示位置' && !geoPoint.value) {
+        showFailToast('请先获取真实定位，或选择不显示位置');
+        return;
+      }
+      const payload = {
+        text: content.value.trim(),
+        mediaAssetIds: uploadedMedia.value.map((item) => item.id),
+        hasVideo: hasVideo.value,
+        topics: selectedTopics.value,
+        style: selectedStyle.value,
+        location: selectedLocation.value === '不显示位置' ? undefined : selectedLocation.value,
+        longitude: geoPoint.value?.longitude,
+        latitude: geoPoint.value?.latitude,
+        visibility: selectedVisibility.value,
+        idempotencyToken: `post-${Date.now()}`
+      };
+      let saved;
+      if (isEditMode.value && editPostId.value) {
+        saved = await updatePost(editPostId.value, payload);
+      } else {
+        saved = await createPost(payload);
+      }
+      clearPreviewUrls();
+      showSuccessToast(pageCopy.value.success);
+      router.replace({ path: '/community', query: { published: String(saved.id) } });
+      return;
+    }
+    showSuccessToast(pageCopy.value.success);
+    router.replace(isWorkMode.value ? '/me/works' : '/community');
+  } finally {
+    publishing.value = false;
+  }
+};
+
+onMounted(async () => {
+  const fromQuery = normalizeTopic(String(route.query.topic ?? ''));
+  selectedTopics.value = fromQuery ? [fromQuery] : ['Locking入门'];
+  locationInput.value = selectedLocation.value;
+  if (!isEditMode.value || !editPostId.value) return;
+  loading.value = true;
+  try {
+    const detail = await fetchPostDetail(editPostId.value);
+    content.value = detail.text;
+    uploadedMedia.value = detail.mediaAssets;
+    for (const item of uploadedMedia.value) {
+      if (item.mediaType === 'video') {
+        item.posterUrl = (await captureVideoPoster(item.url)) ?? undefined;
+      }
+    }
+    selectedTopics.value = detail.topics.length ? detail.topics : selectedTopics.value;
+    selectedStyle.value = detail.style || selectedStyle.value;
+    selectedLocation.value = detail.location || selectedLocation.value;
+    geoPoint.value = detail.longitude !== undefined && detail.latitude !== undefined
+      ? { longitude: detail.longitude, latitude: detail.latitude }
+      : null;
+    locationInput.value = selectedLocation.value === '不显示位置' ? '' : selectedLocation.value;
+  } finally {
+    loading.value = false;
+  }
+});
+
+onUnmounted(clearPreviewUrls);
 </script>
 
 <template>
@@ -91,11 +466,15 @@ const onPublish = () => {
         <h1 class="topbar__title">{{ pageCopy.title }}</h1>
         <p class="topbar__meta">{{ pageCopy.meta }}</p>
       </div>
-      <button class="topbar__pub" type="button" @click="onPublish">{{ pageCopy.action }}</button>
+      <button class="topbar__pub" type="button" :disabled="publishing || uploading || loading" @click="onPublish">
+        {{ publishing ? '发布中…' : pageCopy.action }}
+      </button>
     </header>
 
     <section class="pen-scroll">
+      <p v-if="loading" class="loading-text">加载中</p>
       <textarea
+        v-else
         v-model="content"
         class="editor"
         rows="5"
@@ -103,41 +482,45 @@ const onPublish = () => {
       />
 
       <section class="media-section" aria-label="添加媒体">
+        <input ref="imageInput" class="media-input" type="file" accept="image/*" multiple @change="onImagesSelected" />
+        <input ref="videoInput" class="media-input" type="file" accept="video/*" @change="onVideoSelected" />
         <div class="media-section__head">
           <h2>{{ isWorkMode ? '作品媒体' : '媒体' }}</h2>
-          <span>{{ imageCountLabel }}</span>
+          <span>{{ uploading ? '上传中' : hasVideo ? '1/1' : imageCountLabel }}</span>
         </div>
 
         <div class="media-actions">
-          <button class="media-action" type="button" @click="addImage">
-            <Image :size="22" :stroke-width="2" />
+          <button class="media-action" type="button" :disabled="uploading || hasVideo" @click="pickImage">
+            <LoaderCircle v-if="uploading" class="spin" :size="22" :stroke-width="2" />
+            <Image v-else :size="22" :stroke-width="2" />
             <span>添加图片</span>
           </button>
-          <button class="media-action" type="button" @click="addVideo">
+          <button class="media-action" type="button" :disabled="uploading || uploadedMedia.length > 0" @click="pickVideo">
             <Video :size="22" :stroke-width="2" />
             <span>添加视频</span>
           </button>
         </div>
 
-        <div v-if="hasVideo" class="video-strip">
-          <Video :size="18" :stroke-width="2" />
-          <span>已添加 1 个视频</span>
+        <div v-if="video" class="video-preview">
+          <video :src="mediaPreviewUrl(video)" :poster="mediaPosterUrl(video)" controls playsinline preload="auto" />
+          <button class="media-remove" type="button" aria-label="删除视频" @click="removeMedia(video.id)">
+            <Trash2 :size="14" :stroke-width="2" />
+          </button>
         </div>
 
-        <div v-if="uploadedImages.length" class="image-grid">
-          <article v-for="image in uploadedImages" :key="image.id" class="image-tile">
-            <Image :size="22" :stroke-width="2" />
-            <span>{{ image.name }}</span>
+        <div v-if="images.length" class="image-grid">
+          <article v-for="image in images" :key="image.id" class="image-tile">
+            <img :src="mediaPreviewUrl(image)" :alt="image.originalFilename || '动态图片'" />
             <button
-              class="image-tile__remove"
+              class="media-remove"
               type="button"
-              :aria-label="`删除${image.name}`"
-              @click="removeImage(image.id)"
+              :aria-label="`删除${image.originalFilename || '图片'}`"
+              @click="removeMedia(image.id)"
             >
               <Trash2 :size="14" :stroke-width="2" />
             </button>
           </article>
-          <button v-if="uploadedImages.length < 9" class="image-tile image-tile--add" type="button" @click="addImage">
+          <button v-if="images.length < 9" class="image-tile image-tile--add" type="button" @click="pickImage">
             <Plus :size="22" :stroke-width="2" />
             <span>继续添加</span>
           </button>
@@ -150,11 +533,185 @@ const onPublish = () => {
           :key="r.label"
           :label="r.label"
           :trailing="r.trailing"
+          @click="openSheet(r.key)"
         />
       </div>
 
       <p class="draft-tip">{{ pageCopy.draft }}</p>
     </section>
+
+    <div v-if="activeSheet" class="choice-layer" role="dialog" aria-modal="true" :aria-label="rows.find((r) => r.key === activeSheet)?.label">
+      <button class="choice-layer__backdrop" type="button" aria-label="关闭设置" @click="closeSheet" />
+      <section class="choice-sheet">
+        <header class="choice-sheet__head">
+          <h2>{{ rows.find((r) => r.key === activeSheet)?.label }}</h2>
+          <button type="button" aria-label="关闭" @click="closeSheet">
+            <X :size="16" :stroke-width="2" />
+          </button>
+        </header>
+
+        <div v-if="activeSheet === 'topic'" class="choice-block">
+          <div class="topic-editor">
+            <input
+              v-model="topicInput"
+              type="text"
+              maxlength="50"
+              placeholder="输入话题名称"
+              @keyup.enter="addTopic(topicInput)"
+            />
+            <button type="button" @click="addTopic(topicInput)">添加</button>
+          </div>
+          <div class="chip-row">
+            <button
+              v-for="topic in selectedTopics"
+              :key="topic"
+              class="chip chip--dark"
+              type="button"
+              @click="removeTopic(topic)"
+            >
+              #{{ topic }}
+              <X :size="13" :stroke-width="2" />
+            </button>
+          </div>
+          <div class="section-mini">
+            <span>{{ topicLoading ? '加载中' : '热门推荐' }}</span>
+            <button type="button" @click="loadTopicSuggestions">刷新</button>
+          </div>
+          <div class="option-list">
+            <button
+              v-for="topic in topicSuggestions"
+              :key="topic.name"
+              type="button"
+              class="option-row"
+              @click="addTopic(topic.name)"
+            >
+              <span>#{{ topic.name }}</span>
+              <em>{{ topic.count }} 条</em>
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="activeSheet === 'related'" class="option-list">
+          <button
+            v-for="item in relatedOptions"
+            :key="item"
+            type="button"
+            class="option-row"
+            @click="chooseRelated(item)"
+          >
+            <span>{{ item }}</span>
+            <Check v-if="selectedRelated === item" :size="17" :stroke-width="2.4" />
+          </button>
+        </div>
+
+        <div v-else-if="activeSheet === 'style'" class="chip-grid">
+          <button
+            v-for="style in danceStyles"
+            :key="style"
+            type="button"
+            :class="['choice-chip', { 'choice-chip--active': selectedStyle === style }]"
+            @click="chooseStyle(style)"
+          >
+            {{ style }}
+          </button>
+        </div>
+
+        <div v-else-if="activeSheet === 'location'" class="choice-block">
+          <button class="locate-button" type="button" :disabled="locating" @click="useCurrentLocation">
+            {{ locating ? '定位中…' : '使用当前位置' }}
+          </button>
+          <p v-if="locationError" class="location-error">{{ locationError }}</p>
+          <p v-if="geoPoint" class="location-hint">
+            已获取真实坐标 {{ geoPoint.latitude.toFixed(5) }}, {{ geoPoint.longitude.toFixed(5) }}
+          </p>
+          <div class="topic-editor">
+            <input v-model="locationInput" type="text" maxlength="80" placeholder="定位后可搜索附近地点名或填写备注" @keyup.enter="searchLocation" />
+            <button type="button" :disabled="locationSearching" @click="searchLocation">
+              {{ locationSearching ? '搜索中' : '搜附近' }}
+            </button>
+          </div>
+          <div v-if="locationCandidates.length" class="option-list">
+            <button
+              v-for="place in locationCandidates"
+              :key="`${place.id || place.title}-${place.latitude}-${place.longitude}`"
+              type="button"
+              class="option-row option-row--two"
+              @click="chooseMapPlace(place)"
+            >
+              <span>
+                <strong>{{ place.title }}</strong>
+                <small>{{ place.address || `${place.latitude.toFixed(5)}, ${place.longitude.toFixed(5)}` }}</small>
+              </span>
+              <Check v-if="selectedLocation === place.title" :size="17" :stroke-width="2.4" />
+            </button>
+          </div>
+          <div class="chip-grid">
+            <button
+              type="button"
+              :class="['choice-chip', { 'choice-chip--active': selectedLocation === '不显示位置' }]"
+              @click="chooseLocation('不显示位置')"
+            >
+              不显示位置
+            </button>
+            <button
+              type="button"
+              :class="['choice-chip', { 'choice-chip--active': Boolean(geoPoint) }]"
+              @click="useCurrentLocation"
+            >
+              重新定位
+            </button>
+            <button
+              v-if="geoPoint"
+              type="button"
+              class="choice-chip"
+              @click="applyLocationInput"
+            >
+              使用当前名称
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="activeSheet === 'visibility'" class="option-list">
+          <button
+            v-for="item in visibilityOptions"
+            :key="item.value"
+            type="button"
+            class="option-row option-row--two"
+            @click="chooseVisibility(item.value)"
+          >
+            <span>
+              <strong>{{ item.label }}</strong>
+              <small>{{ item.desc }}</small>
+            </span>
+            <Check v-if="selectedVisibility === item.value" :size="17" :stroke-width="2.4" />
+          </button>
+        </div>
+
+        <div v-else-if="activeSheet === 'work-type'" class="chip-grid">
+          <button
+            v-for="item in workTypes"
+            :key="item"
+            type="button"
+            :class="['choice-chip', { 'choice-chip--active': selectedWorkType === item }]"
+            @click="chooseWorkType(item)"
+          >
+            {{ item }}
+          </button>
+        </div>
+
+        <div v-else-if="activeSheet === 'practice-date'" class="chip-grid">
+          <button
+            v-for="item in practiceDates"
+            :key="item"
+            type="button"
+            :class="['choice-chip', { 'choice-chip--active': selectedPracticeDate === item }]"
+            @click="choosePracticeDate(item)"
+          >
+            {{ item }}
+          </button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -251,6 +808,14 @@ const onPublish = () => {
   }
 }
 
+.loading-text {
+  margin: 20px 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: $pen-lh;
+}
+
 .media-section {
   display: flex;
   flex-direction: column;
@@ -278,6 +843,10 @@ const onPublish = () => {
   }
 }
 
+.media-input {
+  display: none;
+}
+
 .media-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -298,19 +867,26 @@ const onPublish = () => {
   font-weight: 900;
   line-height: $pen-lh;
   cursor: pointer;
+
+  &:disabled {
+    color: $pen-mute;
+    cursor: not-allowed;
+    opacity: 0.56;
+  }
 }
 
-.video-strip {
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 12px;
-  background: $pen-soft;
-  color: $pen-ink;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 800;
+.video-preview {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: $pen-ink;
+
+  video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
 }
 
 .image-grid {
@@ -322,10 +898,10 @@ const onPublish = () => {
 .image-tile {
   position: relative;
   aspect-ratio: 1;
-  border: 1px solid $pen-ink;
+  border: 1px solid $pen-hairline;
   border-radius: 14px;
-  background: $pen-ink;
-  color: $pen-on-primary;
+  background: $pen-soft;
+  color: $pen-ink;
   display: grid;
   place-items: center;
   align-content: center;
@@ -335,6 +911,12 @@ const onPublish = () => {
   line-height: $pen-lh;
   overflow: hidden;
 
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   &--add {
     border-color: $pen-hairline;
     background: $pen-canvas;
@@ -342,20 +924,29 @@ const onPublish = () => {
     cursor: pointer;
   }
 
-  &__remove {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 24px;
-    height: 24px;
-    border: 0;
-    border-radius: 999px;
-    background: $pen-canvas;
-    color: $pen-ink;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-  }
+}
+
+.media-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: $pen-ink;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .rows {
@@ -370,6 +961,246 @@ const onPublish = () => {
   background: #f1f8f3;
   color: #007d48;
   font-size: 13px;
+  font-weight: 800;
+  line-height: $pen-lh;
+}
+
+.choice-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+
+  &__backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.28);
+  }
+}
+
+.choice-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-height: 72vh;
+  overflow-y: auto;
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: $pen-canvas;
+  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.14);
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 900;
+      line-height: $pen-lh;
+    }
+
+    button {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 999px;
+      background: $pen-soft;
+      color: $pen-ink;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+  }
+}
+
+.choice-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.topic-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+
+  input {
+    min-width: 0;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid $pen-hairline;
+    border-radius: 12px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    outline: none;
+  }
+
+  button {
+    height: 42px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 13px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+}
+
+.chip-row,
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+
+  &--dark {
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+}
+
+.choice-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid $pen-hairline;
+  border-radius: 999px;
+  background: $pen-soft;
+  color: $pen-ink;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+
+  &--active {
+    border-color: $pen-ink;
+    background: $pen-ink;
+    color: $pen-on-primary;
+  }
+}
+
+.section-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: $pen-mute;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: $pen-lh;
+
+  button {
+    border: 0;
+    background: transparent;
+    color: $pen-ink;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.option-row {
+  min-height: 50px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid $pen-hairline;
+  background: $pen-canvas;
+  color: $pen-ink;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  em {
+    flex: none;
+    color: $pen-mute;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+
+  &--two span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  small {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+}
+
+.locate-button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: $pen-ink;
+  color: $pen-on-primary;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.56;
+    cursor: not-allowed;
+  }
+}
+
+.location-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: $pen-soft;
+  color: $pen-mute;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: $pen-lh;
+}
+
+.location-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(211, 0, 5, 0.08);
+  color: #d30005;
+  font-size: 12px;
   font-weight: 800;
   line-height: $pen-lh;
 }

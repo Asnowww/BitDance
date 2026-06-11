@@ -141,6 +141,9 @@ public class MerchantWorkshopService {
             w.getAddress(), w.getLocationName(), w.getPriceAmount(),
             w.getMinPeople(), w.getMaxPeople(), w.getSignupDeadline(),
             w.getPublishStatus(), w.getAuditStatus(),
+            null, null, java.math.BigDecimal.ZERO,
+            w.getLocationName(), w.getAddress(), null, w.getLongitude(), w.getLatitude(),
+            0L, java.math.BigDecimal.ZERO, List.of(),
             sessions, false
         );
     }

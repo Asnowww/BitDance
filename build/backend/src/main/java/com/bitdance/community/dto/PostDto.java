@@ -7,6 +7,8 @@ import java.util.List;
 public record PostDto(
     Long id,
     Long authorUserId,
+    String authorName,
+    String authorAvatar,
     String postType,
     String contentText,
     Long danceStyleId,
@@ -20,7 +22,11 @@ public record PostDto(
     String postStatus,
     OffsetDateTime publishedAt,
     List<TopicDto> topics,
+    List<MediaAssetDto> mediaAssets,
     long likeCount,
     long commentCount,
-    boolean liked
+    long collectCount,
+    long shareCount,
+    boolean liked,
+    boolean collected
 ) {}

@@ -6,6 +6,7 @@ import { Image, Music, Plus, ShieldCheck, Trash2, Video } from 'lucide-vue-next'
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { fetchCourseDetail, fetchCoachDetail } from '@/api/course';
 import { fetchStudioDetail } from '@/api/studio';
+import { fetchWorkshopDetail } from '@/api/workshop';
 import {
   createReview,
   REVIEW_DIMENSIONS,
@@ -20,17 +21,19 @@ const router = useRouter();
 const targetTypes: Array<{ type: ReviewTargetType; label: string }> = [
   { type: 'studio', label: '舞室' },
   { type: 'coach', label: '老师' },
-  { type: 'course', label: '课程' }
+  { type: 'course', label: '课程' },
+  { type: 'workshop', label: 'Workshop' }
 ];
 
 const targetNames: Record<ReviewTargetType, string> = {
   studio: 'Urban Flow 舞室',
   coach: 'Mia 老师',
-  course: 'K-pop 入门课'
+  course: 'K-pop 入门课',
+  workshop: 'Workshop 活动'
 };
 
 const normalizeTargetType = (raw: unknown): ReviewTargetType =>
-  raw === 'coach' || raw === 'course' || raw === 'studio' ? raw : 'studio';
+  raw === 'coach' || raw === 'course' || raw === 'studio' || raw === 'workshop' ? raw : 'studio';
 
 const draftKey = 'bitdance_review_draft';
 const routeTargetType = computed(() => normalizeTargetType(route.query.targetType));
@@ -71,14 +74,15 @@ const sourceRefId = computed(() => Number(route.query.sourceRefId) || undefined)
 const targetId = computed(() => (activeType.value === routeTargetType.value ? routeTargetId.value : 0));
 const targetName = computed(() => targetNameState.value || targetNames[activeType.value]);
 const sourceLabel = computed(() => {
-  if (sourceType.value === 'order') return '订单来源待核验';
-  if (sourceType.value === 'checkin') return '签到来源待核验';
+  if (sourceType.value === 'order') return 'Workshop 订单来源';
+  if (sourceType.value === 'checkin') return 'Workshop 签到来源';
   return '已完成试听';
 });
 const sourceGuide = computed(() => {
   if (!hasFixedTarget.value) return '请先从舞室、老师或课程详情页进入，再提交评价。';
-  if (sourceType.value === 'order') return '订单来源会在后端核验完成后决定是否提升权重。';
-  if (sourceType.value === 'checkin') return '签到来源会在后端核验完成后决定是否提升权重。';
+  // M2 来源验证：后端已接入 trial/order/checkin，页面文案直接说明真实可信来源。
+  if (sourceType.value === 'order') return '已带入 Workshop 订单，提交后会按订单事实判断权重。';
+  if (sourceType.value === 'checkin') return '已带入 Workshop 签到，提交后会按签到事实判断权重。';
   return '试听来源已带入，提交后会按真实风控状态展示。';
 });
 const lockedTargetNote = computed(() =>
@@ -204,6 +208,12 @@ const loadTargetContext = async () => {
       targetMetaState.value = `课程 · ¥${detail.priceAmount} · ${detail.difficultyLevel || sourceLabel.value}`;
       return;
     }
+    if (routeTargetType.value === 'workshop') {
+      const detail = await fetchWorkshopDetail(routeTargetId.value);
+      targetNameState.value = detail.title;
+      targetMetaState.value = `Workshop · ${detail.area || detail.studioName || sourceLabel.value}`;
+      return;
+    }
     const detail = await fetchCoachDetail(routeTargetId.value);
     targetNameState.value = detail.displayName;
     targetMetaState.value = `老师 · ${detail.teachingStyle || sourceLabel.value}`;
@@ -214,7 +224,7 @@ const loadTargetContext = async () => {
 
 const submitReview = async () => {
   if (!targetId.value) {
-    showFailToast('请从具体舞室、老师或课程详情页进入写评价');
+    showFailToast('请从具体舞室、老师、课程或 Workshop 详情页进入写评价');
     return;
   }
   if (currentDimensions.value.some((item) => scores[item.key] === undefined)) {

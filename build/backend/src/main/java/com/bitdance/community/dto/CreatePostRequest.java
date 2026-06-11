@@ -18,5 +18,6 @@ public record CreatePostRequest(
     BigDecimal longitude,
     BigDecimal latitude,
     @Pattern(regexp = "public|followers|private") String visibility,
-    @Size(max = 5) List<String> topicNames
+    @Size(max = 5) List<String> topicNames,
+    @Size(max = 10) List<Long> mediaAssetIds
 ) {}

@@ -2,13 +2,14 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { ChevronRight, ListFilter, Music, Search, Star } from 'lucide-vue-next';
+import { ChevronRight, ListFilter, Music, Search, Star, UserRound } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import StudioFilterDrawer, { type StudioFilterValue } from '@/components/studio/StudioFilterDrawer.vue';
 import StudioSearchEditor, { type StudioSearchEditorValue } from '@/components/studio/StudioSearchEditor.vue';
 import { fetchNearbyStudios, type StudioCard, type StudioListQuery } from '@/api/studio';
 import { fetchFavorites, toggleFavorite } from '@/api/favorite';
+import { searchPublicUsers, type PublicUserProfile } from '@/api/userHome';
 import { getToken } from '@/utils/request';
 import { getCityName } from '@/constants/cities';
 import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
@@ -17,6 +18,21 @@ const route = useRoute();
 const router = useRouter();
 
 type SearchPreset = 'zero-basic' | 'trial';
+type SearchMode = 'studio' | 'user';
+
+interface SearchResult {
+  kind: SearchMode;
+  id: string;
+  title: string;
+  meta: string;
+  tags: string[];
+  hint: string;
+  to: string;
+  favored: boolean;
+  compareSelected: boolean;
+}
+
+const parseRouteSearchMode = (): SearchMode => (route.query.mode === 'user' ? 'user' : 'studio');
 
 const parseRoutePreset = (): SearchPreset | undefined => {
   const preset = typeof route.query.preset === 'string' ? route.query.preset : '';
@@ -43,22 +59,13 @@ const buildPresetFilters = (preset?: SearchPreset): StudioFilterValue => {
 
 const drawerVisible = ref(false);
 const searchEditorVisible = ref(false);
+const searchMode = ref<SearchMode>(parseRouteSearchMode());
 const searchValue = ref<StudioSearchEditorValue>(parseRouteSearch());
 const locatedCoords = ref<{ latitude: number; longitude: number } | null>(null);
-
-interface SearchResult {
-  id: string;
-  title: string;
-  meta: string;
-  tags: string[];
-  hint: string;
-  to: string;
-  favored: boolean;
-  compareSelected: boolean;
-}
-
 const studios = ref<StudioCard[]>([]);
+const users = ref<PublicUserProfile[]>([]);
 const resultCount = ref<number>();
+const userResultCount = ref<number>();
 const loading = ref(false);
 const query = ref<StudioListQuery>({ page: 1, pageSize: 20 });
 const appliedFilters = ref<StudioFilterValue>(buildPresetFilters(parseRoutePreset()));
@@ -67,17 +74,46 @@ const compareSelection = ref<Record<string, boolean>>({});
 const favoriteState = ref<Record<number, boolean>>({});
 const canFavorite = computed(() => Boolean(getToken()));
 const mapContainer = ref<HTMLElement | null>(null);
-const mapStatus = ref(hasTencentMapConfig() ? '地图加载中' : '未配置腾讯地图 Key，展示坐标降级视图');
+const mapStatus = ref(hasTencentMapConfig() ? '地图加载中' : '未配置腾讯地图 Key，显示列表和坐标');
 const selectedMapStudioId = ref<number>();
 const resultItemRefs = new Map<number, HTMLElement>();
 let tencentMapApi: Record<string, any> | null = null;
 let map: any = null;
 let markerLayer: any = null;
 
-const results = computed<SearchResult[]>(() =>
-  studios.value.map((studio) => {
+const isUserMode = computed(() => searchMode.value === 'user');
+const selectedMapStudio = computed(() => studios.value.find((studio) => studio.id === selectedMapStudioId.value) ?? null);
+const compareSelectedStudioIds = computed(() =>
+  Object.entries(compareSelection.value).filter(([, on]) => on).map(([id]) => Number(id))
+);
+const compareCount = computed(() => compareSelectedStudioIds.value.length);
+const canEnterCompare = computed(() => compareCount.value >= 2 && compareCount.value <= 3);
+
+const results = computed<SearchResult[]>(() => {
+  if (isUserMode.value) {
+    return users.value.map((user) => {
+      const tags = (user.styles ?? [])
+        .map((style) => style.name || style.skillLevel)
+        .filter(Boolean)
+        .slice(0, 3) as string[];
+      return {
+        kind: 'user',
+        id: String(user.userId),
+        title: user.nickname || `用户 ${user.userId}`,
+        meta: user.bio || user.currentLevel || '公开用户资料',
+        tags: tags.length ? tags : [user.currentLevel || '舞者'],
+        hint: '查看公开主页',
+        to: `/user/${user.userId}`,
+        favored: false,
+        compareSelected: false
+      };
+    });
+  }
+
+  return studios.value.map((studio) => {
     const favored = Boolean(favoriteState.value[studio.id] ?? studio.favored);
     return {
+      kind: 'studio',
       id: String(studio.id),
       title: studio.name,
       meta: `${studio.distanceKm ?? '-'}km · ${studio.address || '地址待完善'}`,
@@ -87,42 +123,26 @@ const results = computed<SearchResult[]>(() =>
       favored,
       compareSelected: Boolean(compareSelection.value[String(studio.id)])
     };
-  })
-);
+  });
+});
 
-const compareSelectedStudioIds = computed(() =>
-  Object.entries(compareSelection.value).filter(([, on]) => on).map(([id]) => Number(id))
-);
-const compareCount = computed(() => compareSelectedStudioIds.value.length);
-const canEnterCompare = computed(() => compareCount.value >= 2 && compareCount.value <= 3);
 const resultSummary = computed(() => {
+  if (isUserMode.value) return `找到 ${userResultCount.value ?? users.value.length} 位用户`;
   const place = searchValue.value.useNearby ? '附近' : getCityName(searchValue.value.cityId) || '当前城市';
   return `${place}找到 ${resultCount.value ?? studios.value.length} 家舞室`;
 });
+
 const searchContextMeta = computed(() => {
+  if (isUserMode.value) {
+    return searchValue.value.keyword ? `按昵称搜索「${searchValue.value.keyword}」` : '全部公开用户';
+  }
   const parts = [searchValue.value.useNearby ? '附近结果' : getCityName(searchValue.value.cityId) || '指定城市'];
   if (searchValue.value.keyword) parts.push(`关键词「${searchValue.value.keyword}」`);
   return parts.join(' · ');
 });
-const selectionHint = computed(() => {
-  if (!compareMode.value) return '点卡片可查看详情，点右侧星标收藏';
-  if (compareCount.value === 0) return '点卡片加入对比，最多同时选 3 家';
-  if (compareCount.value === 1) return '再选 1 家就能进入对比';
-  return `已选 ${compareCount.value} 家，可进入对比`;
-});
-const compareHint = computed(() => {
-  if (compareCount.value === 0) return '开启后点卡片加入对比，右侧星标仍然只负责收藏。';
-  if (compareCount.value === 1) return '再点 1 家就能进入对比页。';
-  if (compareCount.value === 2) return '已经够开始对比了，还可以再补 1 家。';
-  return '已满 3 家，想换对象先取消 1 家。';
-});
-const selectedMapStudio = computed(() => studios.value.find((studio) => studio.id === selectedMapStudioId.value) ?? null);
-const mapFocusHint = computed(() =>
-  selectedMapStudio.value
-    ? `已在地图定位 ${selectedMapStudio.value.name}，列表会同步高亮。`
-    : '点地图上的舞室，列表会跟着定位到同一条结果。'
-);
+
 const activeFilterTags = computed(() => {
+  if (isUserMode.value) return [searchValue.value.keyword ? `昵称：${searchValue.value.keyword}` : '全部公开用户'];
   const tags: string[] = [];
   if (searchValue.value.useNearby && appliedFilters.value.distanceKm) tags.push(`${appliedFilters.value.distanceKm}km 内`);
   if (appliedFilters.value.danceStyleId) tags.push('已选舞种');
@@ -139,13 +159,32 @@ const activeFilterTags = computed(() => {
   if (searchValue.value.keyword) tags.push(`关键词：${searchValue.value.keyword}`);
   return tags;
 });
+
 const searchSummaryTitle = computed(() => resultSummary.value);
 const searchSummaryMeta = computed(() => searchContextMeta.value);
+const selectionHint = computed(() => {
+  if (!compareMode.value) return '点卡片可查看详情，点右侧星标收藏';
+  if (compareCount.value === 0) return '点卡片加入对比，最多同时选择 3 家';
+  if (compareCount.value === 1) return '再选 1 家就能进入对比';
+  return `已选 ${compareCount.value} 家，可以进入对比`;
+});
+const compareHint = computed(() => {
+  if (compareCount.value === 0) return '开启后点卡片加入对比，右侧星标仍然负责收藏';
+  if (compareCount.value === 1) return '再点 1 家就能进入对比页';
+  if (compareCount.value === 2) return '已经足够开始对比，还可以再补 1 家';
+  return '已满 3 家，想换对象先取消 1 家';
+});
+const mapFocusHint = computed(() =>
+  selectedMapStudio.value
+    ? `已在地图定位 ${selectedMapStudio.value.name}，列表会同步高亮`
+    : '点地图上的舞室，列表会定位到同一条结果'
+);
 
 const syncRouteQuery = () => {
   const nextQuery: Record<string, string> = {};
+  if (isUserMode.value) nextQuery.mode = 'user';
   if (searchValue.value.keyword) nextQuery.keyword = searchValue.value.keyword;
-  if (!searchValue.value.useNearby && searchValue.value.cityId) {
+  if (!isUserMode.value && !searchValue.value.useNearby && searchValue.value.cityId) {
     nextQuery.scope = 'city';
     nextQuery.cityId = String(searchValue.value.cityId);
   }
@@ -171,14 +210,24 @@ const syncQueryFromState = () => {
   };
 };
 
+const loadUsers = async () => {
+  loading.value = true;
+  try {
+    const response = await searchPublicUsers(searchValue.value.keyword ?? '', 1, 20);
+    users.value = response.list ?? [];
+    userResultCount.value = response.total ?? users.value.length;
+  } finally {
+    loading.value = false;
+  }
+};
+
 const loadStudios = async () => {
   loading.value = true;
   try {
     syncQueryFromState();
-    // M1 收藏链路：列表接口只负责发现舞室，星标状态从用户收藏接口合并，避免隐式默认收藏第一条。
     const [response, favorites] = await Promise.all([
       fetchNearbyStudios(query.value),
-      canFavorite.value ? fetchFavorites('studio', { silentError: true }).catch(() => []) : Promise.resolve([])
+      canFavorite.value ? fetchFavorites('studio').catch(() => []) : Promise.resolve([])
     ]);
     const favoriteMap = Object.fromEntries((favorites ?? []).map((item) => [item.targetId, true]));
     favoriteState.value = favoriteMap;
@@ -213,6 +262,7 @@ const focusStudio = (id: number, options?: { scrollIntoView?: boolean }) => {
 };
 
 const renderMap = async () => {
+  if (isUserMode.value) return;
   if (!hasTencentMapConfig()) {
     mapStatus.value = '未配置腾讯地图 Key，已保留列表数据和坐标用于验收';
     return;
@@ -231,12 +281,7 @@ const renderMap = async () => {
       ? new TMap.LatLng(Number(points[0].latitude), Number(points[0].longitude))
       : new TMap.LatLng(39.90923, 116.397428);
     if (!map) {
-      // 搜索页地图只承载 M1 附近舞室点位，不把腾讯地图实例状态写入业务 store。
-      map = new TMap.Map(mapContainer.value, {
-        viewMode: '2D',
-        zoom: points.length ? 13 : 11,
-        center
-      });
+      map = new TMap.Map(mapContainer.value, { viewMode: '2D', zoom: points.length ? 13 : 11, center });
     } else {
       map.setCenter?.(center);
       map.setZoom?.(points.length ? 13 : 11);
@@ -246,25 +291,14 @@ const renderMap = async () => {
       id: 'bitdance-studio-markers',
       map,
       styles: {
-        studio: new TMap.MarkerStyle({
-          width: 28,
-          height: 36,
-          anchor: { x: 14, y: 36 }
-        }),
-        studioActive: new TMap.MarkerStyle({
-          width: 34,
-          height: 42,
-          anchor: { x: 17, y: 42 }
-        })
+        studio: new TMap.MarkerStyle({ width: 28, height: 36, anchor: { x: 14, y: 36 } }),
+        studioActive: new TMap.MarkerStyle({ width: 34, height: 42, anchor: { x: 17, y: 42 } })
       },
       geometries: points.map((studio) => ({
         id: String(studio.id),
         styleId: selectedMapStudioId.value === studio.id ? 'studioActive' : 'studio',
         position: new TMap.LatLng(Number(studio.latitude), Number(studio.longitude)),
-        properties: {
-          studioId: studio.id,
-          title: studio.name
-        }
+        properties: { studioId: studio.id, title: studio.name }
       }))
     });
     markerLayer.on('click', (event: any) => {
@@ -283,13 +317,12 @@ const renderMap = async () => {
     }
     mapStatus.value = points.length ? `已标注 ${points.length} 家舞室` : '暂无可标注经纬度';
   } catch {
-    mapStatus.value = '地图加载失败，已回退列表视图数据';
+    mapStatus.value = '地图加载失败，已回退到列表视图数据';
   }
 };
 
 const locate = () => {
   let settled = false;
-  // M1 定位兜底：浏览器权限弹窗可能长时间无回调，先保证舞室列表和腾讯地图点位可见。
   const fallbackTimer = window.setTimeout(() => {
     if (settled) return;
     settled = true;
@@ -316,6 +349,7 @@ const locate = () => {
 };
 
 const openFilter = () => {
+  if (isUserMode.value) return;
   drawerVisible.value = true;
 };
 
@@ -327,6 +361,28 @@ const applySearch = (value: StudioSearchEditorValue) => {
   searchValue.value = value;
   searchEditorVisible.value = false;
   syncRouteQuery();
+  if (isUserMode.value) {
+    void loadUsers();
+    return;
+  }
+  void loadStudios().then(renderMap);
+};
+
+const applySearchMode = (event: Event) => {
+  searchMode.value = (event.target as HTMLSelectElement).value as SearchMode;
+  compareMode.value = false;
+  compareSelection.value = {};
+  selectedMapStudioId.value = undefined;
+  syncRouteQuery();
+  if (isUserMode.value) {
+    resetMarkers();
+    void loadUsers();
+    return;
+  }
+  if (searchValue.value.useNearby && !locatedCoords.value) {
+    locate();
+    return;
+  }
   void loadStudios().then(renderMap);
 };
 
@@ -342,12 +398,14 @@ const toggleCompare = (id: string) => {
     return;
   }
   compareSelection.value[id] = !compareSelection.value[id];
-  if (compareSelection.value[id]) {
-    focusStudio(Number(id));
-  }
+  if (compareSelection.value[id]) focusStudio(Number(id));
 };
 
 const handleResultClick = (item: SearchResult) => {
+  if (item.kind === 'user') {
+    router.push(item.to);
+    return;
+  }
   const id = Number(item.id);
   if (compareMode.value) {
     toggleCompare(item.id);
@@ -361,6 +419,7 @@ const handleResultClick = (item: SearchResult) => {
 };
 
 const toggleResultFavorite = async (item: SearchResult) => {
+  if (item.kind !== 'studio') return;
   if (!canFavorite.value) {
     showToast('请先登录后收藏');
     return;
@@ -368,9 +427,7 @@ const toggleResultFavorite = async (item: SearchResult) => {
   const id = Number(item.id);
   const { favored } = await toggleFavorite('studio', id);
   favoriteState.value = { ...favoriteState.value, [id]: favored };
-  studios.value = studios.value.map((studio) =>
-    studio.id === id ? { ...studio, favored } : studio
-  );
+  studios.value = studios.value.map((studio) => (studio.id === id ? { ...studio, favored } : studio));
   showToast(favored ? '已加入收藏' : '已取消收藏');
 };
 
@@ -390,14 +447,17 @@ const clearCompareSelection = () => {
 };
 
 const resultHintFor = (item: SearchResult) => {
+  if (item.kind === 'user') return item.hint;
   if (compareMode.value) return item.compareSelected ? '已加入对比' : '点卡片加入对比';
-  if (selectedMapStudioId.value === Number(item.id)) {
-    return '已和地图对齐，再点一次看详情';
-  }
+  if (selectedMapStudioId.value === Number(item.id)) return '已和地图对齐，再点一次看详情';
   return item.hint;
 };
 
 onMounted(() => {
+  if (isUserMode.value) {
+    void loadUsers();
+    return;
+  }
   locate();
 });
 
@@ -406,7 +466,6 @@ watch(selectedMapStudioId, () => {
 });
 
 watch(studios, (list) => {
-  // 搜索页的“已选舞室”只应属于当前结果集，筛选后移除失效选择，避免底栏动作指向不可见对象。
   const visibleIds = new Set(list.map((studio) => String(studio.id)));
   if (selectedMapStudioId.value && !visibleIds.has(String(selectedMapStudioId.value))) {
     selectedMapStudioId.value = undefined;
@@ -429,43 +488,52 @@ onUnmounted(() => {
     <PenTopBar title="搜索结果" @share="showToast('搜索结果链接已复制')" />
 
     <section class="pen-scroll">
-      <section
-        class="search-summary"
-        aria-label="搜索结果摘要"
-        role="button"
-        tabindex="0"
-        @click="openSearchEditor"
-        @keydown.enter.prevent="openSearchEditor"
-        @keydown.space.prevent="openSearchEditor"
-      >
+      <section class="search-summary" aria-label="搜索结果摘要">
         <Search class="search-summary__icon" :size="18" :stroke-width="2" />
-        <div class="search-summary__body">
-          <strong class="search-summary__title">{{ searchSummaryTitle }}</strong>
-          <p class="search-summary__meta">{{ searchSummaryMeta }}</p>
-        </div>
-        <ChevronRight class="search-summary__chevron" :size="18" :stroke-width="2" />
+        <select
+          class="search-summary__mode"
+          :value="searchMode"
+          aria-label="选择搜索类型"
+          @click.stop
+          @change="applySearchMode"
+        >
+          <option value="studio">舞室等</option>
+          <option value="user">用户</option>
+        </select>
+        <button
+          type="button"
+          class="search-summary__button"
+          @click="openSearchEditor"
+          @keydown.enter.prevent="openSearchEditor"
+          @keydown.space.prevent="openSearchEditor"
+        >
+          <span class="search-summary__body">
+            <strong class="search-summary__title">{{ searchSummaryTitle }}</strong>
+            <span class="search-summary__meta">{{ searchSummaryMeta }}</span>
+          </span>
+          <ChevronRight class="search-summary__chevron" :size="18" :stroke-width="2" />
+        </button>
       </section>
 
       <section class="filter-toolbar" aria-label="筛选与选择">
         <div class="filter-toolbar__body">
-          <strong class="filter-toolbar__title">当前筛选</strong>
+          <strong class="filter-toolbar__title">{{ isUserMode ? '当前搜索' : '当前筛选' }}</strong>
           <div class="filter-toolbar__chips">
             <span v-for="tag in activeFilterTags" :key="tag" class="filter-toolbar__chip">{{ tag }}</span>
             <span v-if="!activeFilterTags.length" class="filter-toolbar__chip filter-toolbar__chip--muted">默认附近结果</span>
           </div>
         </div>
-        <button type="button" class="filter-trigger" @click="openFilter">
+        <button v-if="!isUserMode" type="button" class="filter-trigger" @click="openFilter">
           <ListFilter :size="16" :stroke-width="2" />
           <span>筛选</span>
         </button>
       </section>
 
-      <section class="map-panel" aria-label="舞室地图">
+      <section v-if="!isUserMode" class="map-panel" aria-label="舞室地图">
         <div ref="mapContainer" class="map-panel__canvas" />
         <p class="map-panel__status">{{ mapStatus }}</p>
         <div class="map-panel__footer">
           <p class="map-panel__focus">{{ mapFocusHint }}</p>
-          <!-- M1 对比入口：滑钮只切换选择模式，底部确认/取消按钮才执行对比动作。 -->
           <button
             type="button"
             class="compare-switch"
@@ -493,25 +561,28 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <ul class="result-list">
+      <p v-if="loading" class="loading-state">加载中...</p>
+      <ul v-else class="result-list">
         <li
           v-for="item in results"
-          :key="item.id"
-          :ref="(el) => bindResultRef(Number(item.id), el as Element | null)"
+          :key="`${item.kind}-${item.id}`"
+          :ref="item.kind === 'studio' ? (el) => bindResultRef(Number(item.id), el as Element | null) : undefined"
           class="result"
           :class="{
-            'result--focused': selectedMapStudioId === Number(item.id),
-            'result--compare': item.compareSelected
+            'result--focused': item.kind === 'studio' && selectedMapStudioId === Number(item.id),
+            'result--compare': item.compareSelected,
+            'result--user': item.kind === 'user'
           }"
           @click="handleResultClick(item)"
         >
           <div class="result__cover" aria-hidden="true">
-            <Music :size="28" :stroke-width="2" />
+            <UserRound v-if="item.kind === 'user'" :size="28" :stroke-width="2" />
+            <Music v-else :size="28" :stroke-width="2" />
           </div>
           <div class="result__body">
             <div class="result__title-row">
               <strong class="result__title">{{ item.title }}</strong>
-              <span v-if="selectedMapStudioId === Number(item.id)" class="result__focus-tag">地图已定位</span>
+              <span v-if="item.kind === 'studio' && selectedMapStudioId === Number(item.id)" class="result__focus-tag">地图已定位</span>
               <span v-if="item.compareSelected" class="result__focus-tag result__focus-tag--compare">已选对比</span>
             </div>
             <p class="result__meta">{{ item.meta }}</p>
@@ -521,6 +592,7 @@ onUnmounted(() => {
             <span class="result__hint">{{ resultHintFor(item) }}</span>
           </div>
           <button
+            v-if="item.kind === 'studio'"
             type="button"
             class="favorite-chip"
             :class="{ 'favorite-chip--on': item.favored, 'favorite-chip--disabled': !canFavorite }"
@@ -533,6 +605,9 @@ onUnmounted(() => {
           </button>
         </li>
       </ul>
+      <p v-if="!loading && !results.length" class="loading-state">
+        {{ isUserMode ? '没有找到公开用户' : '没有找到符合条件的舞室' }}
+      </p>
     </section>
 
     <StudioFilterDrawer
@@ -546,13 +621,13 @@ onUnmounted(() => {
     <StudioSearchEditor
       :visible="searchEditorVisible"
       :value="searchValue"
-      :result-count="resultCount"
+      :result-count="isUserMode ? userResultCount : resultCount"
       @close="searchEditorVisible = false"
       @apply="applySearch"
     />
 
     <PenActionBar
-      v-if="compareMode"
+      v-if="compareMode && !isUserMode"
       soft-label="取消全部"
       dark-label="进入对比"
       :soft-disabled="!compareCount"
@@ -587,15 +662,43 @@ onUnmounted(() => {
   gap: 10px;
   width: 100%;
   min-height: 68px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid $pen-hairline;
   border-radius: 18px;
   background: $pen-canvas;
-  cursor: pointer;
 
-  &__icon {
+  &__icon,
+  &__chevron {
     flex: none;
     color: $pen-ink;
+  }
+
+  &__mode {
+    flex: none;
+    width: 86px;
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid $pen-hairline;
+    border-radius: 12px;
+    background: $pen-soft;
+    color: $pen-ink;
+    font-size: 13px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__button {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
   }
 
   &__body {
@@ -614,16 +717,10 @@ onUnmounted(() => {
   }
 
   &__meta {
-    margin: 0;
     color: $pen-mute;
     font-size: 13px;
     font-weight: 600;
     line-height: $pen-lh;
-  }
-
-  &__chevron {
-    flex: none;
-    color: $pen-ink;
   }
 }
 
@@ -748,16 +845,24 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.map-panel__status {
+.map-panel__status,
+.map-panel__hint,
+.map-panel__focus {
   margin: 0;
-  color: $pen-mute;
   font-size: 12px;
   font-weight: 700;
   line-height: $pen-lh;
+}
 
-  &--focus {
-    color: $pen-ink;
-  }
+.map-panel__status,
+.map-panel__hint {
+  color: $pen-mute;
+}
+
+.map-panel__focus {
+  flex: 1;
+  min-width: 0;
+  color: $pen-ink;
 }
 
 .map-panel__footer {
@@ -765,24 +870,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.map-panel__focus {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  color: $pen-ink;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: $pen-lh;
-}
-
-.map-panel__hint {
-  margin: 0;
-  color: $pen-mute;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: $pen-lh;
 }
 
 .map-panel__fallback {
@@ -836,6 +923,11 @@ onUnmounted(() => {
   &--compare {
     background: #f9f9f9;
     outline: 1px solid $pen-ink;
+  }
+
+  &--user {
+    border: 1px solid $pen-hairline;
+    background: $pen-canvas;
   }
 
   &__cover {
@@ -948,5 +1040,17 @@ onUnmounted(() => {
   &--disabled {
     opacity: 0.5;
   }
+}
+
+.loading-state {
+  margin: 0;
+  padding: 18px 12px;
+  border: 1px solid $pen-hairline;
+  border-radius: 14px;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: $pen-lh;
+  text-align: center;
 }
 </style>

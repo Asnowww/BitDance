@@ -9,6 +9,7 @@ import com.bitdance.practice.dto.JoinRequestDto;
 import com.bitdance.practice.dto.PracticeListResponse;
 import com.bitdance.practice.dto.PracticePostDto;
 import com.bitdance.practice.service.PracticeService;
+import com.bitdance.profile.service.ProfileService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,7 @@ class PracticeControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper om;
     @MockBean PracticeService service;
+    @MockBean ProfileService profileService;
     @MockBean JwtService jwtService;
 
     @BeforeEach

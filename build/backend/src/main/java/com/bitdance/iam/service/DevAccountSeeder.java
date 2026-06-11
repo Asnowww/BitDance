@@ -26,7 +26,7 @@ public class DevAccountSeeder implements ApplicationRunner {
 
     public DevAccountSeeder(
         AuthService authService,
-        @Value("${bitdance.dev.seed-account:true}") boolean enabled,
+        @Value("${bitdance.dev.seed-account:false}") boolean enabled,
         @Value("${bitdance.dev.seed-account-phone:18511695975}") String phone,
         @Value("${bitdance.dev.seed-account-password:123456}") String password
     ) {
@@ -43,9 +43,9 @@ public class DevAccountSeeder implements ApplicationRunner {
         }
         try {
             authService.ensureAccount(phone, password);
-            log.info("[dev] 测试账号已就绪 phone={} (密码登录)", phone);
+            log.info("[dev] test account ensured phone={} (password login)", phone);
         } catch (Exception ex) {
-            log.warn("[dev] 测试账号播种失败：{}", ex.getMessage());
+            log.warn("[dev] test account seed failed: {}", ex.getMessage());
         }
     }
 }

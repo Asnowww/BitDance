@@ -32,6 +32,11 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
         Long userId, String status, Pageable pageable
     );
 
+    // M2 回复验收：教练/商家端需要真实评价队列，不能再用前端静态样例支撑“评价回复”。
+    Page<Review> findByReviewStatusInOrderByPublishedAtDesc(
+        List<String> statuses, Pageable pageable
+    );
+
     // M2 风控验收：本人列表要看到 pending/folded 等非公开状态，这里显式写 JPQL，避免派生查询在当前数据环境下漏数。
     @Query("""
         select r from Review r

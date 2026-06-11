@@ -36,7 +36,7 @@ mock('post', /\/coach\/workshops$/, ({ data }) => {
   return { id, status: 'PENDING_REVIEW' };
 });
 
-mock('get', /\/coach\/workshop-orders$/, () => {
+mock('get', /\/(?:coach|merchant)\/workshop-orders$/, () => {
   try {
     const orders = JSON.parse(localStorage.getItem('bitdance_mock_workshop_orders') ?? '[]');
     return (orders as Array<Record<string, unknown>>).map((o) => ({
@@ -55,7 +55,7 @@ mock('get', /\/coach\/workshop-orders$/, () => {
   }
 });
 
-mock('post', /\/coach\/workshop-orders\/\d+\/checkin$/, ({ url, data }) => {
+mock('post', /\/(?:coach|merchant)\/workshop-orders\/\d+\/checkin$/, ({ url, data }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const body = (data ?? {}) as Record<string, unknown>;
   try {

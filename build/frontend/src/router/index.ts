@@ -176,10 +176,16 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '消息中心', requiresAuth: true }
   },
   {
+    path: '/activity',
+    name: 'activity-hub',
+    component: () => import('@/pages/community/ActivityHubPage.vue'),
+    meta: { tab: 'activity', title: '社区 / 活动' }
+  },
+  {
     path: '/workshops',
     name: 'workshop-list',
     component: () => import('@/pages/workshop/WorkshopListPage.vue'),
-    meta: { tab: 'activity', title: '活动' }
+    meta: { tab: 'activity', title: 'Workshop' }
   },
   {
     path: '/workshop/:id',
@@ -222,6 +228,12 @@ const routes: RouteRecordRaw[] = [
     name: 'post-detail',
     component: () => import('@/pages/community/PostDetailPage.vue'),
     meta: { title: '动态' }
+  },
+  {
+    path: '/community/post/:id/edit',
+    name: 'edit-post',
+    component: () => import('@/pages/community/PublishPostPage.vue'),
+    meta: { title: '编辑动态', requiresAuth: true }
   },
   {
     path: '/community/publish',
@@ -332,6 +344,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '经营看板', requiresAuth: true }
   },
   {
+    path: '/admin/reports',
+    name: 'admin-reports',
+    component: () => import('@/pages/admin/ReportTicketsPage.vue'),
+    meta: { title: '举报后台', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue'),
@@ -349,7 +367,6 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta?.requiresAuth && !getToken()) {
-    // 登录态统一守卫：点击“我的”等受保护入口时先去登录页，登录成功后按 redirect 回到原目标页。
     return { path: '/login', query: { redirect: to.fullPath } };
   }
   return true;

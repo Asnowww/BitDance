@@ -4,6 +4,16 @@ spring:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      connection-timeout: ${SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT:8000}
+      validation-timeout: ${SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT:3000}
+      idle-timeout: ${SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT:300000}
+      max-lifetime: ${SPRING_DATASOURCE_HIKARI_MAX_LIFETIME:600000}
+      keepalive-time: ${SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME:300000}
+      data-source-properties:
+        connectTimeout: ${POSTGRES_CONNECT_TIMEOUT_SECONDS:5}
+        socketTimeout: ${POSTGRES_SOCKET_TIMEOUT_SECONDS:10}
+        tcpKeepAlive: true
   jpa:
     hibernate:
       ddl-auto: validate
@@ -17,8 +27,52 @@ spring:
 bitdance:
   jwt:
     secret: ${BITDANCE_JWT_SECRET}
+  wechat:
+    app-id: ${BITDANCE_WECHAT_APP_ID}
+    app-secret: ${BITDANCE_WECHAT_APP_SECRET}
+    redirect-uri: ${BITDANCE_WECHAT_REDIRECT_URI}
+    scope: ${BITDANCE_WECHAT_SCOPE:snsapi_userinfo}
+    frontend-callback-uri: ${BITDANCE_WECHAT_FRONTEND_CALLBACK_URI}
+    auto-create-user: ${BITDANCE_WECHAT_AUTO_CREATE_USER:false}
   sms:
     mock: ${BITDANCE_SMS_MOCK:false}
+    provider: ${BITDANCE_SMS_PROVIDER:aliyun}
+    storage: ${BITDANCE_SMS_STORAGE:redis}
+    fixed-code: ${BITDANCE_SMS_FIXED_CODE:123456}
+    cooldown-seconds: ${BITDANCE_SMS_COOLDOWN_SECONDS:60}
+    ttl-minutes: ${BITDANCE_SMS_TTL_MINUTES:5}
+    aliyun:
+      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}
+      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID}
+      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET}
+      sign-name: ${ALIYUN_SMS_SIGN_NAME}
+      template-code: ${ALIYUN_SMS_TEMPLATE_CODE}
+      template-param-name: ${ALIYUN_SMS_TEMPLATE_PARAM_NAME:code}
+      template-min-param-name: ${ALIYUN_SMS_TEMPLATE_MIN_PARAM_NAME:min}
+      connect-timeout-ms: ${ALIYUN_SMS_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${ALIYUN_SMS_READ_TIMEOUT_MS:10000}
+    aliyun-pnvs:
+      endpoint: ${ALIYUN_PNVS_ENDPOINT:dypnsapi.aliyuncs.com}
+      access-key-id: ${ALIYUN_PNVS_ACCESS_KEY_ID:${ALIYUN_SMS_ACCESS_KEY_ID}}
+      access-key-secret: ${ALIYUN_PNVS_ACCESS_KEY_SECRET:${ALIYUN_SMS_ACCESS_KEY_SECRET}}
+      sign-name: ${ALIYUN_PNVS_SIGN_NAME:${ALIYUN_SMS_SIGN_NAME}}
+      template-code: ${ALIYUN_PNVS_TEMPLATE_CODE:${ALIYUN_SMS_TEMPLATE_CODE}}
+      template-param-name: ${ALIYUN_PNVS_TEMPLATE_PARAM_NAME:${ALIYUN_SMS_TEMPLATE_PARAM_NAME:code}}
+      template-min-param-name: ${ALIYUN_PNVS_TEMPLATE_MIN_PARAM_NAME:${ALIYUN_SMS_TEMPLATE_MIN_PARAM_NAME:min}}
+      code-placeholder: ${ALIYUN_PNVS_CODE_PLACEHOLDER:##code##}
+      country-code: ${ALIYUN_PNVS_COUNTRY_CODE:86}
+      code-length: ${ALIYUN_PNVS_CODE_LENGTH:6}
+      code-type: ${ALIYUN_PNVS_CODE_TYPE:1}
+      case-auth-policy: ${ALIYUN_PNVS_CASE_AUTH_POLICY:1}
+      duplicate-policy: ${ALIYUN_PNVS_DUPLICATE_POLICY:1}
+      auto-retry: ${ALIYUN_PNVS_AUTO_RETRY:1}
+      return-verify-code: ${ALIYUN_PNVS_RETURN_VERIFY_CODE:false}
+      scheme-name: ${ALIYUN_PNVS_SCHEME_NAME:}
+      connect-timeout-ms: ${ALIYUN_PNVS_CONNECT_TIMEOUT_MS:10000}
+      read-timeout-ms: ${ALIYUN_PNVS_READ_TIMEOUT_MS:10000}
+      call-timeout-ms: ${ALIYUN_PNVS_CALL_TIMEOUT_MS:15000}
+      max-attempts: ${ALIYUN_PNVS_MAX_ATTEMPTS:2}
+      retry-backoff-ms: ${ALIYUN_PNVS_RETRY_BACKOFF_MS:300}
   payment:
     provider: ${BITDANCE_PAYMENT_PROVIDER:mock}
   cors:

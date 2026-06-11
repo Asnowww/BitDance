@@ -4,9 +4,12 @@ import com.bitdance.common.web.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -40,6 +43,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleForbidden(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
             .body(ApiResponse.fail("FORBIDDEN", "无权访问"));
+    }
+
+    @ExceptionHandler({
+        CannotCreateTransactionException.class,
+        DataAccessResourceFailureException.class,
+        JpaSystemException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleDatabaseUnavailable(Exception ex) {
+        log.error("Database unavailable", ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(ApiResponse.fail("DATABASE_UNAVAILABLE", "数据库连接超时，请稍后再试"));
     }
 
     @ExceptionHandler(Exception.class)

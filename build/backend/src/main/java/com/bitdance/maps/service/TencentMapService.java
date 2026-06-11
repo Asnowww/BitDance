@@ -64,6 +64,41 @@ public class TencentMapService {
         }
     }
 
+    public MapGeocodeResult reverseGeocode(BigDecimal latitude, BigDecimal longitude) {
+        assertConfigured();
+        try {
+            JsonNode root = restClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/ws/geocoder/v1/")
+                    .queryParam("location", "%s,%s".formatted(latitude, longitude))
+                    .queryParam("get_poi", 1)
+                    .queryParam("key", key)
+                    .build())
+                .retrieve()
+                .body(JsonNode.class);
+            JsonNode result = requireSuccess(root).path("result");
+            JsonNode components = result.path("address_component");
+            JsonNode formatted = result.path("formatted_addresses");
+            JsonNode firstPoi = result.path("pois").isArray() && !result.path("pois").isEmpty()
+                ? result.path("pois").get(0)
+                : null;
+            String title = text(formatted, "recommend", null);
+            if (!StringUtils.hasText(title)) title = text(firstPoi, "title", null);
+            if (!StringUtils.hasText(title)) title = text(result, "address", "当前位置");
+            return new MapGeocodeResult(
+                title,
+                text(result, "address", title),
+                latitude,
+                longitude,
+                text(components, "adcode", null),
+                text(components, "province", null),
+                text(components, "city", null),
+                text(components, "district", null)
+            );
+        } catch (RestClientException ex) {
+            throw new BizException("TENCENT_MAP_UNAVAILABLE", "腾讯地图服务暂不可用");
+        }
+    }
+
     public MapPlaceListResponse searchPlaces(
         String keyword,
         String city,

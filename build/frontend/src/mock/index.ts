@@ -69,6 +69,7 @@ if (USE_MOCK) {
   import('./modules/coach');
   import('./modules/workshop');
   import('./modules/community');
+  import('./modules/maps');
   import('./modules/buddy');
   import('./modules/coachOps');
   import('./modules/favorite');

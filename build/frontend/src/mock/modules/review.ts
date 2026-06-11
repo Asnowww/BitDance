@@ -37,20 +37,6 @@ interface Item {
   mediaAssets: MediaAsset[];
 }
 
-const mockMediaUrls = [
-  'https://images.unsplash.com/photo-1547153760-18fc86324498?w=960&q=80&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=960&q=80&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=960&q=80&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=960&q=80&auto=format&fit=crop'
-];
-
-const defaultMediaForReview = (id: number, targetType: TargetType): MediaAsset[] => {
-  // M2 媒体评价：mock 种子也带图片，便于无后端数据库时验证评价聚合面板展示。
-  if (targetType !== 'studio' || id % 4 !== 0) return [];
-  const url = mockMediaUrls[id % mockMediaUrls.length];
-  return [{ type: 'image', url, name: `review-${id}.jpg`, size: 180000 }];
-};
-
 const names: Record<TargetType, Record<string, string>> = {
   studio: {
     traffic: '交通便利度',
@@ -107,7 +93,7 @@ const createItem = (
     isPinned: false,
     publishedAt: new Date(Date.now() - daysAgo * 86400000).toISOString(),
     dimensions: buildDims(targetType, scores),
-    mediaAssets: defaultMediaForReview(id, targetType),
+    mediaAssets: [],
     ...overrides
   };
 };
