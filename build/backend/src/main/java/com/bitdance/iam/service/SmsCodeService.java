@@ -83,10 +83,6 @@ public class SmsCodeService {
     }
 
     public void verify(String phone, String code) {
-        if (mockMode && fixedCode.equals(code)) {
-            clearCode(phone);
-            return;
-        }
         if (!mockMode && usePnvsProvider()) {
             pnvsSmsVerifier.verifyCode(phone, code);
             return;
