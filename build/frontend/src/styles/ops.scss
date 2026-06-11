@@ -214,10 +214,10 @@
   }
 }
 
-// 底部固定提交栏
+// 底部固定提交栏(有运营端 tabbar 时自动上移避让)
 @mixin ops-submit-bar {
   position: fixed;
-  bottom: 0;
+  bottom: var(--app-tabbar-offset, 0px);
   left: 50%;
   transform: translateX(-50%);
   width: 100%;

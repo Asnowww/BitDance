@@ -287,115 +287,121 @@ const routes: RouteRecordRaw[] = [
     path: '/coach/appeal',
     name: 'coach-appeal',
     component: () => import('@/pages/coach/AppealPage.vue'),
-    meta: { title: '评价申诉', requiresAuth: true }
+    meta: { title: '评价申诉', requiresAuth: true, ops: true }
+  },
+  {
+    path: '/coach/me',
+    name: 'coach-me',
+    component: () => import('@/pages/user/MePage.vue'),
+    meta: { title: '我的', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/studio-claim',
     name: 'studio-claim',
     component: () => import('@/pages/coach/StudioClaimPage.vue'),
-    meta: { title: '舞室入驻 / 认领', requiresAuth: true }
+    meta: { title: '舞室入驻 / 认领', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/studio-claim/status',
     name: 'studio-claim-status',
     component: () => import('@/pages/coach/StudioClaimStatusPage.vue'),
-    meta: { title: '入驻审核进度', requiresAuth: true }
+    meta: { title: '入驻审核进度', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/courses',
     name: 'merchant-courses',
     component: () => import('@/pages/coach/MerchantCoursesPage.vue'),
-    meta: { title: '课程管理', requiresAuth: true }
+    meta: { title: '课程管理', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/course-edit/:id?',
     name: 'course-edit',
     component: () => import('@/pages/coach/CourseEditPage.vue'),
-    meta: { title: '课程编辑', requiresAuth: true }
+    meta: { title: '课程编辑', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/schedule',
     name: 'merchant-schedule',
     component: () => import('@/pages/coach/MerchantSchedulePage.vue'),
-    meta: { title: '周课表', requiresAuth: true }
+    meta: { title: '周课表', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/schedule-edit/:id?',
     name: 'schedule-edit',
     component: () => import('@/pages/coach/ScheduleEditPage.vue'),
-    meta: { title: '场次编辑', requiresAuth: true }
+    meta: { title: '场次编辑', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/schedule/:id/bookings',
     name: 'schedule-bookings',
     component: () => import('@/pages/coach/ScheduleBookingsPage.vue'),
-    meta: { title: '预约名单', requiresAuth: true }
+    meta: { title: '预约名单', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/checkin',
     name: 'coach-checkin',
     component: () => import('@/pages/coach/CheckinPage.vue'),
-    meta: { title: '签到核销', requiresAuth: true }
+    meta: { title: '签到核销', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/workshops',
     name: 'merchant-workshops',
     component: () => import('@/pages/coach/MerchantWorkshopsPage.vue'),
-    meta: { title: 'Workshop 管理', requiresAuth: true }
+    meta: { title: 'Workshop 管理', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/coaches',
     name: 'merchant-coaches',
     component: () => import('@/pages/coach/MerchantCoachesPage.vue'),
-    meta: { title: '教练管理', requiresAuth: true }
+    meta: { title: '教练管理', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/invitations',
     name: 'coach-invitations',
     component: () => import('@/pages/coach/CoachInvitationsPage.vue'),
-    meta: { title: '我的合作邀请', requiresAuth: true }
+    meta: { title: '我的合作邀请', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/certification',
     name: 'coach-certification',
     component: () => import('@/pages/coach/CoachCertificationPage.vue'),
-    meta: { title: '教练资质', requiresAuth: true }
+    meta: { title: '教练资质', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/settlement',
     name: 'coach-settlement',
     component: () => import('@/pages/coach/SettlementPage.vue'),
-    meta: { title: '收益统计', requiresAuth: true }
+    meta: { title: '收益统计', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/platform/reviews',
     name: 'platform-reviews',
     component: () => import('@/pages/coach/PlatformReviewPage.vue'),
-    meta: { title: '平台审核中心', requiresAuth: true }
+    meta: { title: '平台审核中心', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/workshop-create',
     name: 'coach-workshop-create',
     component: () => import('@/pages/coach/CoachWorkshopCreatePage.vue'),
-    meta: { title: '创建 Workshop', requiresAuth: true }
+    meta: { title: '创建 Workshop', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/orders',
     name: 'coach-orders',
     component: () => import('@/pages/coach/CoachOrdersPage.vue'),
-    meta: { title: '学员订单与核销', requiresAuth: true }
+    meta: { title: '学员订单与核销', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/replies',
     name: 'coach-replies',
     component: () => import('@/pages/coach/ReplyReviewsPage.vue'),
-    meta: { title: '评价回复', requiresAuth: true }
+    meta: { title: '评价回复', requiresAuth: true, ops: true }
   },
   {
     path: '/coach/dashboard',
     name: 'coach-dashboard',
     component: () => import('@/pages/coach/CoachDashboardPage.vue'),
-    meta: { title: '经营看板', requiresAuth: true }
+    meta: { title: '经营看板', requiresAuth: true, ops: true }
   },
   {
     path: '/admin/reports',

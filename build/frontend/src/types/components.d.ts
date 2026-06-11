@@ -12,6 +12,7 @@ declare module 'vue' {
     EmptyState: typeof import('./../components/EmptyState.vue')['default']
     ErrorState: typeof import('./../components/ErrorState.vue')['default']
     NikeIcon: typeof import('./../components/NikeIcon.vue')['default']
+    OpsTabBar: typeof import('./../components/OpsTabBar.vue')['default']
     PenActionBar: typeof import('./../components/pen/PenActionBar.vue')['default']
     PenFieldRow: typeof import('./../components/pen/PenFieldRow.vue')['default']
     PenSettingRow: typeof import('./../components/pen/PenSettingRow.vue')['default']

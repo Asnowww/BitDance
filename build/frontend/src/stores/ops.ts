@@ -68,8 +68,25 @@ export const useOpsStore = defineStore('ops', () => {
     else localStorage.removeItem(STUDIO_KEY);
   };
 
+  /** 当前登录账号与缓存身份不一致时(切换账号未刷新页面),强制重新拉取 */
+  const isStale = () => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('bitdance_profile') ?? 'null');
+      return Boolean(profile?.id) && me.value?.id !== profile.id;
+    } catch {
+      return false;
+    }
+  };
+
   /** 拉取运营身份;失败时各项保持空值,页面按未开通处理 */
   const refresh = async (force = false) => {
+    if (isStale()) {
+      force = true;
+      me.value = null;
+      coachMe.value = null;
+      myClaims.value = [];
+      setStudio(null);
+    }
     if (loading.value || (loaded.value && !force)) return;
     loading.value = true;
     try {

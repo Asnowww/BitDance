@@ -2,9 +2,12 @@
 import { computed } from 'vue';
 import { useRoute, RouterView } from 'vue-router';
 import AppTabBar from './AppTabBar.vue';
+import OpsTabBar from './OpsTabBar.vue';
 
 const route = useRoute();
 const showTabBar = computed(() => route.meta?.hideTabBar !== true);
+// 运营端管理页(meta.ops)使用工作台/课表/订单/评价/我的专属导航
+const isOps = computed(() => route.meta?.ops === true);
 </script>
 
 <template>
@@ -16,7 +19,8 @@ const showTabBar = computed(() => route.meta?.hideTabBar !== true);
         </transition>
       </RouterView>
     </main>
-    <AppTabBar v-if="showTabBar" />
+    <OpsTabBar v-if="showTabBar && isOps" />
+    <AppTabBar v-else-if="showTabBar" />
   </div>
 </template>
 
