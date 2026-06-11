@@ -32,10 +32,14 @@ public class JwtService {
     }
 
     public String issueAccessToken(long userId, List<String> roles) {
+        return issueAccessToken(userId, roles, false);
+    }
+
+    public String issueAccessToken(long userId, List<String> roles, boolean passwordRequired) {
         Date now = new Date();
         return Jwts.builder()
             .subject(String.valueOf(userId))
-            .claims(Map.of("roles", roles))
+            .claims(Map.of("roles", roles, "passwordRequired", passwordRequired))
             .issuedAt(now)
             .expiration(new Date(now.getTime() + accessTtl.toMillis()))
             .signWith(key)

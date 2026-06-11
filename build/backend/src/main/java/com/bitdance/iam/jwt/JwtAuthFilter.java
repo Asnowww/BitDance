@@ -23,6 +23,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
     private static final String BEARER = "Bearer ";
+    private static final String SET_PASSWORD_PATH = "/auth/password";
 
     private final JwtService jwtService;
 
@@ -40,6 +41,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 long userId = Long.parseLong(claims.getSubject());
                 @SuppressWarnings("unchecked")
                 List<String> roles = (List<String>) claims.getOrDefault("roles", List.of());
+                boolean passwordRequired = Boolean.TRUE.equals(claims.get("passwordRequired", Boolean.class));
                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                     userId,
                     null,
@@ -47,10 +49,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         .collect(Collectors.toList())
                 );
                 SecurityContextHolder.getContext().setAuthentication(auth);
+                if (passwordRequired && !isSetPasswordRequest(request)) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write(
+                        "{\"code\":\"PASSWORD_REQUIRED\",\"message\":\"请先设置登录密码\",\"data\":null}"
+                    );
+                    return;
+                }
             } catch (JwtException | IllegalArgumentException ex) {
                 log.debug("Reject invalid JWT: {}", ex.getMessage());
             }
         }
         chain.doFilter(request, response);
+    }
+
+    private boolean isSetPasswordRequest(HttpServletRequest request) {
+        String contextPath = request.getContextPath() == null ? "" : request.getContextPath();
+        String path = request.getRequestURI().substring(contextPath.length());
+        return "POST".equalsIgnoreCase(request.getMethod()) && SET_PASSWORD_PATH.equals(path);
     }
 }

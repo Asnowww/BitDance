@@ -1,6 +1,17 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
-import { getToken } from '@/utils/request';
+import { useUserStore } from '@/stores/user';
+import { getToken, isPasswordRequired } from '@/utils/request';
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean;
+    requiredRoles?: string[];
+    tab?: string;
+    title?: string;
+    hideTabBar?: boolean;
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -20,16 +31,28 @@ const routes: RouteRecordRaw[] = [
     meta: { tab: 'practice', title: '约练广场' }
   },
   {
+    path: '/practice/group-class',
+    name: 'group-class',
+    component: () => import('@/pages/practice/GroupClassPage.vue'),
+    meta: { tab: 'practice', title: '拼课广场' }
+  },
+  {
+    path: '/practice/group-class/create',
+    name: 'group-class-create',
+    component: () => import('@/pages/practice/GroupClassCreatePage.vue'),
+    meta: { tab: 'practice', title: '发起拼课', requiresAuth: true, hideTabBar: true }
+  },
+  {
     path: '/publish/checkin',
     name: 'publish-checkin',
     component: () => import('@/pages/publish/PublishCheckinPage.vue'),
-    meta: { title: '训练打卡', requiresAuth: true }
+    meta: { tab: 'growth', title: '训练打卡', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/publish/practice',
     name: 'publish-practice',
     component: () => import('@/pages/publish/PublishPracticePage.vue'),
-    meta: { title: '发起约练', requiresAuth: true }
+    meta: { tab: 'practice', title: '发起约练', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/publish/review',
@@ -134,12 +157,6 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的评价', requiresAuth: true }
   },
   {
-    path: '/practice/:id',
-    name: 'practice-detail',
-    component: () => import('@/pages/practice/PracticeDetailPage.vue'),
-    meta: { title: '约练详情' }
-  },
-  {
     path: '/me/profile',
     name: 'profile-edit',
     component: () => import('@/pages/user/ProfileEditPage.vue'),
@@ -155,13 +172,13 @@ const routes: RouteRecordRaw[] = [
     path: '/me/practices',
     name: 'my-practices',
     component: () => import('@/pages/user/MyPracticesPage.vue'),
-    meta: { title: '我的约练', requiresAuth: true }
+    meta: { tab: 'practice', title: '我的约练', requiresAuth: true }
   },
   {
     path: '/me/coach-home',
     name: 'coach-home',
     component: () => import('@/pages/user/CoachHomePage.vue'),
-    meta: { title: '教练主页', requiresAuth: true }
+    meta: { title: '教练主页', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/messages',
@@ -269,61 +286,85 @@ const routes: RouteRecordRaw[] = [
     path: '/practice/:id/rate',
     name: 'practice-rate',
     component: () => import('@/pages/practice/PracticeRatingPage.vue'),
-    meta: { title: '约练评价', requiresAuth: true }
+    meta: { tab: 'practice', title: '约练评价', requiresAuth: true, hideTabBar: true }
+  },
+  {
+    path: '/practice/:id',
+    name: 'practice-detail',
+    component: () => import('@/pages/practice/PracticeDetailPage.vue'),
+    meta: { tab: 'practice', title: '约练详情', hideTabBar: true }
   },
   {
     path: '/me/works',
     name: 'my-works',
     component: () => import('@/pages/growth/WorksPage.vue'),
-    meta: { title: '阶段作品', requiresAuth: true }
+    meta: { tab: 'growth', title: '阶段作品', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/me/works/upload',
     name: 'publish-work',
-    component: () => import('@/pages/community/PublishPostPage.vue'),
-    meta: { tab: 'growth', title: '上传作品', requiresAuth: true }
+    component: () => import('@/pages/growth/WorkUploadPage.vue'),
+    meta: { tab: 'growth', title: '上传作品', requiresAuth: true, hideTabBar: true }
+  },
+  {
+    path: '/growth/report',
+    name: 'growth-report',
+    component: () => import('@/pages/growth/GrowthReportPage.vue'),
+    meta: { tab: 'growth', title: '成长报告', requiresAuth: true }
+  },
+  {
+    path: '/growth/timeline',
+    name: 'growth-timeline',
+    component: () => import('@/pages/growth/GrowthTimelinePage.vue'),
+    meta: { tab: 'growth', title: '成长时间线', requiresAuth: true }
   },
   {
     path: '/me/goal',
     name: 'my-goal',
     component: () => import('@/pages/growth/GoalPage.vue'),
-    meta: { title: '训练目标', requiresAuth: true }
+    meta: { tab: 'growth', title: '训练目标', requiresAuth: true, hideTabBar: true }
   },
   {
     path: '/coach/appeal',
     name: 'coach-appeal',
     component: () => import('@/pages/coach/AppealPage.vue'),
-    meta: { title: '评价申诉', requiresAuth: true }
+    meta: { title: '评价申诉', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/workshop-create',
     name: 'coach-workshop-create',
     component: () => import('@/pages/coach/CoachWorkshopCreatePage.vue'),
-    meta: { title: '创建 Workshop', requiresAuth: true }
+    meta: { title: '创建 Workshop', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/orders',
     name: 'coach-orders',
     component: () => import('@/pages/coach/CoachOrdersPage.vue'),
-    meta: { title: '学员订单与核销', requiresAuth: true }
+    meta: { title: '学员订单与核销', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/replies',
     name: 'coach-replies',
     component: () => import('@/pages/coach/ReplyReviewsPage.vue'),
-    meta: { title: '评价回复', requiresAuth: true }
+    meta: { title: '评价回复', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/dashboard',
     name: 'coach-dashboard',
     component: () => import('@/pages/coach/CoachDashboardPage.vue'),
-    meta: { title: '经营看板', requiresAuth: true }
+    meta: { title: '经营看板', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/admin/reports',
     name: 'admin-reports',
     component: () => import('@/pages/admin/ReportTicketsPage.vue'),
-    meta: { title: '举报后台', requiresAuth: true }
+    meta: { title: '举报后台', requiresAuth: true, requiredRoles: ['PLATFORM_ADMIN'] }
+  },
+  {
+    path: '/403',
+    name: 'forbidden',
+    component: () => import('@/pages/common/ForbiddenPage.vue'),
+    meta: { title: '403', hideTabBar: true }
   },
   {
     path: '/:pathMatch(.*)*',
@@ -344,6 +385,16 @@ const router = createRouter({
 router.beforeEach((to) => {
   if (to.meta?.requiresAuth && !getToken()) {
     return { path: '/login', query: { redirect: to.fullPath } };
+  }
+  if (to.meta?.requiresAuth && isPasswordRequired()) {
+    return { path: '/login', query: { setupPassword: '1', redirect: to.fullPath } };
+  }
+  if (to.meta?.requiredRoles?.length) {
+    const user = useUserStore();
+    const allowed = to.meta.requiredRoles.some((role) => user.roleSet.has(role.toUpperCase()));
+    if (!allowed) {
+      return { path: '/403', query: { from: to.fullPath } };
+    }
   }
   return true;
 });

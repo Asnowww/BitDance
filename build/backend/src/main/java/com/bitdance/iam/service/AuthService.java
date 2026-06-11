@@ -57,7 +57,7 @@ public class AuthService {
     public LoginResponse loginWithSms(String phone, String code) {
         smsCodeService.verify(phone, code);
         AppUser user = userRepo.findByPhone(phone).orElseGet(() -> registerUser(phone, null));
-        return issueFor(user);
+        return issueFor(user, !StringUtils.hasText(user.getPasswordHash()));
     }
 
     @Transactional
@@ -68,7 +68,7 @@ public class AuthService {
             || !passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new BizException("AUTH_INVALID", "手机号或密码错误");
         }
-        return issueFor(user);
+        return issueFor(user, false);
     }
 
     @Transactional
@@ -77,12 +77,21 @@ public class AuthService {
             WechatOAuthClient.WechatIdentity identity = wechatOAuthClient.exchangeCode(code);
             AppUser user = findWechatUser(identity)
                 .orElseGet(() -> createWechatUser(identity));
-            return issueFor(user);
+            return issueFor(user, !StringUtils.hasText(user.getPasswordHash()));
         }
         String openId = "wx_" + code;
         AppUser user = userRepo.findByOpenId(openId)
             .orElseGet(() -> bindMockWechatAccount(openId));
-        return issueFor(user);
+        return issueFor(user, !StringUtils.hasText(user.getPasswordHash()));
+    }
+
+    @Transactional
+    public LoginResponse setPassword(Long userId, String rawPassword) {
+        AppUser user = userRepo.findById(userId)
+            .orElseThrow(() -> new BizException("USER_NOT_FOUND", "账号不存在"));
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        userRepo.save(user);
+        return issueFor(user, false);
     }
 
     /** 仅供开发环境播种测试账号使用：存在则补密码，不存在则建号并绑定 USER 角色。 */
@@ -151,13 +160,13 @@ public class AuthService {
         return userRepo.save(user);
     }
 
-    private LoginResponse issueFor(AppUser user) {
+    private LoginResponse issueFor(AppUser user, boolean passwordRequired) {
         List<String> roles = roleRepo.findByUserIdAndStatus(user.getId(), "ACTIVE")
             .stream().map(UserRoleBinding::getRole).toList();
-        String token = jwtService.issueAccessToken(user.getId(), roles);
+        String token = jwtService.issueAccessToken(user.getId(), roles, passwordRequired);
         return new LoginResponse(token, new UserSummary(
             user.getId(), user.getPhone(), maskNick(user.getPhone()), null, roles
-        ));
+        ), passwordRequired);
     }
 
     private String maskNick(String phone) {

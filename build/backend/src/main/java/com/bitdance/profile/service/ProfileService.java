@@ -2,7 +2,9 @@ package com.bitdance.profile.service;
 
 import com.bitdance.common.exception.BizException;
 import com.bitdance.community.repository.FollowRelationRepository;
+import com.bitdance.iam.domain.UserRoleBinding;
 import com.bitdance.iam.repository.AppUserRepository;
+import com.bitdance.iam.repository.UserRoleBindingRepository;
 import com.bitdance.profile.domain.DanceStyle;
 import com.bitdance.profile.domain.PrivacySetting;
 import com.bitdance.profile.domain.UserDancePreference;
@@ -39,6 +41,7 @@ public class ProfileService {
     private final UserDancePreferenceRepository stylePrefRepo;
     private final DanceStyleRepository danceStyleRepo;
     private final AppUserRepository userRepo;
+    private final UserRoleBindingRepository roleRepo;
     private final FollowRelationRepository followRepo;
 
     public ProfileService(
@@ -47,6 +50,7 @@ public class ProfileService {
         UserDancePreferenceRepository stylePrefRepo,
         DanceStyleRepository danceStyleRepo,
         AppUserRepository userRepo,
+        UserRoleBindingRepository roleRepo,
         FollowRelationRepository followRepo
     ) {
         this.profileRepo = profileRepo;
@@ -54,6 +58,7 @@ public class ProfileService {
         this.stylePrefRepo = stylePrefRepo;
         this.danceStyleRepo = danceStyleRepo;
         this.userRepo = userRepo;
+        this.roleRepo = roleRepo;
         this.followRepo = followRepo;
     }
 
@@ -83,6 +88,7 @@ public class ProfileService {
             p.getCityId(),
             p.getCurrentLevel(),
             p.getLearningGoal(),
+            activeRoles(userId),
             styleDtos,
             new PrivacyDto(
                 pr.getProfileVisibility(),
@@ -275,5 +281,11 @@ public class ProfileService {
             out.put(s.getId(), s.getNameZh());
         }
         return out;
+    }
+
+    private List<String> activeRoles(Long userId) {
+        return roleRepo.findByUserIdAndStatus(userId, "ACTIVE").stream()
+            .map(UserRoleBinding::getRole)
+            .toList();
     }
 }

@@ -58,7 +58,7 @@ class PracticeControllerTest {
             "海淀区舞星 Studio", "学院路 1 号",
             new BigDecimal("116.401"), new BigDecimal("39.901"),
             "intermediate", 2, 4, current,
-            start, start.plusHours(2), start, status, "练 Hiphop", OffsetDateTime.now()
+            start, start.plusHours(2), start, status, "练 Hiphop", OffsetDateTime.now(), null
         );
     }
 
@@ -117,7 +117,7 @@ class PracticeControllerTest {
 
     @Test
     void square_returns() throws Exception {
-        when(service.square(eq(1L), eq(2L), eq("intermediate"), eq(1), eq(20)))
+        when(service.square(eq(1L), eq(2L), eq("intermediate"), any(), any(), any(), any(), eq(1), eq(20)))
             .thenReturn(new PracticeListResponse(
                 List.of(postFixture("published", 1)), 1, 20, 1L
             ));

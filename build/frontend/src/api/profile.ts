@@ -24,6 +24,7 @@ export interface ProfileResponse {
   cityId: number | null;
   currentLevel: string | null;
   learningGoal: string | null;
+  roles: string[];
   styles: StylePreference[];
   privacy: PrivacySettings;
 }

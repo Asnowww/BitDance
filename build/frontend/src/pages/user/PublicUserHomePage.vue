@@ -16,6 +16,7 @@ import {
   type UserReviewItem
 } from '@/api/userHome';
 import { fetchFollowStatus, toggleFollow } from '@/api/community';
+import { getDefaultAvatar } from '@/utils/defaultAvatars';
 
 const router = useRouter();
 const route = useRoute();
@@ -32,6 +33,7 @@ const totals = ref({ posts: 0, reviews: 0, practices: 0 });
 const following = ref(false);
 const followCounts = ref({ followers: 0, following: 0 });
 const loading = ref(false);
+const followSubmitting = ref(false);
 
 const userId = computed(() => Number(route.params.id || 0));
 const access = computed(() => profile.value?.access);
@@ -41,6 +43,7 @@ const practiceVisible = computed(() => Boolean(access.value?.practiceVisible));
 const displayName = computed(() =>
   profileVisible.value && profile.value?.nickname ? profile.value.nickname : `用户 ${userId.value || '-'}`
 );
+const publicAvatar = computed(() => (profileVisible.value ? getDefaultAvatar(profile.value?.avatarAssetId) : undefined));
 const styleTags = computed(() =>
   (profile.value?.styles ?? [])
     .map((style) => style.name || style.skillLevel)
@@ -118,13 +121,20 @@ const loadHomeData = async () => {
 };
 
 const onFollow = async () => {
-  const next = await toggleFollow(userId.value);
-  following.value = next.following;
-  followCounts.value = {
-    followers: next.followerCount,
-    following: followCounts.value.following
-  };
-  showToast(next.following ? '已关注' : '已取消关注');
+  if (!userId.value || followSubmitting.value) return;
+  followSubmitting.value = true;
+  try {
+    const next = await toggleFollow(userId.value);
+    following.value = next.following;
+    followCounts.value = {
+      followers: next.followerCount,
+      following: followCounts.value.following
+    };
+    showToast(next.following ? '已关注' : '已取消关注');
+    await loadHomeData();
+  } finally {
+    followSubmitting.value = false;
+  }
 };
 
 onMounted(loadHomeData);
@@ -147,7 +157,13 @@ watch(userId, loadHomeData);
       <section class="hero-card">
         <div class="hero-card__main">
           <div class="avatar">
-            <User :size="36" />
+            <span
+              v-if="publicAvatar"
+              :style="{ background: publicAvatar.background, color: publicAvatar.foreground }"
+            >
+              {{ publicAvatar.mark }}
+            </span>
+            <User v-else :size="36" />
           </div>
           <div class="hero-card__copy">
             <h2>{{ displayName }}</h2>
@@ -167,9 +183,9 @@ watch(userId, loadHomeData);
           </div>
         </div>
         <div class="hero-actions">
-          <button class="hero-actions__follow" type="button" @click="onFollow">
+          <button class="hero-actions__follow" type="button" :disabled="followSubmitting" @click="onFollow">
             <UserPlus :size="18" />
-            <span>{{ following ? '已关注' : '关注' }}</span>
+            <span>{{ followSubmitting ? '处理中...' : following ? '已关注' : '关注' }}</span>
           </button>
           <button class="hero-actions__message" type="button">
             <MessageCircle :size="18" />
@@ -359,6 +375,16 @@ watch(userId, loadHomeData);
   background: $pen-ink;
   color: $pen-on-primary;
   place-items: center;
+
+  span {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    font-size: 18px;
+    font-weight: 900;
+    place-items: center;
+  }
 }
 
 .hero-actions {
@@ -377,6 +403,11 @@ watch(userId, loadHomeData);
     font-weight: 900;
     line-height: $pen-lh;
     cursor: pointer;
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.62;
+    }
   }
 
   &__follow {

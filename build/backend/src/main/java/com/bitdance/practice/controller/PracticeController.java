@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -42,15 +43,45 @@ public class PracticeController {
         @RequestParam(required = false) Long cityId,
         @RequestParam(required = false) Long danceStyleId,
         @RequestParam(required = false) String skillLevel,
+        @RequestParam(required = false) BigDecimal longitude,
+        @RequestParam(required = false) BigDecimal latitude,
+        @RequestParam(required = false) String scope,
+        @RequestParam(defaultValue = "time") String sort,
         @RequestParam(defaultValue = "1") int page,
         @RequestParam(defaultValue = "20") int pageSize
     ) {
-        return ApiResponse.ok(service.square(cityId, danceStyleId, skillLevel, page, pageSize));
+        return ApiResponse.ok(service.square(
+            cityId, danceStyleId, skillLevel, longitude, latitude, scope, sort, page, pageSize
+        ));
+    }
+
+    @GetMapping("/h5/practices/recommendations")
+    public ApiResponse<List<PracticePostDto>> recommendations(
+        @RequestParam(required = false) Long cityId,
+        @RequestParam(required = false) Long danceStyleId,
+        @RequestParam(required = false) String skillLevel,
+        @RequestParam(required = false) BigDecimal longitude,
+        @RequestParam(required = false) BigDecimal latitude,
+        @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ApiResponse.ok(service.recommendations(
+            CurrentUser.getId(), cityId, danceStyleId, skillLevel, longitude, latitude, limit
+        ));
     }
 
     @GetMapping("/public/practices/{id}")
     public ApiResponse<PracticePostDto> detail(@PathVariable Long id) {
         return ApiResponse.ok(service.detail(id));
+    }
+
+    @GetMapping("/h5/practices/{id}")
+    public ApiResponse<PracticePostDto> detailForUser(@PathVariable Long id) {
+        return ApiResponse.ok(service.detailForUser(CurrentUser.getId(), id));
+    }
+
+    @PostMapping("/h5/practices/{id}/complete-confirm")
+    public ApiResponse<PracticePostDto> confirmCompleted(@PathVariable Long id) {
+        return ApiResponse.ok(service.confirmCompleted(CurrentUser.getId(), id));
     }
 
     @GetMapping("/public/users/{userId}/practices")

@@ -5,12 +5,14 @@ import { showSuccessToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { useUserStore } from '@/stores/user';
 import type { StylePreference } from '@/api/profile';
+import { DEFAULT_AVATARS, getDefaultAvatar } from '@/utils/defaultAvatars';
 
 const router = useRouter();
 const user = useUserStore();
 
 const form = reactive({
   nickname: '',
+  avatarAssetId: null as number | null,
   gender: 'unknown',
   birthday: '',
   bio: '',
@@ -21,6 +23,17 @@ const form = reactive({
 const styles = ref<StylePreference[]>([]);
 const loading = ref(false);
 const saving = ref(false);
+
+const styleOptions = [
+  { danceStyleId: 1, name: 'Hiphop', hint: '律动、基础 groove、freestyle' },
+  { danceStyleId: 2, name: 'Jazz', hint: '线条、爆发、舞台表现' },
+  { danceStyleId: 3, name: 'Breaking', hint: '地板、力量、技巧组合' },
+  { danceStyleId: 4, name: 'Locking', hint: '锁舞、funk、节奏控制' },
+  { danceStyleId: 5, name: 'Popping', hint: '震感、控制、音乐切分' },
+  { danceStyleId: 6, name: 'K-pop', hint: '成品舞、镜面扒舞、表现力' },
+  { danceStyleId: 7, name: 'Waacking', hint: '手臂线条、姿态、音乐表达' },
+  { danceStyleId: 8, name: 'Urban', hint: '编舞、质感、课堂组合' }
+];
 
 const genderOptions = [
   { value: 'female', label: '女' },
@@ -34,8 +47,20 @@ const levelLabel: Record<string, string> = {
   intermediate: '进阶',
   advanced: '高阶'
 };
+const levelHint: Record<string, string> = {
+  beginner: '刚开始系统学习，需要基础课和节奏训练',
+  intermediate: '有一定基础，想提升质感和完整作品',
+  advanced: '有稳定训练经验，关注风格深度和舞台表达'
+};
+const goalOptions = ['零基础入门', '提升基本功', '学习成品舞', '准备比赛/演出', '塑形减脂', '认识舞友'];
 
 const primaryStyleId = computed(() => styles.value.find((item) => item.isPrimary)?.danceStyleId);
+const selectedStyleIds = computed(() => new Set(styles.value.map((item) => item.danceStyleId)));
+const selectedStyleNames = computed(() =>
+  styles.value.map((item) => item.name || styleOptions.find((option) => option.danceStyleId === item.danceStyleId)?.name)
+    .filter(Boolean)
+);
+const selectedAvatar = computed(() => getDefaultAvatar(form.avatarAssetId));
 
 const fillForm = async () => {
   loading.value = true;
@@ -43,15 +68,52 @@ const fillForm = async () => {
     const data = await user.refreshProfile();
     if (!data) return;
     form.nickname = data.nickname ?? '';
+    form.avatarAssetId = data.avatarAssetId ?? null;
     form.gender = data.gender ?? 'unknown';
     form.birthday = data.birthday ?? '';
     form.bio = data.bio ?? '';
     form.currentLevel = data.currentLevel ?? '';
     form.learningGoal = data.learningGoal ?? '';
-    styles.value = (data.styles ?? []).map((item) => ({ ...item }));
+    styles.value = normalizeStyles(data.styles ?? []);
   } finally {
     loading.value = false;
   }
+};
+
+const normalizeStyles = (next: StylePreference[]) => {
+  const deduped = new Map<number, StylePreference>();
+  next.forEach((item) => {
+    const option = styleOptions.find((it) => it.danceStyleId === item.danceStyleId);
+    if (!item.danceStyleId) return;
+    deduped.set(item.danceStyleId, {
+      danceStyleId: item.danceStyleId,
+      name: item.name || option?.name || `舞种 ${item.danceStyleId}`,
+      skillLevel: item.skillLevel || form.currentLevel || 'beginner',
+      isPrimary: Boolean(item.isPrimary)
+    });
+  });
+  const out = Array.from(deduped.values());
+  if (out.length && !out.some((item) => item.isPrimary)) {
+    out[0] = { ...out[0], isPrimary: true };
+  }
+  return out.map((item, index) => ({ ...item, isPrimary: index === out.findIndex((it) => it.isPrimary) }));
+};
+
+const toggleStyle = (option: (typeof styleOptions)[number]) => {
+  if (selectedStyleIds.value.has(option.danceStyleId)) {
+    const next = styles.value.filter((item) => item.danceStyleId !== option.danceStyleId);
+    styles.value = normalizeStyles(next);
+    return;
+  }
+  styles.value = normalizeStyles([
+    ...styles.value,
+    {
+      danceStyleId: option.danceStyleId,
+      name: option.name,
+      skillLevel: form.currentLevel || 'beginner',
+      isPrimary: !styles.value.length
+    }
+  ]);
 };
 
 const setPrimary = (danceStyleId: number) => {
@@ -67,18 +129,39 @@ const setStyleLevel = (danceStyleId: number, skillLevel: string) => {
   );
 };
 
+const applyGoalOption = (goal: string) => {
+  const parts = form.learningGoal
+    .split(/[、,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (parts.includes(goal)) {
+    form.learningGoal = parts.filter((item) => item !== goal).join('、');
+    return;
+  }
+  form.learningGoal = [...parts, goal].join('、');
+};
+
+const isGoalActive = (goal: string) =>
+  form.learningGoal
+    .split(/[、,，]/)
+    .map((item) => item.trim())
+    .includes(goal);
+
 const onSave = async () => {
   saving.value = true;
   try {
+    const normalizedStyles = normalizeStyles(styles.value);
+    styles.value = normalizedStyles;
     await user.saveProfileDetail({
       ...(user.detail ?? {}),
       nickname: form.nickname.trim(),
+      avatarAssetId: form.avatarAssetId,
       gender: form.gender,
       birthday: form.birthday || null,
       bio: form.bio,
       currentLevel: form.currentLevel,
       learningGoal: form.learningGoal,
-      styles: styles.value
+      styles: normalizedStyles
     });
     showSuccessToast('资料已保存');
     router.back();
@@ -98,9 +181,38 @@ onMounted(fillForm);
       <p v-if="loading" class="empty">正在读取后端资料...</p>
 
       <div class="avatar">
-        <span class="avatar__img" aria-hidden="true">{{ (form.nickname || 'B').slice(0, 1) }}</span>
-        <span class="avatar__hint">头像资源 ID：{{ user.detail?.avatarAssetId ?? '未绑定' }}</span>
+        <span
+          class="avatar__img"
+          :style="selectedAvatar ? { background: selectedAvatar.background, color: selectedAvatar.foreground } : undefined"
+          aria-hidden="true"
+        >
+          {{ selectedAvatar?.mark ?? (form.nickname || 'B').slice(0, 1) }}
+        </span>
+        <span class="avatar__hint">{{ selectedAvatar ? selectedAvatar.label : '请选择默认头像' }}</span>
       </div>
+
+      <section class="block">
+        <h2 class="block__title block__title--compact">&#22836;&#20687;</h2>
+        <div class="avatar-picker">
+          <button
+            v-for="item in DEFAULT_AVATARS"
+            :key="item.id"
+            class="avatar-choice"
+            :class="{ 'avatar-choice--active': form.avatarAssetId === item.id }"
+            type="button"
+            @click="form.avatarAssetId = item.id"
+          >
+            <span
+              class="avatar-choice__mark"
+              :style="{ background: item.background, color: item.foreground }"
+              aria-hidden="true"
+            >
+              {{ item.mark }}
+            </span>
+            <strong>{{ item.label }}</strong>
+          </button>
+        </div>
+      </section>
 
       <label class="field">
         <span>昵称</span>
@@ -135,6 +247,9 @@ onMounted(fillForm);
 
       <section class="block">
         <h2 class="block__title">当前水平</h2>
+        <p class="block__meta">
+          {{ form.currentLevel ? levelHint[form.currentLevel] : '选择一个最贴近当前状态的水平，用于推荐课程、约练和活动。' }}
+        </p>
         <div class="chip-row">
           <button
             v-for="item in levelOptions"
@@ -155,8 +270,45 @@ onMounted(fillForm);
       </label>
 
       <section class="block">
-        <h2 class="block__title">舞蹈偏好</h2>
-        <p v-if="!styles.length" class="empty">数据库暂无偏好舞种，可由种子数据或后台补充后展示。</p>
+        <h2 class="block__title block__title--compact">目标快捷选择</h2>
+        <div class="chip-row">
+          <button
+            v-for="goal in goalOptions"
+            :key="goal"
+            class="chip"
+            :class="isGoalActive(goal) ? 'chip--active' : 'chip--inactive'"
+            type="button"
+            @click="applyGoalOption(goal)"
+          >
+            {{ goal }}
+          </button>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block__heading">
+          <h2 class="block__title">感兴趣的舞种</h2>
+          <span>{{ styles.length ? `已选 ${styles.length} 项` : '至少选 1 项更好推荐' }}</span>
+        </div>
+        <p class="block__meta">
+          {{ selectedStyleNames.length ? `当前偏好：${selectedStyleNames.join(' / ')}` : '选择你想学或正在练的舞种，可以多选。' }}
+        </p>
+
+        <div class="style-picker">
+          <button
+            v-for="option in styleOptions"
+            :key="option.danceStyleId"
+            class="style-option"
+            :class="{ 'style-option--active': selectedStyleIds.has(option.danceStyleId) }"
+            type="button"
+            @click="toggleStyle(option)"
+          >
+            <strong>{{ option.name }}</strong>
+            <span>{{ option.hint }}</span>
+          </button>
+        </div>
+
+        <p v-if="!styles.length" class="empty">还没有选择舞种，保存前建议至少选择一个主要兴趣。</p>
         <article v-for="style in styles" :key="style.danceStyleId" class="style-card">
           <header>
             <strong>{{ style.name || `舞种 ${style.danceStyleId}` }}</strong>
@@ -168,6 +320,7 @@ onMounted(fillForm);
               {{ primaryStyleId === style.danceStyleId ? '主舞种' : '设为主舞种' }}
             </button>
           </header>
+          <p>这个舞种的当前水平</p>
           <div class="chip-row">
             <button
               v-for="item in levelOptions"
@@ -235,6 +388,48 @@ onMounted(fillForm);
   }
 }
 
+.avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.avatar-choice {
+  display: flex;
+  min-height: 82px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 6px;
+  border: 1px solid $pen-hairline;
+  border-radius: 8px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  cursor: pointer;
+
+  &--active {
+    border-color: $pen-ink;
+    box-shadow: inset 0 0 0 1px $pen-ink;
+  }
+
+  &__mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 900;
+    place-items: center;
+  }
+
+  strong {
+    font-size: 12px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -281,6 +476,37 @@ onMounted(fillForm);
   &__title {
     @include pen-h3-section;
     margin-top: 4px;
+
+    &--compact {
+      font-size: 17px;
+    }
+  }
+
+  &__heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    h2 {
+      flex: 1;
+      min-width: 0;
+    }
+
+    span {
+      color: $pen-mute;
+      font-size: 12px;
+      line-height: $pen-lh;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+  }
+
+  &__meta {
+    margin: -4px 0 2px;
+    color: $pen-mute;
+    font-size: 12px;
+    line-height: 1.45;
+    font-weight: 700;
   }
 }
 
@@ -292,6 +518,56 @@ onMounted(fillForm);
 
 .chip {
   @include pen-chip;
+}
+
+.style-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.style-option {
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid $pen-hairline;
+  border-radius: 8px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  strong,
+  span {
+    letter-spacing: 0;
+  }
+
+  strong {
+    font-size: 15px;
+    line-height: $pen-lh;
+    font-weight: 900;
+  }
+
+  span {
+    color: $pen-mute;
+    font-size: 11px;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+
+  &--active {
+    border-color: $pen-ink;
+    background: $pen-ink;
+    color: $pen-on-primary;
+
+    span {
+      color: $pen-subtle-text;
+    }
+  }
 }
 
 .style-card {
@@ -314,6 +590,14 @@ onMounted(fillForm);
     font-weight: 900;
   }
 
+  p {
+    margin: 0;
+    color: $pen-mute;
+    font-size: 12px;
+    line-height: $pen-lh;
+    font-weight: 800;
+  }
+
   header button {
     height: 32px;
     padding: 6px 11px;
@@ -330,6 +614,12 @@ onMounted(fillForm);
       background: $pen-ink;
       color: $pen-on-primary;
     }
+  }
+}
+
+@media (max-width: 360px) {
+  .style-picker {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

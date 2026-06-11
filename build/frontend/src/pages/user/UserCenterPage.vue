@@ -8,6 +8,7 @@ import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/us
 import { fetchMySocialAccounts, updateSocialAccount, type SocialAccount } from '@/api/social';
 import { fetchFollowers, fetchFollowing } from '@/api/community';
 import { useUserStore } from '@/stores/user';
+import { getDefaultAvatar } from '@/utils/defaultAvatars';
 
 const router = useRouter();
 const route = useRoute();
@@ -29,6 +30,7 @@ const loading = ref(false);
 
 const profileName = computed(() => user.detail?.nickname || user.profile?.nickname || '未命名用户');
 const profileId = computed(() => user.profile?.id || user.detail?.userId || 0);
+const profileAvatar = computed(() => getDefaultAvatar(user.detail?.avatarAssetId ?? user.profile?.avatar));
 const primaryPreference = computed(() => {
   const styles = user.detail?.styles ?? [];
   return styles.find((item) => item.isPrimary) ?? styles[0];
@@ -140,7 +142,13 @@ watch(
     <section class="profile-scroll">
       <section class="hero-card">
         <div class="avatar">
-          <User :size="36" />
+          <span
+            v-if="profileAvatar"
+            :style="{ background: profileAvatar.background, color: profileAvatar.foreground }"
+          >
+            {{ profileAvatar.mark }}
+          </span>
+          <User v-else :size="36" />
         </div>
         <div class="hero-card__copy">
           <h2>{{ profileName }}</h2>
@@ -346,6 +354,16 @@ watch(
   background: $pen-ink;
   color: $pen-on-primary;
   place-items: center;
+
+  span {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    font-size: 18px;
+    font-weight: 900;
+    place-items: center;
+  }
 }
 
 .edit-btn {

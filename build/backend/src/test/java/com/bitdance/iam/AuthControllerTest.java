@@ -68,13 +68,15 @@ class AuthControllerTest {
         when(authService.loginWithSms(eq("13800000000"), eq("123456")))
             .thenReturn(new LoginResponse(
                 "mock-token",
-                new UserSummary(1L, "13800000000", "舞者0000", null, List.of("USER"))
+                new UserSummary(1L, "13800000000", "舞者0000", null, List.of("USER")),
+                false
             ));
         mvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(om.writeValueAsString(new LoginRequest("13800000000", "123456"))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.token").value("mock-token"))
-            .andExpect(jsonPath("$.data.user.id").value(1));
+            .andExpect(jsonPath("$.data.user.id").value(1))
+            .andExpect(jsonPath("$.data.passwordRequired").value(false));
     }
 }

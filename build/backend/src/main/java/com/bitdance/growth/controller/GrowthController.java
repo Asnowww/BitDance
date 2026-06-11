@@ -6,6 +6,7 @@ import com.bitdance.growth.dto.CheckinDto;
 import com.bitdance.growth.dto.CreateCheckinRequest;
 import com.bitdance.growth.dto.CreateWorkRequest;
 import com.bitdance.growth.dto.GoalDto;
+import com.bitdance.growth.dto.GrowthReportDto;
 import com.bitdance.growth.dto.GrowthStats;
 import com.bitdance.growth.dto.TimelineItem;
 import com.bitdance.growth.dto.UpsertGoalRequest;
@@ -20,8 +21,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -90,5 +93,13 @@ public class GrowthController {
     @GetMapping("/badges")
     public ApiResponse<List<BadgeDto>> badges() {
         return ApiResponse.ok(service.listBadges(CurrentUser.getId()));
+    }
+
+    @GetMapping("/reports")
+    public ApiResponse<GrowthReportDto> report(
+        @RequestParam(defaultValue = "monthly") String period,
+        @RequestParam(required = false) LocalDate anchorDate
+    ) {
+        return ApiResponse.ok(service.report(CurrentUser.getId(), period, anchorDate));
     }
 }

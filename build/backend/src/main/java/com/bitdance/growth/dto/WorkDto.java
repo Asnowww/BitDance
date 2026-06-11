@@ -1,6 +1,8 @@
 package com.bitdance.growth.dto;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import com.bitdance.media.dto.MediaAssetDto;
 
 public record WorkDto(
     Long id,
@@ -10,5 +12,7 @@ public record WorkDto(
     String workDescription,
     Long coverAssetId,
     Boolean isPublic,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    String coverUrl,
+    List<MediaAssetDto> mediaAssets
 ) {}

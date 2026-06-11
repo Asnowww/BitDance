@@ -12,7 +12,7 @@ const showTabBar = computed(() => route.meta?.hideTabBar !== true);
     <main class="layout__main" :class="{ 'has-tabbar': showTabBar }">
       <RouterView v-slot="{ Component }">
         <transition name="fade" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" :key="route.fullPath" />
         </transition>
       </RouterView>
     </main>
