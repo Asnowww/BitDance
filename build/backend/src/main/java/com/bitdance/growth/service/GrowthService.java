@@ -204,10 +204,10 @@ public class GrowthService {
                 w.getCreatedAt() == null ? OffsetDateTime.now() : w.getCreatedAt()
             );
         }
-        for (PracticePost p : practicePostRepo.findByCreatorUserIdAndPostStatusOrderByStartAtDesc(userId, "completed")) {
+        for (PracticePost p : practicePostRepo.findByInvolvedUserAndPostStatus(userId, "completed")) {
             addTimelineItem(out,
                 "practice", p.getId(), "约练完成",
-                (p.getSkillLevel() == null ? "" : p.getSkillLevel() + " · ") + p.getLocationName(),
+                practiceSubtitle(p),
                 p.getEndAt()
             );
         }
@@ -383,6 +383,15 @@ public class GrowthService {
 
     private String truncate(String s, int max) {
         return s.length() <= max ? s : s.substring(0, max) + "...";
+    }
+
+    private String practiceSubtitle(PracticePost p) {
+        List<String> parts = new ArrayList<>();
+        if (p.getSkillLevel() != null && !p.getSkillLevel().isBlank()) parts.add(p.getSkillLevel());
+        if (p.getLocationName() != null && !p.getLocationName().isBlank()) parts.add(p.getLocationName());
+        if (p.getCurrentPeopleCount() != null) parts.add(p.getCurrentPeopleCount() + "人");
+        if (p.getEndAt() != null) parts.add(p.getEndAt().toLocalDate().toString());
+        return String.join(" · ", parts);
     }
 
     private void validateDate(OffsetDateTime ts) {

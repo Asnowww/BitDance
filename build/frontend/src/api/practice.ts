@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { getToken } from '@/utils/request';
 
 export type PracticePostStatus =
   | 'DRAFT'
@@ -16,6 +16,8 @@ export interface PracticePost {
   level: string;
   date: string;
   time: string;
+  startAt?: string;
+  endAt?: string;
   city: string;
   area: string;
   location: string;
@@ -28,6 +30,18 @@ export interface PracticePost {
   authorAvatar: string;
   createdAt: number;
   distanceMeters?: number | null;
+  participants?: PracticeParticipant[];
+  completionConfirmedByMe?: boolean;
+  allCompletedConfirmed?: boolean;
+  ratingTargets?: PracticeParticipant[];
+  ratedUserIds?: number[];
+}
+
+export interface PracticeParticipant {
+  userId: number;
+  role: 'creator' | 'participant' | string;
+  completionConfirmed?: boolean;
+  ratedByMe?: boolean;
 }
 
 export interface PracticeListQuery {
@@ -95,6 +109,11 @@ interface BackendPracticePost {
   description?: string;
   createdAt?: string;
   distanceMeters?: number | null;
+  participants?: PracticeParticipant[];
+  completionConfirmedByMe?: boolean;
+  allCompletedConfirmed?: boolean;
+  ratingTargets?: PracticeParticipant[];
+  ratedUserIds?: number[];
 }
 
 interface BackendPracticeListResp {
@@ -172,6 +191,8 @@ const toPracticePost = (raw: BackendPracticePost | PracticePost): PracticePost =
       level: raw.skillLevel || '不限',
       date: formatDate(raw.startAt),
       time: formatTime(raw.startAt, raw.endAt),
+      startAt: raw.startAt,
+      endAt: raw.endAt,
       city,
       area: raw.locationAddress || '',
       location: raw.locationName,
@@ -183,7 +204,12 @@ const toPracticePost = (raw: BackendPracticePost | PracticePost): PracticePost =
       authorName: `用户 ${raw.creatorUserId}`,
       authorAvatar: '',
       createdAt: raw.createdAt ? new Date(raw.createdAt).getTime() : Date.now(),
-      distanceMeters: raw.distanceMeters ?? null
+      distanceMeters: raw.distanceMeters ?? null,
+      participants: raw.participants ?? [],
+      completionConfirmedByMe: raw.completionConfirmedByMe ?? false,
+      allCompletedConfirmed: raw.allCompletedConfirmed ?? false,
+      ratingTargets: raw.ratingTargets ?? [],
+      ratedUserIds: raw.ratedUserIds ?? []
     };
   }
   return raw;
@@ -238,9 +264,20 @@ export const fetchPractices = (q: PracticeListQuery) =>
     }));
 
 export const fetchPracticeDetail = (id: number) =>
-  request
-    .get<unknown, BackendPracticePost | PracticePost>(`/public/practices/${id}`)
-    .then(toPracticePost);
+  getToken()
+    ? request
+      .get<unknown, BackendPracticePost | PracticePost>(`/h5/practices/${id}`)
+      .catch((error) => {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+          return request.get<unknown, BackendPracticePost | PracticePost>(`/public/practices/${id}`);
+        }
+        return Promise.reject(error);
+      })
+      .then(toPracticePost)
+    : request
+      .get<unknown, BackendPracticePost | PracticePost>(`/public/practices/${id}`)
+      .then(toPracticePost);
 
 export const createPractice = (body: PracticeCreateBody) =>
   request
@@ -261,6 +298,14 @@ export const cancelJoin = (id: number) =>
 
 export const confirmPractice = (id: number) =>
   fetchPracticeDetail(id);
+
+export const confirmPracticeCompleted = (id: number) =>
+  request
+    .post<unknown, BackendPracticePost | PracticePost>(`/h5/practices/${id}/complete-confirm`)
+    .then(toPracticePost);
+
+export const fetchPracticeRatings = (id: number) =>
+  request.get<unknown, unknown[]>(`/h5/practices/${id}/ratings`);
 
 export const fetchPracticeRecommendations = (q: PracticeListQuery = {}) =>
   request

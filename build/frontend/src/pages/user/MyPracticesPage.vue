@@ -7,12 +7,14 @@ import PenTopBar from '@/components/pen/PenTopBar.vue';
 import {
   acceptPracticeRequest,
   cancelPracticeRequest,
+  confirmPracticeCompleted,
   fetchPracticeDetail,
   fetchMyPracticeRequests,
   fetchMyPractices,
   fetchPracticeRequests,
   rejectPracticeRequest,
   type PracticeJoinRequest,
+  type PracticeParticipant,
   type PracticePost
 } from '@/api/practice';
 
@@ -76,6 +78,28 @@ const dateLine = (item: PracticePost) => `${item.date} ${item.time} · ${item.ar
 
 const practiceOf = (practiceId: number) => practiceMap.value[practiceId];
 
+const canConfirmCompletion = (item?: PracticePost) =>
+  Boolean(item
+    && (['CONFIRMED', 'COMPLETED'].includes(item.status) || (item.status === 'MATCHED' && item.endAt && new Date(item.endAt).getTime() <= Date.now()))
+    && !item.completionConfirmedByMe);
+
+const pendingRatingTargets = (item?: PracticePost) =>
+  (item?.ratingTargets ?? []).filter((target) => !item?.ratedUserIds?.includes(target.userId));
+
+const participantLabel = (item: PracticeParticipant) =>
+  item.role === 'creator' ? `发起者 #${item.userId}` : `舞友 #${item.userId}`;
+
+const confirmComplete = async (item: PracticePost) => {
+  const updated = await confirmPracticeCompleted(item.id);
+  created.value = created.value.map((post) => post.id === updated.id ? updated : post);
+  joinedPractices.value = { ...joinedPractices.value, [updated.id]: updated };
+  showSuccessToast('已确认完成，可以去互评了');
+};
+
+const goRate = (practice: PracticePost, target: PracticeParticipant) => {
+  router.push(`/practice/${practice.id}/rate?toUserId=${target.userId}&toName=${encodeURIComponent(participantLabel(target))}`);
+};
+
 const requestDate = (item: PracticeJoinRequest) =>
   item.createdAt ? new Date(item.createdAt).toLocaleString() : '申请时间待同步';
 
@@ -128,7 +152,11 @@ onMounted(load);
             <p>{{ dateLine(item) }}</p>
             <div class="foot">
               <span>{{ statusText[item.status] || item.status }} · {{ item.takenCount }}/{{ item.capacity }} 人</span>
-              <button type="button" @click="router.push(`/practice/${item.id}`)">详情</button>
+              <div class="actions">
+                <button v-if="canConfirmCompletion(item)" type="button" @click="confirmComplete(item)">确认完成</button>
+                <button v-else-if="pendingRatingTargets(item).length" class="primary" type="button" @click="goRate(item, pendingRatingTargets(item)[0])">去互评</button>
+                <button v-else type="button" @click="router.push(`/practice/${item.id}`)">{{ item.status === 'COMPLETED' ? '查看评价' : '详情' }}</button>
+              </div>
             </div>
           </div>
         </article>
@@ -154,8 +182,15 @@ onMounted(load);
             </template>
             <div class="foot">
               <span>{{ statusText[item.joinStatus] || item.joinStatus }}</span>
-              <button v-if="item.joinStatus === 'pending'" type="button" @click="cancelMine(item)">撤回</button>
-              <button v-else type="button" @click="router.push(`/practice/${item.practicePostId}`)">查看</button>
+              <div class="actions">
+                <button v-if="item.joinStatus === 'pending'" type="button" @click="cancelMine(item)">撤回</button>
+                <template v-else-if="practiceOf(item.practicePostId)">
+                  <button v-if="canConfirmCompletion(practiceOf(item.practicePostId))" type="button" @click="confirmComplete(practiceOf(item.practicePostId))">确认完成</button>
+                  <button v-else-if="pendingRatingTargets(practiceOf(item.practicePostId)).length" class="primary" type="button" @click="goRate(practiceOf(item.practicePostId), pendingRatingTargets(practiceOf(item.practicePostId))[0])">去互评</button>
+                  <button v-else type="button" @click="router.push(`/practice/${item.practicePostId}`)">查看</button>
+                </template>
+                <button v-else type="button" @click="router.push(`/practice/${item.practicePostId}`)">查看</button>
+              </div>
             </div>
           </div>
         </article>

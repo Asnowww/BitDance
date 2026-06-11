@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast } from 'vant';
 import { CalendarDays, ChevronLeft, MapPin, RefreshCw, Users } from 'lucide-vue-next';
-import { fetchPracticeDetail, joinPractice, type PracticePost } from '@/api/practice';
+import { confirmPracticeCompleted, fetchPracticeDetail, joinPractice, type PracticeParticipant, type PracticePost } from '@/api/practice';
 import { getToken } from '@/utils/request';
 
 const route = useRoute();
@@ -11,6 +11,7 @@ const router = useRouter();
 const practice = ref<PracticePost | null>(null);
 const loading = ref(false);
 const joining = ref(false);
+const completing = ref(false);
 const error = ref('');
 
 const id = computed(() => Number(route.params.id));
@@ -27,6 +28,27 @@ const statusText: Record<string, string> = {
 const canJoin = computed(() =>
   Boolean(practice.value && ['PUBLISHED', 'MATCHED'].includes(practice.value.status) && practice.value.takenCount < practice.value.capacity)
 );
+
+const isEnded = computed(() =>
+  Boolean(practice.value?.endAt && new Date(practice.value.endAt).getTime() <= Date.now())
+);
+
+const canConfirmCompletion = computed(() =>
+  Boolean(practice.value
+    && getToken()
+    && ratingTargets.value.length > 0
+    && (['CONFIRMED', 'COMPLETED'].includes(practice.value.status) || (practice.value.status === 'MATCHED' && isEnded.value))
+    && !practice.value.completionConfirmedByMe)
+);
+
+const ratingTargets = computed(() => practice.value?.ratingTargets ?? []);
+
+const pendingRatingTargets = computed(() =>
+  ratingTargets.value.filter((item) => !practice.value?.ratedUserIds?.includes(item.userId))
+);
+
+const participantLabel = (item: PracticeParticipant) =>
+  item.role === 'creator' ? `发起者 #${item.userId}` : `舞友 #${item.userId}`;
 
 const distanceLabel = computed(() => {
   const meters = practice.value?.distanceMeters;
@@ -66,6 +88,28 @@ const join = async () => {
   } finally {
     joining.value = false;
   }
+};
+
+const confirmComplete = async () => {
+  if (!practice.value) return;
+  if (!getToken()) {
+    router.push({ path: '/login', query: { redirect: `/practice/${practice.value.id}` } });
+    return;
+  }
+  completing.value = true;
+  try {
+    practice.value = await confirmPracticeCompleted(practice.value.id);
+    showSuccessToast('已确认完成，可以去互评了');
+  } catch {
+    showFailToast('暂时不能确认完成，请检查约练状态或参与身份');
+  } finally {
+    completing.value = false;
+  }
+};
+
+const rateTarget = (item: PracticeParticipant) => {
+  if (!practice.value || practice.value.ratedUserIds?.includes(item.userId)) return;
+  router.push(`/practice/${practice.value.id}/rate?toUserId=${item.userId}&toName=${encodeURIComponent(participantLabel(item))}`);
 };
 
 onMounted(load);
@@ -138,9 +182,37 @@ onMounted(load);
         </article>
       </section>
 
+      <section v-if="canConfirmCompletion || ratingTargets.length || practice.completionConfirmedByMe" class="review-panel">
+        <div class="review-panel__head">
+          <div>
+            <strong>{{ practice.completionConfirmedByMe ? '完成已确认' : '约练完成确认' }}</strong>
+            <p>{{ practice.allCompletedConfirmed ? '全员已确认，约练已完成。' : '确认后可以对本次约练的舞友进行互评。' }}</p>
+          </div>
+          <button v-if="canConfirmCompletion" type="button" :disabled="completing" @click="confirmComplete">
+            {{ completing ? '确认中...' : '确认已完成' }}
+          </button>
+        </div>
+
+        <div v-if="ratingTargets.length" class="rating-list">
+          <button
+            v-for="target in ratingTargets"
+            :key="target.userId"
+            type="button"
+            :class="{ done: practice.ratedUserIds?.includes(target.userId) }"
+            @click="rateTarget(target)"
+          >
+            <span>{{ participantLabel(target) }}</span>
+            <em>{{ practice.ratedUserIds?.includes(target.userId) ? '已评价' : '去评价' }}</em>
+          </button>
+        </div>
+      </section>
+
       <section class="actions">
         <button type="button" @click="router.push('/me/practices')">我的约练</button>
-        <button v-if="practice.status === 'COMPLETED'" class="primary" type="button" @click="router.push(`/practice/${practice.id}/rate?toUserId=${practice.authorId}`)">
+        <button v-if="canConfirmCompletion" class="primary" type="button" :disabled="completing" @click="confirmComplete">
+          {{ completing ? '确认中...' : '确认已完成' }}
+        </button>
+        <button v-else-if="pendingRatingTargets.length" class="primary" type="button" @click="rateTarget(pendingRatingTargets[0])">
           去互评
         </button>
         <button v-else class="primary" type="button" :disabled="!canJoin || joining" @click="join">
@@ -173,6 +245,17 @@ onMounted(load);
 .panel article { display: flex; gap: 12px; padding: 15px 0; border-bottom: 1px solid #e5e5e5; }
 .panel strong { display: block; font-size: 15px; font-weight: 900; }
 .panel p { margin: 4px 0 0; color: #707072; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.review-panel { margin: 16px 18px 0; padding: 14px; border-radius: 8px; background: #f5f5f5; }
+.review-panel__head { display: flex; align-items: center; gap: 12px; }
+.review-panel__head div { flex: 1; min-width: 0; }
+.review-panel__head strong { display: block; font-size: 15px; font-weight: 950; }
+.review-panel__head p { margin: 4px 0 0; color: #707072; font-size: 12px; font-weight: 700; line-height: 1.4; }
+.review-panel__head button { flex: none; height: 36px; padding: 0 13px; border: 0; border-radius: 999px; background: #111; color: #fff; font-weight: 900; }
+.rating-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.rating-list button { min-height: 42px; padding: 0 12px; border: 1px solid #d1d1d1; border-radius: 8px; background: #fff; color: #111; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 900; }
+.rating-list em { color: #111; font-style: normal; font-size: 12px; }
+.rating-list .done { color: #707072; background: #ededed; }
+.rating-list .done em { color: #707072; }
 .actions { position: fixed; left: 50%; bottom: 0; width: 100%; max-width: 430px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #e5e5e5; box-sizing: border-box; transform: translateX(-50%); display: grid; grid-template-columns: 1fr 1.3fr; gap: 8px; }
 .actions button { height: 48px; border: 1px solid #111; border-radius: 999px; background: #fff; color: #111; font-size: 15px; font-weight: 900; }
 .actions .primary { background: #111; color: #fff; }

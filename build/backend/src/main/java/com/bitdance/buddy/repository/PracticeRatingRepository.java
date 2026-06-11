@@ -14,5 +14,7 @@ public interface PracticeRatingRepository extends JpaRepository<PracticeRating, 
 
     List<PracticeRating> findByPracticePostIdOrderByIdAsc(Long practicePostId);
 
+    List<PracticeRating> findByPracticePostIdAndFromUserId(Long practicePostId, Long fromUserId);
+
     long countByPracticePostId(Long practicePostId);
 }

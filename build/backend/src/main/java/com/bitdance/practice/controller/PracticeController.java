@@ -71,6 +71,16 @@ public class PracticeController {
         return ApiResponse.ok(service.detail(id));
     }
 
+    @GetMapping("/h5/practices/{id}")
+    public ApiResponse<PracticePostDto> detailForUser(@PathVariable Long id) {
+        return ApiResponse.ok(service.detailForUser(CurrentUser.getId(), id));
+    }
+
+    @PostMapping("/h5/practices/{id}/complete-confirm")
+    public ApiResponse<PracticePostDto> confirmCompleted(@PathVariable Long id) {
+        return ApiResponse.ok(service.confirmCompleted(CurrentUser.getId(), id));
+    }
+
     @GetMapping("/public/users/{userId}/practices")
     public ApiResponse<List<PracticePostDto>> publicPostsByUser(@PathVariable Long userId) {
         return ApiResponse.ok(service.publicPostsByCreator(userId));

@@ -6,8 +6,8 @@ import { ChevronLeft, Image, Trash2, Upload, Video } from 'lucide-vue-next';
 import { createGrowthWork, uploadMediaAsset, type MediaAssetDto } from '@/api/growth';
 
 const router = useRouter();
-const title = ref('');
-const description = ref('');
+const title = ref('Hiphop 周末练习片段');
+const description = ref('记录这次动作完成度、卡点问题和下次练习目标。');
 const danceStyleId = ref(1);
 const isPublic = ref(true);
 const assets = ref<MediaAssetDto[]>([]);

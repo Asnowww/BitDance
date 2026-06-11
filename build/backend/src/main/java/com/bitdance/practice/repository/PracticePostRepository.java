@@ -68,6 +68,24 @@ public interface PracticePostRepository extends JpaRepository<PracticePost, Long
 
     @Query("""
         select p from PracticePost p
+        where p.postStatus = :postStatus
+          and (
+            p.creatorUserId = :userId
+            or p.id in (
+              select r.practicePostId from PracticeJoinRequest r
+              where r.applicantUserId = :userId
+                and r.joinStatus = 'accepted'
+            )
+          )
+        order by p.endAt desc, p.id desc
+        """)
+    List<PracticePost> findByInvolvedUserAndPostStatus(
+        @Param("userId") Long userId,
+        @Param("postStatus") String postStatus
+    );
+
+    @Query("""
+        select p from PracticePost p
         where p.creatorUserId = :creatorUserId
           and p.postStatus in ('published','matched','confirmed','completed')
         order by p.startAt desc, p.id desc
