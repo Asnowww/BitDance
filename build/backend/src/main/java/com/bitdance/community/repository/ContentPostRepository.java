@@ -20,7 +20,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
         """)
     Page<ContentPost> recommend(@Param("danceStyleId") Long danceStyleId, Pageable pageable);
 
-    @Query("""
+    @Query(
+        value = """
         select p from ContentPost p
         where p.postStatus = 'published'
           and p.visibility in ('public','followers')
@@ -29,7 +30,14 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
           case when p.authorUserId in :followeeIds then 0 else 1 end,
           p.publishedAt desc,
           p.id desc
-        """)
+        """,
+        countQuery = """
+        select count(p) from ContentPost p
+        where p.postStatus = 'published'
+          and p.visibility in ('public','followers')
+          and (:danceStyleId is null or p.danceStyleId = :danceStyleId)
+        """
+    )
     Page<ContentPost> recommendPrioritized(
         @Param("danceStyleId") Long danceStyleId,
         @Param("followeeIds") List<Long> followeeIds,

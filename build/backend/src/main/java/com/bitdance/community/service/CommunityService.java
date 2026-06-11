@@ -33,6 +33,7 @@ import com.bitdance.community.repository.TopicTagRepository;
 import com.bitdance.favorite.repository.FavoriteRepository;
 import com.bitdance.profile.domain.UserProfile;
 import com.bitdance.profile.repository.UserProfileRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -245,6 +246,11 @@ public class CommunityService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+        cacheNames = "community:feed:recommend",
+        key = "#scope + ':' + (#danceStyleId == null ? 'all' : #danceStyleId) + ':' + (#topicId == null ? 'all' : #topicId) + ':' + #page + ':' + #pageSize",
+        condition = "#currentUserId == null && #scope != 'follow'"
+    )
     public PostListResponse feed(
         String scope, Long danceStyleId, Long topicId, int page, int pageSize, Long currentUserId
     ) {

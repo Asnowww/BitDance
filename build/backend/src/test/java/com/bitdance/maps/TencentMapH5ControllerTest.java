@@ -6,6 +6,7 @@ import com.bitdance.maps.dto.MapGeocodeResult;
 import com.bitdance.maps.dto.MapPlaceListResponse;
 import com.bitdance.maps.dto.MapPlaceResult;
 import com.bitdance.maps.service.TencentMapService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
@@ -18,6 +19,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -113,5 +115,18 @@ class TencentMapH5ControllerTest {
             .andExpect(jsonPath("$.data.title").value("海淀区"))
             .andExpect(jsonPath("$.data.latitude").value(39.98412))
             .andExpect(jsonPath("$.data.longitude").value(116.30748));
+    }
+
+    @Test
+    @DisplayName("ip-location falls back to Beijing Zhongguancun when Tencent lookup fails")
+    void ipLocation_fallsBackToDefaultCoordinates() throws Exception {
+        doThrow(new IllegalStateException("map unavailable")).when(tencentMapService).locateByIp(isNull());
+
+        mvc.perform(get("/h5/maps/tencent/ip-location"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.title").value("中关村"))
+            .andExpect(jsonPath("$.data.address").value("北京市海淀区中关村大街"))
+            .andExpect(jsonPath("$.data.latitude").value(39.98412))
+            .andExpect(jsonPath("$.data.longitude").value(116.307484));
     }
 }

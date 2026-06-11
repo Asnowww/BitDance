@@ -31,6 +31,7 @@ import com.bitdance.workshop.repository.WorkshopCheckinRepository;
 import com.bitdance.workshop.repository.WorkshopOrderRepository;
 import com.bitdance.workshop.repository.WorkshopRepository;
 import com.bitdance.workshop.repository.WorkshopSessionRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -95,6 +96,10 @@ public class WorkshopService {
     // ============ Browse ============
 
     @Transactional(readOnly = true)
+    @Cacheable(
+        cacheNames = "workshop:list",
+        key = "(#cityId == null ? 'all' : #cityId) + ':' + (#danceStyleId == null ? 'all' : #danceStyleId) + ':' + #page + ':' + #pageSize"
+    )
     public WorkshopListResponse list(Long cityId, Long danceStyleId, int page, int pageSize) {
         int safePage = Math.max(1, page);
         int safeSize = Math.min(Math.max(1, pageSize), 100);

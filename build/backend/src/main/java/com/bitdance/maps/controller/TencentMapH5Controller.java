@@ -19,11 +19,24 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Validated
 @RestController
 @RequestMapping("/h5/maps/tencent")
 public class TencentMapH5Controller {
+
+    private static final MapGeocodeResult DEFAULT_BEIJING_LOCATION = new MapGeocodeResult(
+        "中关村",
+        "北京市海淀区中关村大街",
+        new BigDecimal("39.984120"),
+        new BigDecimal("116.307484"),
+        "110108",
+        "北京市",
+        "北京市",
+        "海淀区",
+        List.of()
+    );
 
     private final TencentMapService tencentMapService;
 
@@ -48,7 +61,11 @@ public class TencentMapH5Controller {
 
     @GetMapping("/ip-location")
     public ApiResponse<MapGeocodeResult> locateByIp(HttpServletRequest request) {
-        return ApiResponse.ok(tencentMapService.locateByIp(ClientIpResolver.resolvePublicIp(request)));
+        try {
+            return ApiResponse.ok(tencentMapService.locateByIp(ClientIpResolver.resolvePublicIp(request)));
+        } catch (RuntimeException ex) {
+            return ApiResponse.ok(DEFAULT_BEIJING_LOCATION);
+        }
     }
 
     @GetMapping("/places")

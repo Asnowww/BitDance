@@ -16,6 +16,10 @@ export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token
 export const getToken = () => localStorage.getItem(TOKEN_KEY) ?? '';
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+type RequestConfigWithSilentError = InternalAxiosRequestConfig & {
+  silentErrorToast?: boolean;
+};
+
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
   timeout: 15000
@@ -37,11 +41,15 @@ request.interceptors.response.use(
     if (body.code === 0 || body.code === 200 || body.code === 'SUCCESS') {
       return body.data as never;
     }
-    showFailToast(body.message || '请求失败');
+    if (!(response.config as RequestConfigWithSilentError).silentErrorToast) {
+      showFailToast(body.message || '请求失败');
+    }
     return Promise.reject(body);
   },
   (error) => {
-    showFailToast(error?.message || '网络异常');
+    if (!(error?.config as RequestConfigWithSilentError | undefined)?.silentErrorToast) {
+      showFailToast(error?.message || '网络异常');
+    }
     return Promise.reject(error);
   }
 );

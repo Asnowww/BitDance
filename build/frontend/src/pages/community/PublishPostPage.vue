@@ -13,7 +13,16 @@ import {
   type CommunityTopic,
   type MediaAsset
 } from '@/api/community';
-import { locateTencentByIp, reverseGeocodeTencentLocation, searchTencentPlaces, type MapPlace } from '@/api/maps';
+import {
+  buildFallbackMapGeocodeResult,
+  getTencentMapDefaultLocation,
+  locateTencentByIp,
+  reverseGeocodeTencentLocation,
+  searchFallbackTencentPlaces,
+  searchTencentPlaces,
+  type MapGeocodeResult,
+  type MapPlace
+} from '@/api/maps';
 import { hasTencentMapConfig, loadTencentMap } from '@/utils/tencentMap';
 import { captureVideoPoster } from '@/utils/videoPoster';
 
@@ -49,6 +58,7 @@ const locationSearching = ref(false);
 const locationCandidates = ref<MapPlace[]>([]);
 const locationError = ref('');
 const locationResolvedAddress = ref('');
+const locationReady = ref(false);
 const selectedVisibility = ref<Visibility>('public');
 const selectedRelated = ref('Urban Flow');
 const selectedWorkType = ref('阶段作品');
@@ -212,16 +222,22 @@ const loadTopicSuggestions = async () => {
 const openSheet = async (key: SheetKey) => {
   activeSheet.value = key;
   if (key === 'topic') await loadTopicSuggestions();
-  if (key === 'location' && geoPoint.value && locationCandidates.value.length === 0) {
-    try {
-      const { geo, places } = await loadNearbyLocationChoices(geoPoint.value.latitude, geoPoint.value.longitude);
-      locationResolvedAddress.value = geo.address || locationResolvedAddress.value;
-      locationCandidates.value = places;
-      if (selectedLocation.value === '不显示位置' && places[0]?.title) {
-        selectedLocation.value = places[0].title;
+  if (key === 'location') {
+    locationInput.value = '';
+    if (locationCandidates.value.length === 0 || !locationReady.value) {
+      try {
+        await ensureLocationChoicesLoaded(false);
+      } catch {
+        // Keep sheet interactive even if both remote and local fallback fail unexpectedly.
       }
-    } catch {
-      // Ignore sheet-open refresh failures and keep the current manual state visible.
+    } else if (geoPoint.value) {
+      try {
+        const { geo, places } = await loadNearbyLocationChoices(geoPoint.value.latitude, geoPoint.value.longitude);
+        locationResolvedAddress.value = geo.address || locationResolvedAddress.value;
+        locationCandidates.value = places;
+      } catch {
+        // Ignore sheet-open refresh failures and keep the current manual state visible.
+      }
     }
   }
 };
@@ -243,21 +259,22 @@ const chooseStyle = (value: string) => {
 const chooseLocation = (value: string) => {
   selectedLocation.value = value;
   locationInput.value = value === '不显示位置' ? '' : value;
-  if (value === '不显示位置') geoPoint.value = null;
-  locationCandidates.value = [];
+  if (value === '不显示位置') {
+    geoPoint.value = null;
+    locationReady.value = false;
+  }
   locationError.value = '';
   locationResolvedAddress.value = '';
   closeSheet();
 };
 
 const chooseMapPlace = (place: MapPlace) => {
-  if (!geoPoint.value) {
-    showFailToast('请先获取真实定位');
-    return;
-  }
+  geoPoint.value = { latitude: place.latitude, longitude: place.longitude };
   selectedLocation.value = place.title;
   locationResolvedAddress.value = place.address || '';
+  locationInput.value = '';
   locationError.value = '';
+  locationReady.value = true;
   closeSheet();
 };
 
@@ -291,34 +308,10 @@ const dedupePlaces = (places: MapPlace[]) => {
   });
 };
 
-const loadNearbyLocationChoices = async (latitude: number, longitude: number, keyword?: string) => {
-  let geo;
-  try {
-    geo = await reverseGeocodeTencentLocation(latitude, longitude);
-  } catch {
-    const fallbackTitle = await reverseGeocodeByTencentJs(latitude, longitude);
-    geo = {
-      title: fallbackTitle,
-      address: fallbackTitle,
-      latitude,
-      longitude,
-      city: '北京',
-      district: undefined,
-      pois: [] as MapPlace[]
-    };
-  }
+const fetchRemoteNearbyPlaces = async (geo: MapGeocodeResult, latitude: number, longitude: number, keyword?: string) => {
   const keywordText = keyword?.trim();
-  let places = dedupePlaces([
-    {
-      title: geo.title || geo.address || '附近位置',
-      address: geo.address,
-      latitude: geo.latitude,
-      longitude: geo.longitude
-    },
-    ...(geo.pois ?? [])
-  ]);
   if (keywordText) {
-    const searched = await searchTencentPlaces({
+    return searchTencentPlaces({
       keyword: keywordText,
       city: geo.city || '北京',
       latitude,
@@ -326,7 +319,67 @@ const loadNearbyLocationChoices = async (latitude: number, longitude: number, ke
       radiusMeters: 5000,
       pageSize: 12
     });
-    places = dedupePlaces(searched);
+  }
+  const genericKeywords = ['写字楼', '商场', '学校', '餐厅'];
+  const groups = await Promise.allSettled(
+    genericKeywords.map((item) =>
+      searchTencentPlaces({
+        keyword: item,
+        city: geo.city || '北京',
+        latitude,
+        longitude,
+        radiusMeters: 3000,
+        pageSize: 6
+      })
+    )
+  );
+  return groups.flatMap((item) => (item.status === 'fulfilled' ? item.value : []));
+};
+
+const loadNearbyLocationChoices = async (latitude: number, longitude: number, keyword?: string) => {
+  let geo: MapGeocodeResult;
+  try {
+    geo = await reverseGeocodeTencentLocation(latitude, longitude);
+  } catch {
+    try {
+      const fallbackTitle = await reverseGeocodeByTencentJs(latitude, longitude);
+      geo = {
+        ...buildFallbackMapGeocodeResult(latitude, longitude),
+        title: fallbackTitle,
+        address: fallbackTitle
+      };
+    } catch {
+      geo = buildFallbackMapGeocodeResult(latitude, longitude);
+    }
+  }
+  const keywordText = keyword?.trim();
+  let searchedPlaces: MapPlace[] = [];
+  try {
+    searchedPlaces = await fetchRemoteNearbyPlaces(geo, latitude, longitude, keywordText);
+  } catch {
+    searchedPlaces = [];
+  }
+  if (searchedPlaces.length === 0) {
+    searchedPlaces = searchFallbackTencentPlaces({
+      keyword: keywordText,
+      latitude,
+      longitude,
+      pageSize: 12
+    });
+  }
+  let places = dedupePlaces([
+    {
+      title: geo.title || geo.address || '附近位置',
+      address: geo.address,
+      latitude: geo.latitude,
+      longitude: geo.longitude
+    },
+    ...(geo.pois ?? []),
+    ...searchedPlaces
+  ]);
+  if (keywordText) {
+    const normalizedKeyword = keywordText.toLowerCase();
+    places = places.filter((place) => `${place.title}${place.address || ''}${place.category || ''}`.toLowerCase().includes(normalizedKeyword));
   }
   return {
     geo,
@@ -334,7 +387,7 @@ const loadNearbyLocationChoices = async (latitude: number, longitude: number, ke
   };
 };
 
-const applyResolvedLocation = async (latitude: number, longitude: number, successMessage: string) => {
+const applyResolvedLocation = async (latitude: number, longitude: number, successMessage?: string) => {
   geoPoint.value = { latitude, longitude };
   const { geo, places } = await loadNearbyLocationChoices(latitude, longitude);
   locationResolvedAddress.value = geo.address || '';
@@ -342,7 +395,8 @@ const applyResolvedLocation = async (latitude: number, longitude: number, succes
   selectedLocation.value = places[0]?.title || geo.title || geo.address || '不显示位置';
   locationInput.value = '';
   locationError.value = '';
-  showSuccessToast(successMessage);
+  locationReady.value = true;
+  if (successMessage) showSuccessToast(successMessage);
 };
 
 const useApproximateLocation = async () => {
@@ -350,7 +404,20 @@ const useApproximateLocation = async () => {
   await applyResolvedLocation(approx.latitude, approx.longitude, '已通过网络位置估算附近位置');
 };
 
-const useCurrentLocation = async () => {
+const useDefaultLocation = async () => {
+  const fallback = getTencentMapDefaultLocation();
+  await applyResolvedLocation(fallback.latitude, fallback.longitude, '已使用北京中关村位置兜底');
+};
+
+const ensureLocationChoicesLoaded = async (showToast = false) => {
+  if (geoPoint.value) {
+    await applyResolvedLocation(geoPoint.value.latitude, geoPoint.value.longitude, showToast ? '已刷新附近位置' : undefined);
+    return;
+  }
+  await useCurrentLocation(showToast);
+};
+
+const useCurrentLocation = async (showToast = true) => {
   locating.value = true;
   locationError.value = '';
   try {
@@ -367,21 +434,31 @@ const useCurrentLocation = async () => {
     });
     const latitude = Number(position.coords.latitude.toFixed(6));
     const longitude = Number(position.coords.longitude.toFixed(6));
-    await applyResolvedLocation(latitude, longitude, '已获取附近位置');
+    await applyResolvedLocation(latitude, longitude, showToast ? '已获取附近位置' : undefined);
   } catch (error) {
     try {
-      await useApproximateLocation();
-    } catch {
+      const approx = await locateTencentByIp();
+      await applyResolvedLocation(approx.latitude, approx.longitude, showToast ? '已通过网络位置估算附近位置' : undefined);
       const code = typeof error === 'object' && error && 'code' in error ? Number((error as GeolocationPositionError).code) : 0;
       locationError.value =
         code === 1
-          ? '系统定位不可用，且网络位置估算失败，请用地图搜索选择位置'
+          ? '系统定位不可用，已为你切换到附近地点列表'
           : code === 2
-            ? '当前环境暂时拿不到系统定位，且网络位置估算失败，请用地图搜索选择位置'
+            ? '当前环境拿不到精确定位，已切换到附近地点列表'
             : code === 3
-              ? '系统定位超时，且网络位置估算失败，请用地图搜索选择位置'
-              : '定位失败，请稍后再试或用地图搜索选择位置';
-      showFailToast(locationError.value);
+              ? '系统定位超时，已切换到附近地点列表'
+              : '系统定位失败，已切换到附近地点列表';
+    } catch {
+      const code = typeof error === 'object' && error && 'code' in error ? Number((error as GeolocationPositionError).code) : 0;
+      await useDefaultLocation();
+      locationError.value =
+        code === 1
+          ? '系统定位不可用，已使用北京中关村兜底地点'
+          : code === 2
+            ? '当前环境暂时拿不到系统定位，已使用北京中关村兜底地点'
+            : code === 3
+              ? '系统定位超时，已使用北京中关村兜底地点'
+              : '定位失败，已使用北京中关村兜底地点';
     }
   } finally {
     locating.value = false;
@@ -389,18 +466,20 @@ const useCurrentLocation = async () => {
 };
 
 const searchLocation = async () => {
-  if (!geoPoint.value) {
-    locationError.value = '请先使用当前位置获取真实经纬度，再搜索附近地点名称';
-    showFailToast(locationError.value);
-    return;
-  }
   const keyword = locationInput.value.trim();
   locationSearching.value = true;
   locationError.value = '';
   try {
+    if (!geoPoint.value) {
+      await ensureLocationChoicesLoaded(false);
+    }
+    if (!geoPoint.value) {
+      throw new Error('定位上下文为空');
+    }
     const { geo, places } = await loadNearbyLocationChoices(geoPoint.value.latitude, geoPoint.value.longitude, keyword || undefined);
     locationResolvedAddress.value = geo.address || locationResolvedAddress.value;
     locationCandidates.value = places;
+    locationReady.value = true;
     if (places.length === 0) {
       locationError.value = '附近没有匹配地点，请换个关键词再试';
       showFailToast(locationError.value);
@@ -439,10 +518,6 @@ const onPublish = async () => {
   publishing.value = true;
   try {
     if (!isWorkMode.value) {
-      if (selectedLocation.value !== '不显示位置' && !geoPoint.value) {
-        showFailToast('请先获取真实定位，或选择不显示位置');
-        return;
-      }
       const payload = {
         text: content.value.trim(),
         mediaAssetIds: uploadedMedia.value.map((item) => item.id),
@@ -495,6 +570,7 @@ onMounted(async () => {
     geoPoint.value = detail.longitude !== undefined && detail.latitude !== undefined
       ? { longitude: detail.longitude, latitude: detail.latitude }
       : null;
+    locationReady.value = Boolean(geoPoint.value);
     locationInput.value = selectedLocation.value === '不显示位置' ? '' : selectedLocation.value;
   } finally {
     loading.value = false;
@@ -665,12 +741,12 @@ onUnmounted(clearPreviewUrls);
         </div>
 
         <div v-else-if="activeSheet === 'location'" class="choice-block">
-          <button class="locate-button" type="button" :disabled="locating" @click="useCurrentLocation">
+          <button class="locate-button" type="button" :disabled="locating" @click="() => useCurrentLocation()">
             {{ locating ? '定位中…' : geoPoint ? '重新定位' : '使用当前位置' }}
           </button>
           <p v-if="locationError" class="location-error">{{ locationError }}</p>
           <p v-if="geoPoint" class="location-hint">
-            已获取真实坐标 {{ geoPoint.latitude.toFixed(5) }}, {{ geoPoint.longitude.toFixed(5) }}
+            附近位置基于 {{ geoPoint.latitude.toFixed(5) }}, {{ geoPoint.longitude.toFixed(5) }}
           </p>
           <p v-if="geoPoint && selectedLocation !== '不显示位置'" class="location-current">
             <strong>{{ selectedLocation }}</strong>
