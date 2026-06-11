@@ -22,6 +22,7 @@ export interface WorkshopBrief {
   styles: string[];
   startDate: string;
   endDate: string;
+  nextSessionId?: number;
   priceMin: number;
   priceMax: number;
   capacity: number;
@@ -35,10 +36,38 @@ export interface WorkshopDetail extends WorkshopBrief {
   studioName: string;
   studioId: number;
   coachId: number;
+  coachName: string;
+  coachIntro?: string;
+  coachRating: number;
+  studioAddress?: string;
+  studioTransportInfo?: string;
+  longitude?: number;
+  latitude?: number;
   signupDeadline?: string | null;
-  pastReviews: Array<{ id: number; author: string; text: string; rating: number }>;
+  reviewCount: number;
+  reviewAverage: number;
+  pastReviews: Array<{ id: number; author: string; text: string; rating: number; verified?: boolean; publishedAt?: string }>;
   sessions: WorkshopSession[];
   status: WorkshopStatus;
+}
+
+export interface WorkshopCalendarEvent {
+  orderId: number;
+  workshopId: number;
+  sessionId: number;
+  workshopName: string;
+  coachName: string;
+  locationName: string;
+  address: string;
+  orderStatus: OrderStatus | string;
+  amountPaid: number;
+  checkinCode?: string;
+  startAt: string;
+  endAt: string;
+  reminderStage: string;
+  reminderTitle: string;
+  reminderBody: string;
+  allowCheckin: boolean;
 }
 
 export interface WorkshopOrder {
@@ -93,6 +122,8 @@ interface WorkshopBriefResp {
   signupDeadline?: string | null;
   startDate?: string;
   endDate?: string;
+  nextSessionStartAt?: string | null;
+  nextSessionEndAt?: string | null;
   publishStatus?: string;
   styles?: string[];
   city?: string;
@@ -111,8 +142,36 @@ interface WorkshopDetailResp extends WorkshopBriefResp {
   auditStatus?: string | null;
   sessions: SessionResp[];
   studioName?: string;
-  pastReviews?: Array<{ id: number; author: string; text: string; rating: number }>;
+  coachName?: string;
+  coachIntro?: string | null;
+  coachRating?: number | string | null;
+  studioAddress?: string | null;
+  studioTransportInfo?: string | null;
+  longitude?: number | string | null;
+  latitude?: number | string | null;
+  reviewCount?: number;
+  reviewAverage?: number | string | null;
+  pastReviews?: Array<{ id: number; authorName?: string; author?: string; text: string; rating: number | string; verified?: boolean; publishedAt?: string }>;
   favored?: boolean;
+}
+
+interface WorkshopCalendarEventResp {
+  orderId: number;
+  workshopId: number;
+  sessionId: number;
+  workshopName: string;
+  coachName: string;
+  locationName: string;
+  address: string;
+  orderStatus: string;
+  amountPaid?: number | string | null;
+  checkinCode?: string | null;
+  startAt: string;
+  endAt: string;
+  reminderStage: string;
+  reminderTitle: string;
+  reminderBody: string;
+  allowCheckin: boolean;
 }
 
 interface WorkshopOrderResp {
@@ -198,6 +257,8 @@ const mapSession = (s: SessionResp, fallbackPrice = 0): WorkshopSession => ({
 const mapBrief = (w: WorkshopBriefResp): WorkshopBrief => {
   const styleName = w.styles?.[0] ?? (w.danceStyleId ? STYLE_NAME[w.danceStyleId] : 'Workshop');
   const price = toNumber(w.priceAmount ?? w.priceMin);
+  const nextStart = w.nextSessionStartAt ?? undefined;
+  const nextEnd = w.nextSessionEndAt ?? undefined;
   return {
     id: w.id,
     title: w.workshopName ?? w.title ?? `Workshop #${w.id}`,
@@ -205,8 +266,8 @@ const mapBrief = (w: WorkshopBriefResp): WorkshopBrief => {
     city: w.city ?? (w.cityId ? Object.entries(CITY_ID).find(([, id]) => id === w.cityId)?.[0] ?? '同城' : '同城'),
     area: w.locationName ?? w.area ?? '线下舞室',
     styles: [styleName],
-    startDate: w.startDate ?? (w.signupDeadline ? `截止 ${datePart(w.signupDeadline)}` : '开放报名'),
-    endDate: w.endDate ?? '',
+    startDate: nextStart ? datePart(nextStart) : w.startDate ?? (w.signupDeadline ? `截止 ${datePart(w.signupDeadline)}` : '开放报名'),
+    endDate: nextEnd ? datePart(nextEnd) : w.endDate ?? '',
     priceMin: price,
     priceMax: toNumber(w.priceMax ?? price),
     capacity: w.capacity ?? 0,
@@ -232,8 +293,24 @@ const mapDetail = (w: WorkshopDetailResp): WorkshopDetail => {
     studioName: w.studioName ?? w.locationName ?? '合作舞室',
     studioId: w.studioId ?? 0,
     coachId: w.coachId ?? 0,
+    coachName: w.coachName ?? (w.coachId ? `导师 #${w.coachId}` : '特邀导师'),
+    coachIntro: w.coachIntro ?? '',
+    coachRating: toNumber(w.coachRating),
+    studioAddress: w.studioAddress ?? w.address ?? '',
+    studioTransportInfo: w.studioTransportInfo ?? '',
+    longitude: w.longitude == null ? undefined : Number(w.longitude),
+    latitude: w.latitude == null ? undefined : Number(w.latitude),
     signupDeadline: w.signupDeadline ?? null,
-    pastReviews: w.pastReviews ?? [],
+    reviewCount: Number(w.reviewCount ?? (w.pastReviews?.length ?? 0)),
+    reviewAverage: toNumber(w.reviewAverage),
+    pastReviews: (w.pastReviews ?? []).map((item) => ({
+      id: item.id,
+      author: item.authorName ?? item.author ?? '舞者',
+      text: item.text,
+      rating: toNumber(item.rating),
+      verified: item.verified,
+      publishedAt: item.publishedAt
+    })),
     sessions,
     status: w.publishStatus === 'published' || w.publishStatus === undefined ? 'PUBLISHED' : 'CLOSED'
   };
@@ -255,6 +332,25 @@ const mapOrder = (o: WorkshopOrderResp): WorkshopOrder => ({
   orderStatus: mapOrderStatus(o.orderStatus ?? o.status),
   checkinCode: o.checkinCode ?? '',
   createdAt: toMs(o.createdAt)
+});
+
+const mapCalendarEvent = (item: WorkshopCalendarEventResp): WorkshopCalendarEvent => ({
+  orderId: item.orderId,
+  workshopId: item.workshopId,
+  sessionId: item.sessionId,
+  workshopName: item.workshopName,
+  coachName: item.coachName,
+  locationName: item.locationName,
+  address: item.address,
+  orderStatus: mapOrderStatus(item.orderStatus),
+  amountPaid: toNumber(item.amountPaid),
+  checkinCode: item.checkinCode ?? undefined,
+  startAt: item.startAt,
+  endAt: item.endAt,
+  reminderStage: item.reminderStage,
+  reminderTitle: item.reminderTitle,
+  reminderBody: item.reminderBody,
+  allowCheckin: item.allowCheckin
 });
 
 const hydrateOrders = async (items: WorkshopOrderResp[]): Promise<WorkshopOrder[]> => {
@@ -324,6 +420,12 @@ export const refundWorkshopOrder = (id: number) =>
 
 export const fetchMyWorkshopOrders = () =>
   request.get<unknown, WorkshopOrderResp[]>('/h5/workshop-orders/mine').then(hydrateOrders);
+
+export const fetchMyWorkshopOrder = (id: number) =>
+  request.get<unknown, WorkshopOrderResp>(`/h5/workshop-orders/${id}`).then(mapOrder);
+
+export const fetchWorkshopCalendar = () =>
+  request.get<unknown, WorkshopCalendarEventResp[]>('/h5/workshop-calendar').then((items) => (items ?? []).map(mapCalendarEvent));
 
 export const checkinWorkshopOrder = (id: number, code: string) =>
   request.post<unknown, WorkshopOrderResp>(`/h5/workshop-orders/${id}/checkin`, { code }).then(mapOrder);

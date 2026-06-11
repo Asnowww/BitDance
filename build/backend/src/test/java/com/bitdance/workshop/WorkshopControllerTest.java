@@ -7,6 +7,7 @@ import com.bitdance.workshop.dto.CheckinRequest;
 import com.bitdance.workshop.dto.CreateOrderRequest;
 import com.bitdance.workshop.dto.OrderDto;
 import com.bitdance.workshop.dto.SessionDto;
+import com.bitdance.workshop.dto.WorkshopCalendarEventDto;
 import com.bitdance.workshop.dto.WorkshopBrief;
 import com.bitdance.workshop.dto.WorkshopDetail;
 import com.bitdance.workshop.dto.WorkshopListResponse;
@@ -52,9 +53,11 @@ class WorkshopControllerTest {
     }
 
     private WorkshopBrief brief() {
+        OffsetDateTime start = OffsetDateTime.now().plusDays(7);
         return new WorkshopBrief(
             10L, 1L, 7L, 1L, 1L, "Yumi Hiphop Workshop",
             null, "海淀区舞星 Studio", new BigDecimal("199.00"), null, "published",
+            start, start.plusHours(2),
             30, 8
         );
     }
@@ -69,7 +72,9 @@ class WorkshopControllerTest {
             10L, 1L, 7L, 1L, 1L, "Yumi Hiphop Workshop",
             null, "限定档期", "学院路 1 号", "海淀区舞星 Studio",
             new BigDecimal("199.00"), 5, 30, null,
-            "published", "approved",
+            "published", "approved", "Yumi", "导师介绍", new BigDecimal("4.90"),
+            "舞星 Studio", "学院路 1 号", "地铁直达", null, null,
+            2L, new BigDecimal("4.80"), List.of(),
             List.of(session(8, 30)), false
         );
     }
@@ -276,6 +281,30 @@ class WorkshopControllerTest {
         mvc.perform(get("/h5/workshop-orders/mine"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void myOrder_returns() throws Exception {
+        when(service.getMyOrder(42L, 500L)).thenReturn(order("paid", "ABC12345"));
+        mvc.perform(get("/h5/workshop-orders/500").header("Authorization", "Bearer fake"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(500));
+    }
+
+    @Test
+    void calendar_returns() throws Exception {
+        when(service.listMyCalendar(42L)).thenReturn(List.of(
+            new WorkshopCalendarEventDto(
+                500L, 10L, 100L, "Yumi Hiphop Workshop", "Yumi",
+                "舞星 Studio", "学院路 1 号", "paid",
+                new BigDecimal("199.00"), "ABC12345",
+                OffsetDateTime.now().plusDays(1), OffsetDateTime.now().plusDays(1).plusHours(2),
+                "tomorrow", "明日开跳", "记得提前出发", false
+            )
+        ));
+        mvc.perform(get("/h5/workshop-calendar").header("Authorization", "Bearer fake"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].workshopName").value("Yumi Hiphop Workshop"));
     }
 
     // ============ Checkin ============

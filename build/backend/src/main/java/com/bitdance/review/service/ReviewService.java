@@ -15,6 +15,10 @@ import com.bitdance.review.dto.ReviewListResponse;
 import com.bitdance.review.dto.ReviewSummary;
 import com.bitdance.review.repository.ReviewDimensionScoreRepository;
 import com.bitdance.review.repository.ReviewRepository;
+import com.bitdance.workshop.domain.WorkshopCheckin;
+import com.bitdance.workshop.domain.WorkshopOrder;
+import com.bitdance.workshop.repository.WorkshopCheckinRepository;
+import com.bitdance.workshop.repository.WorkshopOrderRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -42,6 +46,8 @@ public class ReviewService {
     private final TrialBookingRepository trialRepo;
     private final AppUserRepository userRepo;
     private final BadgeRuleEngine badgeRuleEngine;
+    private final WorkshopOrderRepository workshopOrderRepo;
+    private final WorkshopCheckinRepository workshopCheckinRepo;
 
     public ReviewService(
         ReviewRepository reviewRepo,
@@ -49,7 +55,9 @@ public class ReviewService {
         ReviewRiskService riskService,
         TrialBookingRepository trialRepo,
         AppUserRepository userRepo,
-        BadgeRuleEngine badgeRuleEngine
+        BadgeRuleEngine badgeRuleEngine,
+        WorkshopOrderRepository workshopOrderRepo,
+        WorkshopCheckinRepository workshopCheckinRepo
     ) {
         this.reviewRepo = reviewRepo;
         this.dimRepo = dimRepo;
@@ -57,6 +65,8 @@ public class ReviewService {
         this.trialRepo = trialRepo;
         this.userRepo = userRepo;
         this.badgeRuleEngine = badgeRuleEngine;
+        this.workshopOrderRepo = workshopOrderRepo;
+        this.workshopCheckinRepo = workshopCheckinRepo;
     }
 
     @Transactional
@@ -141,7 +151,16 @@ public class ReviewService {
                     && matchesTrialTarget(b, req.targetType(), req.targetId()))
                 .orElse(false);
         }
-        // order / checkin 待 Workshop 模块上线后补
+        if ("order".equals(req.sourceType())) {
+            return workshopOrderRepo.findById(req.sourceRefId())
+                .map(order -> matchesWorkshopOrder(userId, order, req.targetType(), req.targetId(), false))
+                .orElse(false);
+        }
+        if ("checkin".equals(req.sourceType())) {
+            return workshopOrderRepo.findById(req.sourceRefId())
+                .map(order -> matchesWorkshopOrder(userId, order, req.targetType(), req.targetId(), true))
+                .orElse(false);
+        }
         return false;
     }
 
@@ -156,6 +175,19 @@ public class ReviewService {
             case "studio" -> b.getStudioId().equals(targetId);
             default -> false; // 试听不直接证明 coach 评价（留待 BE-013 互评接入）
         };
+    }
+
+    private boolean matchesWorkshopOrder(
+        Long userId, WorkshopOrder order, String targetType, Long targetId, boolean mustCheckedIn
+    ) {
+        if (!order.getUserId().equals(userId)) return false;
+        if (mustCheckedIn) {
+            WorkshopCheckin checkin = workshopCheckinRepo.findByWorkshopOrderId(order.getId()).orElse(null);
+            if (checkin == null || checkin.getCheckedInByUserId() == null) return false;
+        } else if (!java.util.Set.of("paid", "checked_in", "completed").contains(order.getOrderStatus())) {
+            return false;
+        }
+        return "workshop".equals(targetType) && order.getWorkshopId().equals(targetId);
     }
 
     private void validateDimensionCodes(List<DimensionScoreDto> dimensions) {
@@ -286,8 +318,8 @@ public class ReviewService {
     }
 
     private void validateTargetType(String targetType) {
-        if (!Set.of("studio", "course", "coach").contains(targetType)) {
-            throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach");
+        if (!Set.of("studio", "course", "coach", "workshop").contains(targetType)) {
+            throw new BizException("INVALID_ARGUMENT", "targetType 必须是 studio/course/coach/workshop");
         }
     }
 

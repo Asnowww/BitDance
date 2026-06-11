@@ -15,6 +15,8 @@ public record WorkshopBrief(
     BigDecimal priceAmount,
     OffsetDateTime signupDeadline,
     String publishStatus,
+    OffsetDateTime nextSessionStartAt,
+    OffsetDateTime nextSessionEndAt,
     Integer capacity,
     Integer soldCount
 ) {}

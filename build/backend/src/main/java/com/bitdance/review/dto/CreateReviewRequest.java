@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public record CreateReviewRequest(
-    @NotBlank @Pattern(regexp = "studio|course|coach", message = "targetType 必须是 studio/course/coach")
+    @NotBlank @Pattern(regexp = "studio|course|coach|workshop", message = "targetType 必须是 studio/course/coach/workshop")
     String targetType,
     @NotNull Long targetId,
     @NotNull @DecimalMin("1.00") @DecimalMax("5.00") BigDecimal overallScore,

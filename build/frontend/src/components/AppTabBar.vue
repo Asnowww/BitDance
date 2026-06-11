@@ -18,7 +18,7 @@ const router = useRouter();
 const activeTab = computed(() => {
   if (route.meta?.tab) return route.meta.tab as string;
   if (route.path.startsWith('/practice')) return 'practice';
-  if (route.path.startsWith('/workshop') || route.path.startsWith('/community')) return 'activity';
+  if (route.path.startsWith('/activity') || route.path.startsWith('/workshop') || route.path.startsWith('/community')) return 'activity';
   if (route.path.startsWith('/growth') || route.path.startsWith('/me/works') || route.path.startsWith('/me/goal')) {
     return 'growth';
   }
@@ -36,7 +36,7 @@ const activeTab = computed(() => {
 const tabs: TabItem[] = [
   { key: 'home', label: '发现', icon: 'search', to: '/home' },
   { key: 'practice', label: '约练', icon: 'users', to: '/practice' },
-  { key: 'activity', label: '社区', icon: 'sparkles', to: '/workshops' },
+  { key: 'activity', label: '社区', icon: 'sparkles', to: '/activity' },
   { key: 'growth', label: '成长', icon: 'activity', to: '/growth' },
   { key: 'me', label: '我的', icon: 'user', to: '/me' }
 ];

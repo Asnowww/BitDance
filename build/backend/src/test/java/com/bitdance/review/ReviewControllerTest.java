@@ -118,7 +118,7 @@ class ReviewControllerTest {
     @Test
     void create_invalidTargetType_returns400() throws Exception {
         var bad = new CreateReviewRequest(
-            "workshop", 1L, new BigDecimal("4.0"), null,
+            "practice", 1L, new BigDecimal("4.0"), null,
             List.of(new DimensionScoreDto("a", "交通", (short) 5)),
             null, null
         );

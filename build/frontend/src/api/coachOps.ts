@@ -57,10 +57,10 @@ export const createCoachWorkshop = (body: CoachWorkshopDraft) =>
   request.post<unknown, { id: number; status: string }>('/coach/workshops', body);
 
 export const fetchCoachOrders = () =>
-  request.get<unknown, CoachWorkshopOrderRow[]>('/coach/workshop-orders');
+  request.get<unknown, CoachWorkshopOrderRow[]>('/merchant/workshop-orders');
 
 export const checkinByCoach = (orderId: number, code: string) =>
-  request.post<unknown, { ok: boolean }>(`/coach/workshop-orders/${orderId}/checkin`, { code });
+  request.post<unknown, { ok: boolean }>(`/merchant/workshop-orders/${orderId}/checkin`, { code });
 
 export const replyReview = (body: CoachReviewReplyBody) =>
   request.post<unknown, { ok: boolean }>('/coach/review-replies', body);

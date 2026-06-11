@@ -170,10 +170,16 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '消息中心', requiresAuth: true }
   },
   {
+    path: '/activity',
+    name: 'activity-hub',
+    component: () => import('@/pages/community/ActivityHubPage.vue'),
+    meta: { tab: 'activity', title: '社区 / 活动' }
+  },
+  {
     path: '/workshops',
     name: 'workshop-list',
     component: () => import('@/pages/workshop/WorkshopListPage.vue'),
-    meta: { tab: 'activity', title: '活动' }
+    meta: { tab: 'activity', title: 'Workshop' }
   },
   {
     path: '/workshop/:id',

@@ -2,73 +2,62 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { ChevronLeft, ChevronRight, Ticket } from 'lucide-vue-next';
+import { ChevronLeft, ChevronRight, Clock3, MapPin } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import { fetchMyWorkshopOrders, type WorkshopOrder } from '@/api/workshop';
+import { fetchWorkshopCalendar, type WorkshopCalendarEvent } from '@/api/workshop';
 
 const router = useRouter();
-const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-const orders = ref<WorkshopOrder[]>([]);
+const events = ref<WorkshopCalendarEvent[]>([]);
 const loading = ref(false);
 const today = new Date();
+const currentMonth = ref(new Date(today.getFullYear(), today.getMonth(), 1));
 const selectedDay = ref(today.getDate());
-const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-
-interface Cell {
-  n: number;
-  muted: boolean;
-  event: boolean;
-  selected: boolean;
-}
-
-const dateOf = (order: WorkshopOrder) => {
-  const date = order.sessionDate ? new Date(order.sessionDate) : new Date(order.createdAt);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-const activeOrders = computed(() =>
-  orders.value.filter((order) => ['PAID', 'CHECKED_IN', 'COMPLETED'].includes(order.status))
-);
-const selectedEvents = computed(() =>
-  activeOrders.value.filter((order) => {
-    const date = dateOf(order);
-    return date && date.getMonth() === today.getMonth() && date.getDate() === selectedDay.value;
-  })
-);
-const eventDays = computed(() => new Set(activeOrders.value.map((order) => dateOf(order)?.getDate()).filter(Boolean)));
-
-const cells = computed<Cell[]>(() => {
-  const out: Cell[] = [];
-  const previousMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
-  for (let i = monthStart.getDay() - 1; i >= 0; i--) {
-    out.push({ n: previousMonthDays - i, muted: true, event: false, selected: false });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    out.push({ n: d, muted: false, event: eventDays.value.has(d), selected: d === selectedDay.value });
-  }
-  while (out.length % 7 !== 0) {
-    out.push({ n: out.length % 7, muted: true, event: false, selected: false });
-  }
-  return out;
-});
-const weeks = computed(() => {
-  const rows: Cell[][] = [];
-  for (let i = 0; i < cells.value.length; i += 7) rows.push(cells.value.slice(i, i + 7));
-  return rows;
-});
-const monthLabel = computed(() => `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`);
-const dayTitle = computed(() => `${today.getMonth() + 1} 月 ${selectedDay.value} 日`);
 
 const load = async () => {
   loading.value = true;
   try {
-    orders.value = await fetchMyWorkshopOrders();
-    const firstEvent = activeOrders.value.find((order) => dateOf(order)?.getMonth() === today.getMonth());
-    const firstDate = firstEvent ? dateOf(firstEvent) : null;
-    if (firstDate) selectedDay.value = firstDate.getDate();
+    events.value = await fetchWorkshopCalendar();
+    const first = events.value[0] ? new Date(events.value[0].startAt) : null;
+    if (first && !Number.isNaN(first.getTime())) {
+      currentMonth.value = new Date(first.getFullYear(), first.getMonth(), 1);
+      selectedDay.value = first.getDate();
+    }
   } finally {
     loading.value = false;
   }
+};
+
+const monthLabel = computed(() => `${currentMonth.value.getFullYear()} 年 ${currentMonth.value.getMonth() + 1} 月`);
+const monthStartWeekday = computed(() => new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth(), 1).getDay());
+const daysInMonth = computed(() => new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 0).getDate());
+const monthEvents = computed(() =>
+  events.value.filter((event) => {
+    const date = new Date(event.startAt);
+    return date.getFullYear() === currentMonth.value.getFullYear() && date.getMonth() === currentMonth.value.getMonth();
+  })
+);
+const selectedEvents = computed(() =>
+  monthEvents.value.filter((event) => new Date(event.startAt).getDate() === selectedDay.value)
+);
+const eventDays = computed(() => new Set(monthEvents.value.map((event) => new Date(event.startAt).getDate())));
+const weeks = computed(() => {
+  const cells: Array<{ n: number; muted: boolean; event: boolean; selected: boolean }> = [];
+  const prevMonthLastDay = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth(), 0).getDate();
+  for (let i = monthStartWeekday.value - 1; i >= 0; i -= 1) {
+    cells.push({ n: prevMonthLastDay - i, muted: true, event: false, selected: false });
+  }
+  for (let day = 1; day <= daysInMonth.value; day += 1) {
+    cells.push({ n: day, muted: false, event: eventDays.value.has(day), selected: selectedDay.value === day });
+  }
+  while (cells.length % 7 !== 0) cells.push({ n: 0, muted: true, event: false, selected: false });
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  return rows;
+});
+
+const shiftMonth = (delta: number) => {
+  currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + delta, 1);
+  selectedDay.value = 1;
 };
 
 onMounted(load);
@@ -76,46 +65,66 @@ onMounted(load);
 
 <template>
   <main class="pen-page">
-    <PenTopBar title="活动日历" @share="showToast('已复制')" />
+    <PenTopBar title="活动日历" @share="showToast('活动日历链接已复制')" />
 
     <section class="pen-scroll">
       <div class="month">
-        <button class="month__nav" type="button" aria-label="上个月"><ChevronLeft :size="20" :stroke-width="2" /></button>
-        <span class="month__label">{{ monthLabel }}</span>
-        <button class="month__nav" type="button" aria-label="下个月"><ChevronRight :size="20" :stroke-width="2" /></button>
+        <button class="month__nav" type="button" aria-label="上个月" @click="shiftMonth(-1)">
+          <ChevronLeft :size="20" :stroke-width="2" />
+        </button>
+        <strong>{{ monthLabel }}</strong>
+        <button class="month__nav" type="button" aria-label="下个月" @click="shiftMonth(1)">
+          <ChevronRight :size="20" :stroke-width="2" />
+        </button>
       </div>
 
       <div class="week-head">
-        <span v-for="w in weekdays" :key="w">{{ w }}</span>
+        <span v-for="day in ['日', '一', '二', '三', '四', '五', '六']" :key="day">{{ day }}</span>
       </div>
 
       <div class="grid">
-        <div v-for="(row, ri) in weeks" :key="ri" class="grid__row">
+        <div v-for="(row, rowIndex) in weeks" :key="rowIndex" class="grid__row">
           <button
-            v-for="(c, ci) in row"
-            :key="ci"
+            v-for="(cell, index) in row"
+            :key="`${rowIndex}-${index}`"
             class="cell"
             type="button"
-            :disabled="c.muted"
-            @click="selectedDay = c.n"
+            :disabled="cell.muted || !cell.n"
+            @click="selectedDay = cell.n"
           >
-            <span v-if="c.selected" class="cell__sel">{{ c.n }}</span>
-            <span v-else class="cell__num" :class="{ 'cell__num--muted': c.muted }">{{ c.n }}</span>
-            <span v-if="c.event && !c.selected" class="cell__dot" aria-hidden="true" />
+            <span v-if="cell.selected" class="cell__selected">{{ cell.n }}</span>
+            <span v-else class="cell__num" :class="{ 'cell__num--muted': cell.muted }">{{ cell.n || '' }}</span>
+            <span v-if="cell.event && !cell.selected" class="cell__dot" />
           </button>
         </div>
       </div>
 
-      <h2 class="day-title">{{ dayTitle }}</h2>
+      <section class="tip-card">
+        <strong>提醒规则</strong>
+        <p>支付成功后加入活动日历；开场前 24 小时、1 小时和结束后会定向提醒。</p>
+      </section>
+
       <p v-if="loading" class="empty">活动加载中</p>
-      <p v-else-if="selectedEvents.length === 0" class="empty">当天暂无已报名活动</p>
-      <article v-for="event in selectedEvents" :key="event.id" class="event">
-        <div class="event__cover" aria-hidden="true"><Ticket :size="24" :stroke-width="2" /></div>
+      <p v-else-if="selectedEvents.length === 0" class="empty">这一天暂无活动</p>
+
+      <article v-for="event in selectedEvents" :key="event.orderId" class="event">
         <div class="event__copy">
-          <strong class="event__name">{{ event.workshopTitle }}</strong>
-          <span class="event__meta">{{ event.sessionTime || '待确认时间' }} · ¥{{ event.amount }} · {{ event.status }}</span>
+          <strong>{{ event.workshopName }}</strong>
+          <span><Clock3 :size="14" :stroke-width="2" />{{ new Date(event.startAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) }}</span>
+          <span><MapPin :size="14" :stroke-width="2" />{{ event.locationName }}</span>
+          <p>{{ event.reminderTitle }} · {{ event.reminderBody }}</p>
         </div>
-        <button class="event__btn" type="button" @click="router.push(`/workshop/${event.workshopId}`)">查看</button>
+        <div class="event__actions">
+          <button
+            v-if="event.allowCheckin && event.checkinCode"
+            class="ghost-btn"
+            type="button"
+            @click="router.push(`/workshop-checkin/${event.orderId}`)"
+          >
+            去签到
+          </button>
+          <button class="primary-btn" type="button" @click="router.push(`/workshop/${event.workshopId}`)">查看</button>
+        </div>
       </article>
     </section>
   </main>
@@ -137,15 +146,28 @@ onMounted(load);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 16px;
 
-  &__label { font-size: 18px; font-weight: 900; line-height: $pen-lh; }
-  &__nav { border: 0; background: transparent; color: $pen-ink; display: grid; place-items: center; cursor: pointer; }
+  strong {
+    font-size: 18px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  &__nav {
+    border: 0;
+    background: transparent;
+    color: $pen-ink;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
 }
 
 .week-head {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+
   span {
     text-align: center;
     color: $pen-mute;
@@ -160,7 +182,11 @@ onMounted(load);
   flex-direction: column;
   gap: 6px;
 
-  &__row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  &__row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
 }
 
 .cell {
@@ -175,10 +201,21 @@ onMounted(load);
   gap: 3px;
   cursor: pointer;
 
-  &:disabled { cursor: default; }
+  &:disabled {
+    cursor: default;
+  }
 
-  &__num { font-size: 14px; font-weight: 700; line-height: $pen-lh; &--muted { color: $pen-hairline; } }
-  &__sel {
+  &__num {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: $pen-lh;
+
+    &--muted {
+      color: $pen-hairline;
+    }
+  }
+
+  &__selected {
     width: 32px;
     height: 32px;
     border-radius: 999px;
@@ -189,13 +226,45 @@ onMounted(load);
     font-size: 14px;
     font-weight: 800;
   }
-  &__dot { width: 5px; height: 5px; border-radius: 999px; background: $pen-ink; }
+
+  &__dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: $pen-ink;
+  }
 }
 
-.day-title { @include pen-h3-section; font-size: 16px; margin-top: 4px; }
+.tip-card,
+.event {
+  border-radius: 14px;
+}
+
+.tip-card {
+  padding: 14px;
+  background: $pen-soft;
+
+  strong, p {
+    margin: 0;
+  }
+
+  strong {
+    font-size: 15px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  p {
+    margin-top: 6px;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+}
 
 .empty {
-  margin: 6px 0;
+  margin: 0;
   color: $pen-mute;
   font-size: 13px;
   font-weight: 700;
@@ -204,23 +273,61 @@ onMounted(load);
 
 .event {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
   padding: 14px;
-  border-radius: 14px;
-  background: $pen-soft;
+  background: $pen-canvas;
+  border: 1px solid $pen-hairline;
 
-  &__cover {
-    flex: none; width: 48px; height: 48px; border-radius: 12px;
-    background: $pen-ink; color: $pen-on-primary; display: grid; place-items: center;
+  &__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
-  &__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  &__name { font-size: 15px; font-weight: 900; line-height: $pen-lh; }
-  &__meta { color: $pen-mute; font-size: 12px; font-weight: 600; line-height: $pen-lh; }
-  &__btn {
-    flex: none; height: 34px; padding: 8px 16px;
-    border: 0; border-radius: 999px; background: $pen-ink; color: $pen-on-primary;
-    font-size: 13px; font-weight: 700; line-height: $pen-lh; cursor: pointer;
+
+  strong {
+    font-size: 15px;
+    font-weight: 900;
+    line-height: $pen-lh;
   }
+
+  span, p {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+
+.ghost-btn,
+.primary-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: $pen-lh;
+  cursor: pointer;
+}
+
+.ghost-btn {
+  background: $pen-soft;
+  color: $pen-ink;
+}
+
+.primary-btn {
+  background: $pen-ink;
+  color: $pen-on-primary;
 }
 </style>

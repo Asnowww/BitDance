@@ -21,6 +21,17 @@ public record WorkshopDetail(
     OffsetDateTime signupDeadline,
     String publishStatus,
     String auditStatus,
+    String coachName,
+    String coachIntro,
+    BigDecimal coachRating,
+    String studioName,
+    String studioAddress,
+    String studioTransportInfo,
+    BigDecimal longitude,
+    BigDecimal latitude,
+    Long reviewCount,
+    BigDecimal reviewAverage,
+    List<WorkshopReviewSnippet> pastReviews,
     List<SessionDto> sessions,
     boolean favored
 ) {}
