@@ -38,6 +38,7 @@ interface MapGeocodeResp {
   province?: string;
   city?: string;
   district?: string;
+  pois?: MapPlaceResp[];
 }
 
 const toPlace = (item: MapPlaceResp): MapPlace | null => {
@@ -66,7 +67,7 @@ export const searchTencentPlaces = (q: {
   pageSize?: number;
 }) =>
   request
-    .get<unknown, MapPlaceListResp>('/admin/maps/tencent/places', {
+    .get<unknown, MapPlaceListResp>('/h5/maps/tencent/places', {
       params: {
         keyword: q.keyword,
         city: q.city ?? '北京',
@@ -80,7 +81,7 @@ export const searchTencentPlaces = (q: {
     .then((data) => (data.list ?? []).map(toPlace).filter(Boolean) as MapPlace[]);
 
 export const geocodeTencentAddress = (address: string) =>
-  request.get<unknown, MapGeocodeResp>('/admin/maps/tencent/geocode', { params: { address } }).then((data) => {
+  request.get<unknown, MapGeocodeResp>('/h5/maps/tencent/geocode', { params: { address } }).then((data) => {
     const latitude = Number(data.latitude);
     const longitude = Number(data.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -100,7 +101,7 @@ export const geocodeTencentAddress = (address: string) =>
 
 export const reverseGeocodeTencentLocation = (latitude: number, longitude: number) =>
   request
-    .get<unknown, MapGeocodeResp>('/admin/maps/tencent/reverse-geocode', {
+    .get<unknown, MapGeocodeResp>('/h5/maps/tencent/reverse-geocode', {
       params: { latitude, longitude }
     })
     .then((data) => {
@@ -117,6 +118,26 @@ export const reverseGeocodeTencentLocation = (latitude: number, longitude: numbe
         adcode: data.adcode,
         province: data.province,
         city: data.city,
-        district: data.district
+        district: data.district,
+        pois: (data.pois ?? []).map(toPlace).filter(Boolean) as MapPlace[]
       };
     });
+
+export const locateTencentByIp = () =>
+  request.get<unknown, MapGeocodeResp>('/h5/maps/tencent/ip-location').then((data) => {
+    const latitude = Number(data.latitude);
+    const longitude = Number(data.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new Error('地图未返回有效坐标');
+    }
+    return {
+      title: data.title || data.address || '当前位置',
+      address: data.address || data.title || '当前位置',
+      latitude,
+      longitude,
+      adcode: data.adcode,
+      province: data.province,
+      city: data.city,
+      district: data.district
+    };
+  });

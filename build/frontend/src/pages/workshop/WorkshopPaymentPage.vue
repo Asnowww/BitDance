@@ -23,15 +23,21 @@ const submitting = ref(false);
 const loading = ref(false);
 
 const methods = [
-  { key: 'wechat', title: '微信支付', desc: '演示流程会先生成订单，再模拟拉起微信支付完成回调' },
-  { key: 'alipay', title: '支付宝', desc: '保留渠道占位，联调完成后可切换为真实支付网关' },
-  { key: 'balance', title: '余额抵扣', desc: '保留渠道占位，当前环境不走真实账户扣款' }
+  { key: 'wechat', title: '微信支付' },
+  { key: 'alipay', title: '支付宝' },
+  { key: 'balance', title: '余额支付' }
 ] as const;
 
 const session = computed(() =>
   workshop.value?.sessions.find((item) => item.id === selectedSessionId.value) ?? null
 );
 const amount = computed(() => session.value?.price ?? workshop.value?.priceMin ?? 0);
+const isWorkshopEnded = computed(() => Boolean(workshop.value?.ended));
+const isSignupClosed = computed(() => Boolean(workshop.value?.signupClosed));
+const isSessionEnded = computed(() => Boolean(session.value?.ended));
+const canPay = computed(
+  () => Boolean(session.value) && !loading.value && !submitting.value && !isWorkshopEnded.value && !isSignupClosed.value && !isSessionEnded.value
+);
 
 const load = async () => {
   loading.value = true;
@@ -41,6 +47,16 @@ const load = async () => {
     if (!selectedSessionId.value || !session.value) {
       showFailToast('请先从详情页选择场次');
       router.replace(`/workshop/${workshopId}`);
+      return;
+    }
+    if (isWorkshopEnded.value || isSessionEnded.value) {
+      showFailToast('活动已结束');
+      router.replace(`/workshop/${workshopId}`);
+      return;
+    }
+    if (isSignupClosed.value) {
+      showFailToast('报名已截止');
+      router.replace(`/workshop/${workshopId}`);
     }
   } finally {
     loading.value = false;
@@ -48,7 +64,7 @@ const load = async () => {
 };
 
 const onPay = async () => {
-  if (!selectedSessionId.value || submitting.value) return;
+  if (!selectedSessionId.value || !canPay.value) return;
   submitting.value = true;
   try {
     const order = await createWorkshopOrder({
@@ -62,6 +78,12 @@ const onPay = async () => {
     }
     showSuccessToast('支付成功，签到码已生成');
     router.replace(`/workshop-checkin/${paidOrder.id}`);
+  } catch (error) {
+    const err = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+    showFailToast(err?.response?.data?.message || err?.message || '支付失败，请稍后重试');
   } finally {
     submitting.value = false;
   }
@@ -93,7 +115,6 @@ onMounted(load);
       <section class="panel">
         <div class="panel__head">
           <h2>支付方式</h2>
-          <span>当前为演示支付环境，已预留真实微信支付网关接入位</span>
         </div>
         <button
           v-for="item in methods"
@@ -106,30 +127,28 @@ onMounted(load);
           <component :is="payment === item.key ? CheckCircle2 : Circle" :size="18" :stroke-width="2" />
           <div class="method__copy">
             <strong>{{ item.title }}</strong>
-            <span>{{ item.desc }}</span>
           </div>
         </button>
-      </section>
-
-      <section class="panel panel--soft">
-        <div class="panel__head">
-          <h2>支付链路说明</h2>
-        </div>
-        <ul class="rule-list">
-          <li>先创建报名订单，再发起支付渠道请求</li>
-          <li>真实环境可由后端 WechatPayGateway 对接微信支付 v3 下单、回调和退款</li>
-          <li>当前联调环境会模拟支付成功，并继续生成签到二维码与签到码</li>
-        </ul>
       </section>
     </section>
 
     <footer class="pay-bar">
       <div class="pay-bar__copy">
         <strong>实付 ¥{{ amount }}</strong>
-        <span>{{ session ? `剩余 ${Math.max(0, session.capacity - session.taken)} 位` : '等待选择场次' }}</span>
+        <span>
+          {{
+            !session
+              ? '等待选择场次'
+              : isWorkshopEnded || isSessionEnded
+                ? '活动已结束'
+                : isSignupClosed
+                  ? '报名已截止'
+                  : `剩余 ${Math.max(0, session.capacity - session.taken)} 位`
+          }}
+        </span>
       </div>
-      <button class="pay-bar__btn" type="button" :disabled="submitting || loading || !session" @click="onPay">
-        {{ submitting ? '拉起支付中…' : payment === 'wechat' ? '调起微信支付（演示）' : '确认支付并报名' }}
+      <button class="pay-bar__btn" type="button" :disabled="!canPay" @click="onPay">
+        {{ submitting ? '支付中…' : '去支付' }}
       </button>
     </footer>
   </main>
@@ -233,13 +252,6 @@ h1 {
       font-weight: 900;
       line-height: $pen-lh;
     }
-
-    span {
-      color: $pen-mute;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: $pen-lh;
-    }
   }
 }
 
@@ -267,7 +279,6 @@ h1 {
   &__copy {
     display: flex;
     flex-direction: column;
-    gap: 3px;
     min-width: 0;
     flex: 1;
   }
@@ -277,25 +288,6 @@ h1 {
     font-weight: 800;
     line-height: $pen-lh;
   }
-
-  span {
-    color: $pen-mute;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.4;
-  }
-}
-
-.rule-list {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  color: $pen-ink;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
 }
 
 .pay-bar {

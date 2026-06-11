@@ -37,6 +37,7 @@ const canSubmit = computed(
     !submitting.value &&
     (mode.value === 'code' ? code.value.length >= 4 : password.value.length >= 6)
 );
+const canQuickEnter = import.meta.env.DEV;
 
 const heroImage =
   'https://images.unsplash.com/photo-1761882628233-1e23102da76d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3Nzk3ODEzMzV8&ixlib=rb-4.1.0&q=80&w=1080';
@@ -98,6 +99,39 @@ const onSubmit = async () => {
   } catch (error) {
     loginError.value = getErrorMessage(error);
     /* request 拦截器已弹错误 toast */
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const onQuickEnter = async () => {
+  submitting.value = true;
+  loginError.value = '';
+  try {
+    await userStore.login('13800138000', '123456');
+    showSuccessToast('已进入开发测试模式');
+    const redirect = (route.query.redirect as string) || '/home';
+    router.replace(redirect);
+  } catch (error) {
+    try {
+      userStore.logout();
+      localStorage.setItem('bitdance_token', 'dev-bypass-token');
+      localStorage.setItem(
+        'bitdance_profile',
+        JSON.stringify({
+          id: 999,
+          phone: '13800000000',
+          nickname: '舞者0000',
+          avatar: null,
+          roles: ['USER', 'COACH']
+        })
+      );
+      showSuccessToast('已进入开发测试模式');
+      const redirect = (route.query.redirect as string) || '/home';
+      window.location.replace(`${window.location.origin}${window.location.pathname}#${redirect}`);
+    } catch {
+      loginError.value = getErrorMessage(error);
+    }
   } finally {
     submitting.value = false;
   }
@@ -235,6 +269,15 @@ onBeforeUnmount(() => {
         {{ submitting ? '登录中...' : mode === 'code' ? '登录 / 注册' : '登录' }}
       </button>
       <p v-if="loginError" class="sms-error">{{ loginError }}</p>
+      <button
+        v-if="canQuickEnter"
+        class="btn btn--soft"
+        type="button"
+        :disabled="submitting"
+        @click="onQuickEnter"
+      >
+        直接进入测试
+      </button>
       <button class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
     </main>
   </div>

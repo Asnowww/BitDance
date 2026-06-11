@@ -44,7 +44,8 @@ class AdminStudioLocationControllerTest {
             "110108",
             "北京市",
             "北京市",
-            "海淀区"
+            "海淀区",
+            List.of()
         ));
         when(studioService.updateLocation(eq(101L), argThat(this::matchesResolvedLocation))).thenReturn(new StudioDetail(
             101L,
