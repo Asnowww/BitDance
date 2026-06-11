@@ -1,6 +1,17 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
+import { useUserStore } from '@/stores/user';
 import { getToken, isPasswordRequired } from '@/utils/request';
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean;
+    requiredRoles?: string[];
+    tab?: string;
+    title?: string;
+    hideTabBar?: boolean;
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -167,7 +178,7 @@ const routes: RouteRecordRaw[] = [
     path: '/me/coach-home',
     name: 'coach-home',
     component: () => import('@/pages/user/CoachHomePage.vue'),
-    meta: { title: '教练主页', requiresAuth: true }
+    meta: { title: '教练主页', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/messages',
@@ -317,37 +328,43 @@ const routes: RouteRecordRaw[] = [
     path: '/coach/appeal',
     name: 'coach-appeal',
     component: () => import('@/pages/coach/AppealPage.vue'),
-    meta: { title: '评价申诉', requiresAuth: true }
+    meta: { title: '评价申诉', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/workshop-create',
     name: 'coach-workshop-create',
     component: () => import('@/pages/coach/CoachWorkshopCreatePage.vue'),
-    meta: { title: '创建 Workshop', requiresAuth: true }
+    meta: { title: '创建 Workshop', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/orders',
     name: 'coach-orders',
     component: () => import('@/pages/coach/CoachOrdersPage.vue'),
-    meta: { title: '学员订单与核销', requiresAuth: true }
+    meta: { title: '学员订单与核销', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/replies',
     name: 'coach-replies',
     component: () => import('@/pages/coach/ReplyReviewsPage.vue'),
-    meta: { title: '评价回复', requiresAuth: true }
+    meta: { title: '评价回复', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/coach/dashboard',
     name: 'coach-dashboard',
     component: () => import('@/pages/coach/CoachDashboardPage.vue'),
-    meta: { title: '经营看板', requiresAuth: true }
+    meta: { title: '经营看板', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
     path: '/admin/reports',
     name: 'admin-reports',
     component: () => import('@/pages/admin/ReportTicketsPage.vue'),
-    meta: { title: '举报后台', requiresAuth: true }
+    meta: { title: '举报后台', requiresAuth: true, requiredRoles: ['PLATFORM_ADMIN'] }
+  },
+  {
+    path: '/403',
+    name: 'forbidden',
+    component: () => import('@/pages/common/ForbiddenPage.vue'),
+    meta: { title: '403', hideTabBar: true }
   },
   {
     path: '/:pathMatch(.*)*',
@@ -371,6 +388,13 @@ router.beforeEach((to) => {
   }
   if (to.meta?.requiresAuth && isPasswordRequired()) {
     return { path: '/login', query: { setupPassword: '1', redirect: to.fullPath } };
+  }
+  if (to.meta?.requiredRoles?.length) {
+    const user = useUserStore();
+    const allowed = to.meta.requiredRoles.some((role) => user.roleSet.has(role.toUpperCase()));
+    if (!allowed) {
+      return { path: '/403', query: { from: to.fullPath } };
+    }
   }
   return true;
 });

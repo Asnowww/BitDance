@@ -107,7 +107,8 @@ export const useUserStore = defineStore('user', () => {
       updateProfile({
         id: data.userId,
         nickname: data.nickname || profile.value.nickname,
-        avatar: data.avatarAssetId == null ? profile.value.avatar : String(data.avatarAssetId)
+        avatar: data.avatarAssetId == null ? profile.value.avatar : String(data.avatarAssetId),
+        roles: data.roles ?? profile.value.roles
       });
     }
     return data;
@@ -120,7 +121,8 @@ export const useUserStore = defineStore('user', () => {
       updateProfile({
         id: data.userId,
         nickname: data.nickname || profile.value.nickname,
-        avatar: data.avatarAssetId == null ? profile.value.avatar : String(data.avatarAssetId)
+        avatar: data.avatarAssetId == null ? profile.value.avatar : String(data.avatarAssetId),
+        roles: data.roles ?? profile.value.roles
       });
     }
     return data;
@@ -204,6 +206,7 @@ export const useUserStore = defineStore('user', () => {
     token,
     passwordRequired,
     isLogin,
+    roleSet,
     isCoach,
     isStudioAdmin,
     isPlatformAdmin,

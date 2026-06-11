@@ -50,6 +50,7 @@ class ProfileControllerTest {
         return new ProfileResponse(
             42L, "舞者0042", null, "unknown",
             LocalDate.of(2000, 1, 1), "热爱街舞", null, "intermediate", "完成一支 Routine",
+            List.of("USER"),
             List.of(new StylePreferenceDto(1L, "Hiphop", "intermediate", true)),
             new PrivacyDto("public", "followers", "public", "public")
         );

@@ -19,6 +19,7 @@ import {
 } from 'lucide-vue-next';
 import { showSuccessToast, showToast } from 'vant';
 import { useUserStore } from '@/stores/user';
+import { getDefaultAvatar } from '@/utils/defaultAvatars';
 
 const router = useRouter();
 const user = useUserStore();
@@ -36,6 +37,7 @@ interface AccountActionDialog {
 }
 
 const profileName = computed(() => user.profile?.nickname || 'BitDance 用户');
+const profileAvatar = computed(() => getDefaultAvatar(user.detail?.avatarAssetId ?? user.profile?.avatar));
 const profileMeta = computed(() => {
   const level = user.detail?.currentLevel || '未设置水平';
   const goal = user.detail?.learningGoal || '未设置目标';
@@ -146,7 +148,13 @@ onMounted(() => {
     <section class="me-scroll">
       <section class="profile-card" aria-label="账号资料">
         <button class="profile-card__avatar" type="button" aria-label="进入我的个人主页" @click="goProfileHome">
-          <UserRound :size="34" :stroke-width="2.2" />
+          <span
+            v-if="profileAvatar"
+            :style="{ background: profileAvatar.background, color: profileAvatar.foreground }"
+          >
+            {{ profileAvatar.mark }}
+          </span>
+          <UserRound v-else :size="34" :stroke-width="2.2" />
         </button>
         <span class="profile-card__copy">
           <strong>{{ profileName }}</strong>
@@ -337,6 +345,16 @@ onMounted(() => {
     place-items: center;
     border: 0;
     cursor: pointer;
+
+    span {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      font-size: 16px;
+      font-weight: 900;
+      place-items: center;
+    }
   }
 
   &__copy {

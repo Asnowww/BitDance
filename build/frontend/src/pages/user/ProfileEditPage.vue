@@ -5,12 +5,14 @@ import { showSuccessToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { useUserStore } from '@/stores/user';
 import type { StylePreference } from '@/api/profile';
+import { DEFAULT_AVATARS, getDefaultAvatar } from '@/utils/defaultAvatars';
 
 const router = useRouter();
 const user = useUserStore();
 
 const form = reactive({
   nickname: '',
+  avatarAssetId: null as number | null,
   gender: 'unknown',
   birthday: '',
   bio: '',
@@ -58,6 +60,7 @@ const selectedStyleNames = computed(() =>
   styles.value.map((item) => item.name || styleOptions.find((option) => option.danceStyleId === item.danceStyleId)?.name)
     .filter(Boolean)
 );
+const selectedAvatar = computed(() => getDefaultAvatar(form.avatarAssetId));
 
 const fillForm = async () => {
   loading.value = true;
@@ -65,6 +68,7 @@ const fillForm = async () => {
     const data = await user.refreshProfile();
     if (!data) return;
     form.nickname = data.nickname ?? '';
+    form.avatarAssetId = data.avatarAssetId ?? null;
     form.gender = data.gender ?? 'unknown';
     form.birthday = data.birthday ?? '';
     form.bio = data.bio ?? '';
@@ -151,6 +155,7 @@ const onSave = async () => {
     await user.saveProfileDetail({
       ...(user.detail ?? {}),
       nickname: form.nickname.trim(),
+      avatarAssetId: form.avatarAssetId,
       gender: form.gender,
       birthday: form.birthday || null,
       bio: form.bio,
@@ -176,9 +181,38 @@ onMounted(fillForm);
       <p v-if="loading" class="empty">正在读取后端资料...</p>
 
       <div class="avatar">
-        <span class="avatar__img" aria-hidden="true">{{ (form.nickname || 'B').slice(0, 1) }}</span>
-        <span class="avatar__hint">头像资源 ID：{{ user.detail?.avatarAssetId ?? '未绑定' }}</span>
+        <span
+          class="avatar__img"
+          :style="selectedAvatar ? { background: selectedAvatar.background, color: selectedAvatar.foreground } : undefined"
+          aria-hidden="true"
+        >
+          {{ selectedAvatar?.mark ?? (form.nickname || 'B').slice(0, 1) }}
+        </span>
+        <span class="avatar__hint">{{ selectedAvatar ? selectedAvatar.label : '请选择默认头像' }}</span>
       </div>
+
+      <section class="block">
+        <h2 class="block__title block__title--compact">&#22836;&#20687;</h2>
+        <div class="avatar-picker">
+          <button
+            v-for="item in DEFAULT_AVATARS"
+            :key="item.id"
+            class="avatar-choice"
+            :class="{ 'avatar-choice--active': form.avatarAssetId === item.id }"
+            type="button"
+            @click="form.avatarAssetId = item.id"
+          >
+            <span
+              class="avatar-choice__mark"
+              :style="{ background: item.background, color: item.foreground }"
+              aria-hidden="true"
+            >
+              {{ item.mark }}
+            </span>
+            <strong>{{ item.label }}</strong>
+          </button>
+        </div>
+      </section>
 
       <label class="field">
         <span>昵称</span>
@@ -351,6 +385,48 @@ onMounted(fillForm);
     color: $pen-mute;
     font-size: 12px;
     font-weight: 800;
+  }
+}
+
+.avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.avatar-choice {
+  display: flex;
+  min-height: 82px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 6px;
+  border: 1px solid $pen-hairline;
+  border-radius: 8px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  cursor: pointer;
+
+  &--active {
+    border-color: $pen-ink;
+    box-shadow: inset 0 0 0 1px $pen-ink;
+  }
+
+  &__mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 900;
+    place-items: center;
+  }
+
+  strong {
+    font-size: 12px;
+    font-weight: 900;
+    line-height: $pen-lh;
   }
 }
 

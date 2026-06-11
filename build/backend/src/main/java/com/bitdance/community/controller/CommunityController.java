@@ -55,7 +55,7 @@ public class CommunityController {
 
     @GetMapping("/public/community/media/{id}")
     public ResponseEntity<byte[]> media(@PathVariable Long id) {
-        ContentPostMedia media = service.getPublishedMedia(id);
+        ContentPostMedia media = service.getPublishedMedia(id, CurrentUser.getIdOrNull());
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(media.getMimeType()))
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline")

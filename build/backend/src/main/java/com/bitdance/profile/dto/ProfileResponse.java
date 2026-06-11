@@ -13,6 +13,7 @@ public record ProfileResponse(
     Long cityId,
     String currentLevel,
     String learningGoal,
+    List<String> roles,
     List<StylePreferenceDto> styles,
     PrivacyDto privacy
 ) {}

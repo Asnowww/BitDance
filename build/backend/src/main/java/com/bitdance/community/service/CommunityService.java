@@ -141,7 +141,7 @@ public class CommunityService {
     }
 
     @Transactional(readOnly = true)
-    public ContentPostMedia getPublishedMedia(Long mediaId) {
+    public ContentPostMedia getPublishedMedia(Long mediaId, Long currentUserId) {
         ContentPostMedia media = mediaRepo.findById(mediaId)
             .orElseThrow(() -> new BizException("MEDIA_NOT_FOUND", "媒体不存在"));
         if (!"active".equals(media.getMediaStatus()) || media.getContentPostId() == null) {
@@ -149,7 +149,7 @@ public class CommunityService {
         }
         ContentPost post = postRepo.findById(media.getContentPostId())
             .orElseThrow(() -> new BizException("MEDIA_NOT_FOUND", "媒体不存在"));
-        if (!"published".equals(post.getPostStatus()) || "private".equals(post.getVisibility())) {
+        if (!canViewPublishedPost(post, currentUserId)) {
             throw new BizException("MEDIA_NOT_FOUND", "媒体不存在");
         }
         return media;
@@ -726,6 +726,21 @@ public class CommunityService {
     private List<Long> followeeIds(Long userId) {
         return followRepo.findByFollowerUserId(userId)
             .stream().map(FollowRelation::getFolloweeUserId).toList();
+    }
+
+    private boolean canViewPublishedPost(ContentPost post, Long currentUserId) {
+        if (!"published".equals(post.getPostStatus())) {
+            return false;
+        }
+        if ("public".equals(post.getVisibility())) {
+            return true;
+        }
+        if (currentUserId != null && currentUserId.equals(post.getAuthorUserId())) {
+            return true;
+        }
+        return "followers".equals(post.getVisibility())
+            && currentUserId != null
+            && followRepo.existsByFollowerUserIdAndFolloweeUserId(currentUserId, post.getAuthorUserId());
     }
 
     private FollowUserDto toFollowUserDto(Long targetUserId, Long viewerUserId, OffsetDateTime followedAt) {

@@ -14,7 +14,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
     @Query("""
         select p from ContentPost p
         where p.postStatus = 'published'
-          and p.visibility in ('public','followers')
+          and p.visibility = 'public'
           and (:danceStyleId is null or p.danceStyleId = :danceStyleId)
         order by p.publishedAt desc, p.id desc
         """)
@@ -23,7 +23,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long> 
     @Query("""
         select p from ContentPost p
         where p.postStatus = 'published'
-          and p.visibility in ('public','followers')
+          and (
+            p.visibility = 'public'
+            or (p.visibility = 'followers' and p.authorUserId in :followeeIds)
+          )
           and (:danceStyleId is null or p.danceStyleId = :danceStyleId)
         order by
           case when p.authorUserId in :followeeIds then 0 else 1 end,
