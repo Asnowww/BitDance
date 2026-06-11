@@ -398,6 +398,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '经营看板', requiresAuth: true }
   },
   {
+    path: '/admin/reports',
+    name: 'admin-reports',
+    component: () => import('@/pages/admin/ReportTicketsPage.vue'),
+    meta: { title: '举报后台', requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/pages/common/NotFoundPage.vue'),
@@ -425,6 +431,7 @@ const hasOpsRole = () => {
 
 router.beforeEach((to, from) => {
   if (to.meta?.requiresAuth && !getToken()) {
+    // 登录态统一守卫：点击“我的”等受保护入口时先去登录页，登录成功后按 redirect 回到原目标页。
     return { path: '/login', query: { redirect: to.fullPath } };
   }
   // 应用入口分流:已登录的运营角色打开 App 时直达管理端(站内点击 tab 回首页不受影响)

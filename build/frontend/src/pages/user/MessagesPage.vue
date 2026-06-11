@@ -1,18 +1,76 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Users, User, Star, Ticket, Bell } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { Bell, CheckCheck, Star, Ticket, User, Users } from 'lucide-vue-next';
+import { showSuccessToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
+import { fetchMessages, markAllRead, markRead, type MessageItem } from '@/api/message';
 
-const cats = ['全部', '约练', '评价', '活动', '系统'];
-const activeCat = ref('全部');
-
-const messages = [
-  { icon: Users, name: '约练助手', time: '5 分钟前', preview: '你发起的周六 Hiphop 约练有 2 人报名', unread: true },
-  { icon: User, name: 'Mia 老师', time: '1 小时前', preview: '试听课已确认，周日 14:00 见～', unread: true },
-  { icon: Star, name: '评价提醒', time: '昨天', preview: '本次课程体验如何？来写下结构化评价', unread: false },
-  { icon: Ticket, name: '活动通知', time: '周三', preview: 'Locking 大师课开始报名，剩 8 位', unread: false },
-  { icon: Bell, name: '系统通知', time: '5/28', preview: '你的资料偏好已更新', unread: false }
+const cats = [
+  { key: 'all', label: '全部' },
+  { key: 'practice', label: '约练' },
+  { key: 'review', label: '评价' },
+  { key: 'trial', label: '试听' },
+  { key: 'system', label: '系统' }
 ];
+
+const iconMap = {
+  practice: Users,
+  review: Star,
+  trial: Ticket,
+  system: Bell
+};
+
+const activeCat = ref('all');
+const messages = ref<MessageItem[]>([]);
+const unread = ref(0);
+const loading = ref(false);
+
+const visibleMessages = computed(() => messages.value);
+
+const formatTime = (value?: string) => {
+  if (!value) return '刚刚';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '刚刚';
+  return date.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const loadMessages = async () => {
+  loading.value = true;
+  try {
+    const data = await fetchMessages(activeCat.value);
+    messages.value = data.list;
+    unread.value = data.unread;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const selectCat = async (key: string) => {
+  activeCat.value = key;
+  await loadMessages();
+};
+
+const readOne = async (item: MessageItem) => {
+  if (item.isRead || item.read) return;
+  await markRead(item.id);
+  item.isRead = true;
+  item.read = true;
+  unread.value = Math.max(0, unread.value - 1);
+};
+
+const readAll = async () => {
+  await markAllRead();
+  messages.value = messages.value.map((item) => ({ ...item, isRead: true, read: true }));
+  unread.value = 0;
+  showSuccessToast('已全部标记为已读');
+};
+
+onMounted(loadMessages);
 </script>
 
 <template>
@@ -20,32 +78,54 @@ const messages = [
     <PenTopBar title="消息" :show-share="false" />
 
     <section class="pen-scroll">
-      <div class="chip-row">
+      <header class="summary">
+        <div>
+          <strong>{{ unread }}</strong>
+          <span>条未读消息</span>
+        </div>
+        <button type="button" :disabled="unread === 0" @click="readAll">
+          <CheckCheck :size="18" />
+          <span>全部已读</span>
+        </button>
+      </header>
+
+      <div class="chip-row" aria-label="消息分类">
         <button
           v-for="c in cats"
-          :key="c"
+          :key="c.key"
           class="chip"
-          :class="activeCat === c ? 'chip--active' : 'chip--inactive'"
+          :class="activeCat === c.key ? 'chip--active' : 'chip--inactive'"
           type="button"
-          @click="activeCat = c"
+          @click="selectCat(c.key)"
         >
-          {{ c }}
+          {{ c.label }}
         </button>
       </div>
 
-      <article v-for="m in messages" :key="m.name" class="msg">
-        <span class="msg__dot" :class="{ 'msg__dot--on': m.unread }" aria-hidden="true" />
-        <span class="msg__avatar" aria-hidden="true">
-          <component :is="m.icon" :size="22" :stroke-width="2" />
-        </span>
-        <div class="msg__body">
-          <div class="msg__top">
-            <span class="msg__name">{{ m.name }}</span>
-            <span class="msg__time">{{ m.time }}</span>
+      <p v-if="loading" class="empty">正在加载消息...</p>
+      <p v-else-if="!visibleMessages.length" class="empty">当前分类暂无消息</p>
+
+      <template v-else>
+        <article
+          v-for="m in visibleMessages"
+          :key="m.id"
+          class="msg"
+          :class="{ 'msg--read': m.isRead || m.read }"
+          @click="readOne(m)"
+        >
+          <span class="msg__dot" :class="{ 'msg__dot--on': !(m.isRead || m.read) }" aria-hidden="true" />
+          <span class="msg__avatar" aria-hidden="true">
+            <component :is="iconMap[m.category] || User" :size="22" :stroke-width="2" />
+          </span>
+          <div class="msg__body">
+            <div class="msg__top">
+              <span class="msg__name">{{ m.title }}</span>
+              <span class="msg__time">{{ formatTime(m.createdAt) }}</span>
+            </div>
+            <p class="msg__preview">{{ m.content || m.body }}</p>
           </div>
-          <p class="msg__preview">{{ m.preview }}</p>
-        </div>
-      </article>
+        </article>
+      </template>
     </section>
   </main>
 </template>
@@ -64,6 +144,54 @@ const messages = [
   padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
 }
 
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+
+  div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  span {
+    color: $pen-mute;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -74,12 +202,31 @@ const messages = [
   @include pen-chip;
 }
 
+.empty {
+  margin: 0;
+  padding: 22px 12px;
+  border: 1px solid $pen-hairline;
+  border-radius: 8px;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
 .msg {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 0;
+  border: 0;
   border-bottom: 1px solid $pen-hairline;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &--read {
+    opacity: 0.72;
+  }
 
   &__dot {
     flex: none;
@@ -120,9 +267,13 @@ const messages = [
   }
 
   &__name {
+    min-width: 0;
+    overflow: hidden;
     font-size: 15px;
     font-weight: 900;
     line-height: $pen-lh;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__time {

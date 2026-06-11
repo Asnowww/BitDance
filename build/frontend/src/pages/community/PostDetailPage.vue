@@ -1,30 +1,31 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showToast } from 'vant';
+import { showSuccessToast, showToast } from 'vant';
 import { Bookmark, ChevronLeft, ChevronRight, Ellipsis, Flag, Heart, MapPin } from 'lucide-vue-next';
+import { reportPost } from '@/api/community';
 
 const route = useRoute();
 const router = useRouter();
-const postId = String(route.params.id || '1');
+const postId = Number(route.params.id || 100001);
 const menuOpen = ref(false);
 const collected = ref(false);
 const reportOpen = ref(false);
 const selectedReason = ref('');
 const reportNote = ref('');
+const submitting = ref(false);
 
 const reportReasons = [
-  '低俗或不适内容',
-  '骚扰、辱骂或人身攻击',
-  '虚假宣传或引流',
-  '侵犯版权或盗用作品',
-  '危险行为或线下安全风险',
-  '其他问题'
+  { code: 'spam', label: '垃圾信息或引流' },
+  { code: 'adult', label: '低俗或不适内容' },
+  { code: 'violence', label: '骚扰、攻击或线下安全风险' },
+  { code: 'fraud', label: '虚假宣传或诈骗' },
+  { code: 'other', label: '其他问题' }
 ];
 
 const comments = [
   { id: 'k', name: '小 K', text: '看起来好棒，下次一起约练？' },
-  { id: 'm', name: 'Mia 老师', text: '动作进步很大，继续保持～' }
+  { id: 'm', name: 'Mia 老师', text: '动作进步很大，继续保持。' }
 ];
 
 const toggleMenu = () => {
@@ -46,15 +47,21 @@ const closeReport = () => {
   reportOpen.value = false;
 };
 
-const submitReport = () => {
+const submitReport = async () => {
   if (!selectedReason.value) {
     showToast('请选择举报原因');
     return;
   }
-  reportOpen.value = false;
-  selectedReason.value = '';
-  reportNote.value = '';
-  showToast('举报已提交，平台会尽快处理');
+  submitting.value = true;
+  try {
+    const result = await reportPost(postId, selectedReason.value, reportNote.value.trim() || undefined);
+    reportOpen.value = false;
+    selectedReason.value = '';
+    reportNote.value = '';
+    showSuccessToast(`举报已提交 #${result.ticketId}`);
+  } finally {
+    submitting.value = false;
+  }
 };
 </script>
 
@@ -93,7 +100,7 @@ const submitReport = () => {
       </header>
 
       <p class="text">
-        今天试听了 Urban Flow 的韩舞课，老师会拆动作、节奏适合第一次学韩舞的人，零基础也跟得上，强烈推荐给想入门的姐妹！
+        今天试听了 Urban Flow 的韩舞课，老师会拆动作，节奏适合第一次学韩舞的人，零基础也能跟得上，推荐给想入门的同学。
       </p>
 
       <div class="media" aria-hidden="true" />
@@ -120,7 +127,7 @@ const submitReport = () => {
     </section>
 
     <footer class="comment-bar">
-      <div class="comment-bar__input">写评论…</div>
+      <div class="comment-bar__input">写评论...</div>
       <button class="comment-bar__like" type="button" aria-label="点赞">
         <Heart :size="20" :stroke-width="2" />
       </button>
@@ -138,13 +145,13 @@ const submitReport = () => {
         <div class="reason-list">
           <button
             v-for="reason in reportReasons"
-            :key="reason"
+            :key="reason.code"
             class="reason"
-            :class="{ 'reason--active': selectedReason === reason }"
+            :class="{ 'reason--active': selectedReason === reason.code }"
             type="button"
-            @click="selectedReason = reason"
+            @click="selectedReason = reason.code"
           >
-            <span>{{ reason }}</span>
+            <span>{{ reason.label }}</span>
           </button>
         </div>
 
@@ -157,7 +164,9 @@ const submitReport = () => {
 
         <footer class="report-actions">
           <button class="report-actions__cancel" type="button" @click="closeReport">取消</button>
-          <button class="report-actions__submit" type="button" @click="submitReport">提交举报</button>
+          <button class="report-actions__submit" type="button" :disabled="submitting" @click="submitReport">
+            {{ submitting ? '提交中...' : '提交举报' }}
+          </button>
         </footer>
       </section>
     </div>
@@ -238,7 +247,6 @@ const submitReport = () => {
     padding: 0 10px;
     font-size: 14px;
     font-weight: 800;
-    line-height: $pen-lh;
     cursor: pointer;
 
     &--danger {
@@ -554,6 +562,7 @@ const submitReport = () => {
   line-height: 1.4;
   resize: none;
   outline: none;
+  box-sizing: border-box;
 
   &::placeholder {
     color: $pen-mute;
@@ -573,6 +582,10 @@ const submitReport = () => {
     font-weight: 900;
     line-height: $pen-lh;
     cursor: pointer;
+
+    &:disabled {
+      opacity: 0.55;
+    }
   }
 
   &__cancel {

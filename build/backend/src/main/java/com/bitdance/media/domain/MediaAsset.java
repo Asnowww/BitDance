@@ -29,7 +29,7 @@ public class MediaAsset {
     @Column(name = "storage_type", nullable = false, length = 16)
     private String storageType = "db";
 
-    @Column(name = "bucket_name", nullable = false, length = 100)
+    @Column(name = "bucket_name", nullable = false, length = 128)
     private String bucketName = "db";
 
     @Column(name = "object_key", nullable = false, length = 512)
@@ -41,14 +41,26 @@ public class MediaAsset {
     @Column(name = "file_name", length = 255)
     private String fileName;
 
-    @Column(name = "mime_type", nullable = false, length = 100)
+    @Column(name = "mime_type", nullable = false, length = 128)
     private String mimeType;
 
     @Column(name = "file_size", nullable = false)
-    private Long fileSize;
+    private Long fileSize = 0L;
 
     @Column(name = "content")
     private byte[] content;
+
+    @Column(name = "image_width")
+    private Integer imageWidth;
+
+    @Column(name = "image_height")
+    private Integer imageHeight;
+
+    @Column(name = "duration_seconds")
+    private java.math.BigDecimal durationSeconds;
+
+    @Column(name = "sha256", length = 64)
+    private String sha256;
 
     @Column(name = "uploader_user_id")
     private Long uploaderUserId;
@@ -85,11 +97,21 @@ public class MediaAsset {
     public void setFileSize(Long v) { this.fileSize = v; }
     public byte[] getContent() { return content; }
     public void setContent(byte[] v) { this.content = v; }
+    public Integer getImageWidth() { return imageWidth; }
+    public void setImageWidth(Integer v) { this.imageWidth = v; }
+    public Integer getImageHeight() { return imageHeight; }
+    public void setImageHeight(Integer v) { this.imageHeight = v; }
+    public java.math.BigDecimal getDurationSeconds() { return durationSeconds; }
+    public void setDurationSeconds(java.math.BigDecimal v) { this.durationSeconds = v; }
+    public String getSha256() { return sha256; }
+    public void setSha256(String v) { this.sha256 = v; }
     public Long getUploaderUserId() { return uploaderUserId; }
     public void setUploaderUserId(Long v) { this.uploaderUserId = v; }
     public String getAuditStatus() { return auditStatus; }
     public void setAuditStatus(String v) { this.auditStatus = v; }
     public Boolean getPublicAsset() { return publicAsset; }
     public void setPublicAsset(Boolean v) { this.publicAsset = v; }
+    public Boolean getIsPublic() { return publicAsset; }
+    public void setIsPublic(Boolean v) { this.publicAsset = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }

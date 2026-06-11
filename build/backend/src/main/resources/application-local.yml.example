@@ -12,5 +12,56 @@ spring:
 bitdance:
   jwt:
     secret: REPLACE_WITH_32_BYTE_RANDOM_STRING
+  wechat:
+    app-id: REPLACE_ME
+    app-secret: REPLACE_ME
+    redirect-uri: https://your-public-domain.example/api/auth/wechat/callback
+    # snsapi_userinfo: official-account H5 auth, open inside WeChat mobile client.
+    # snsapi_login: open-platform website QR login, open in desktop browser.
+    scope: snsapi_userinfo
+    frontend-callback-uri: http://localhost:5173/#/login
+    auto-create-user: false
   sms:
     mock: true
+    provider: aliyun
+    storage: memory
+    fixed-code: "123456"
+    cooldown-seconds: 60
+    ttl-minutes: 5
+    aliyun:
+      endpoint: dysmsapi.aliyuncs.com
+      access-key-id: REPLACE_ME
+      access-key-secret: REPLACE_ME
+      sign-name: REPLACE_ME
+      template-code: REPLACE_ME
+      template-param-name: code
+      template-min-param-name: min
+      connect-timeout-ms: 5000
+      read-timeout-ms: 10000
+    aliyun-pnvs:
+      endpoint: dypnsapi.aliyuncs.com
+      access-key-id: REPLACE_ME
+      access-key-secret: REPLACE_ME
+      sign-name: 速通互联验证码
+      template-code: "100001"
+      template-param-name: code
+      template-min-param-name: min
+      code-placeholder: "##code##"
+      country-code: "86"
+      code-length: 6
+      code-type: 1
+      case-auth-policy: 1
+      duplicate-policy: 1
+      auto-retry: 1
+      return-verify-code: false
+      scheme-name: ""
+      connect-timeout-ms: 10000
+      read-timeout-ms: 10000
+      call-timeout-ms: 15000
+      max-attempts: 2
+      retry-backoff-ms: 300
+  maps:
+    tencent:
+      # M1 腾讯地图服务端 Key：填腾讯位置服务 WebService Key，真实值只放本地 gitignored 配置。
+      key: REPLACE_WITH_TENCENT_MAP_WEBSERVICE_KEY
+      referer: BitDance

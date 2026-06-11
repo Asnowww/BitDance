@@ -4,33 +4,91 @@ import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import { cancelTrialBooking, fetchMyTrialBookings, type TrialBooking } from '@/api/trial';
+import { fetchCourseDetail, type CourseDetail } from '@/api/course';
+import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
+import { cancelTrialBooking, fetchMyTrialBookings, fetchStudioSchedule, type ScheduleSlot, type TrialBooking } from '@/api/trial';
 
 const router = useRouter();
 const cats = ['全部', '待确认', '已确认', '已完成'];
-const activeCat = ref('待确认');
+const activeCat = ref('全部');
 
 const bookings = ref<TrialBooking[]>([]);
+const courseMap = ref<Record<number, CourseDetail>>({});
+const studioMap = ref<Record<number, StudioDetail>>({});
+const scheduleMap = ref<Record<number, ScheduleSlot>>({});
 const statusText: Record<string, string> = {
-  pending: '待舞室确认', confirmed: '已确认 · 待上课', arrived: '已完成',
+  pending: '待舞室确认', confirmed: '已确认 · 待上课', attended: '已完成', arrived: '已完成',
   noshow: '未到场', rejected: '已拒绝', canceled: '已取消'
 };
-const records = computed(() => bookings.value.map((item) => ({
-  id: String(item.id),
-  title: `舞室 #${item.studioId}`,
-  meta: `课程 #${item.courseId} · ${new Date(item.createdAt).toLocaleString()}`,
-  status: statusText[item.bookingStatus] ?? item.bookingStatus,
-  tone: item.bookingStatus === 'confirmed' ? 'success' : item.bookingStatus === 'pending' ? 'ink' : 'mute',
-  action: item.bookingStatus === 'pending' ? '取消预约' : '查看详情'
-})));
+const statusFilters: Record<string, string[]> = {
+  全部: [],
+  待确认: ['pending'],
+  已确认: ['confirmed'],
+  已完成: ['attended', 'arrived']
+};
+
+const formatTime = (value?: string) => {
+  if (!value) return '时间待舞室确认';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1970) return '时间待舞室确认';
+  return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+const records = computed(() => {
+  // M1 我的试听：状态 chip 必须真实驱动列表筛选，不能只切换高亮却继续展示全部记录。
+  const allowedStatuses = statusFilters[activeCat.value] ?? [];
+  const visibleBookings = allowedStatuses.length
+    ? bookings.value.filter((item) => allowedStatuses.includes(item.bookingStatus))
+    : bookings.value;
+  return visibleBookings.map((item) => ({
+    id: String(item.id),
+    title: studioMap.value[item.studioId]?.name || `舞室 #${item.studioId}`,
+    // M1 试听预约：旧数据 createdAt 可能为空，优先展示课表 startAt，再用创建时间兜底，避免 1970 日期。
+    meta: `${courseMap.value[item.courseId]?.courseName || `课程 #${item.courseId}`} · ${formatTime(scheduleMap.value[item.courseScheduleId ?? 0]?.startAt || item.createdAt)}`,
+    status: statusText[item.bookingStatus] ?? item.bookingStatus,
+    tone: item.bookingStatus === 'confirmed' ? 'success' : item.bookingStatus === 'pending' ? 'ink' : 'mute',
+    action: item.bookingStatus === 'pending' ? '取消预约' : '查看详情'
+  }));
+});
+const emptyText = computed(() => {
+  if (activeCat.value === '全部') return '暂无试听记录，可先去舞室详情预约试听';
+  return `当前没有${activeCat.value}的试听记录`;
+});
 const onAction = async (id: string, action: string) => {
   if (action !== '取消预约') return showToast(action);
   await cancelTrialBooking(Number(id));
-  bookings.value = await fetchMyTrialBookings();
+  await loadBookings();
 };
-onMounted(async () => {
+
+const loadBookings = async () => {
   bookings.value = await fetchMyTrialBookings();
-});
+  const courseIds = Array.from(new Set(bookings.value.map((item) => item.courseId)));
+  const studioIds = Array.from(new Set(bookings.value.map((item) => item.studioId)));
+  const [courseResults, studioResults, scheduleResults] = await Promise.all([
+    Promise.allSettled(courseIds.map((id) => fetchCourseDetail(id))),
+    Promise.allSettled(studioIds.map((id) => fetchStudioDetail(id))),
+    // M1 试听预约：预约 DTO 只有 scheduleId，这里按舞室批量拉课表补出真实上课时间。
+    Promise.allSettled(studioIds.map((id) => fetchStudioSchedule(id)))
+  ]);
+  courseMap.value = Object.fromEntries(
+    courseResults
+      .filter((item): item is PromiseFulfilledResult<CourseDetail> => item.status === 'fulfilled')
+      .map((item) => [item.value.id, item.value])
+  );
+  studioMap.value = Object.fromEntries(
+    studioResults
+      .filter((item): item is PromiseFulfilledResult<StudioDetail> => item.status === 'fulfilled')
+      .map((item) => [item.value.id, item.value])
+  );
+  scheduleMap.value = Object.fromEntries(
+    scheduleResults
+      .filter((item): item is PromiseFulfilledResult<ScheduleSlot[]> => item.status === 'fulfilled')
+      .flatMap((item) => item.value)
+      .map((item) => [item.id, item])
+  );
+};
+
+onMounted(loadBookings);
 </script>
 
 <template>
@@ -62,6 +120,7 @@ onMounted(async () => {
           </div>
         </div>
       </article>
+      <p v-if="!records.length" class="empty">{{ emptyText }}</p>
     </section>
   </main>
 </template>
@@ -80,6 +139,16 @@ onMounted(async () => {
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { @include pen-chip; }
+
+.empty {
+  margin: 0;
+  padding: 20px 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+  text-align: center;
+}
 
 .rec {
   display: flex;

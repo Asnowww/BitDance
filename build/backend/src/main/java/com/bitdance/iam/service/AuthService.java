@@ -9,10 +9,16 @@ import com.bitdance.iam.jwt.JwtService;
 import com.bitdance.iam.repository.AppUserRepository;
 import com.bitdance.iam.repository.UserRoleBindingRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.HexFormat;
 
 @Service
 public class AuthService {
@@ -22,19 +28,25 @@ public class AuthService {
     private final UserRoleBindingRepository roleRepo;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    private final WechatOAuthClient wechatOAuthClient;
+    private final boolean wechatAutoCreateUser;
 
     public AuthService(
         SmsCodeService smsCodeService,
         AppUserRepository userRepo,
         UserRoleBindingRepository roleRepo,
         JwtService jwtService,
-        PasswordEncoder passwordEncoder
+        PasswordEncoder passwordEncoder,
+        WechatOAuthClient wechatOAuthClient,
+        @Value("${bitdance.wechat.auto-create-user:false}") boolean wechatAutoCreateUser
     ) {
         this.smsCodeService = smsCodeService;
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
+        this.wechatOAuthClient = wechatOAuthClient;
+        this.wechatAutoCreateUser = wechatAutoCreateUser;
     }
 
     public void sendSmsCode(String phone) {
@@ -56,6 +68,20 @@ public class AuthService {
             || !passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new BizException("AUTH_INVALID", "手机号或密码错误");
         }
+        return issueFor(user);
+    }
+
+    @Transactional
+    public LoginResponse loginWithWechat(String code) {
+        if (!code.startsWith("dev_mock_")) {
+            WechatOAuthClient.WechatIdentity identity = wechatOAuthClient.exchangeCode(code);
+            AppUser user = findWechatUser(identity)
+                .orElseGet(() -> createWechatUser(identity));
+            return issueFor(user);
+        }
+        String openId = "wx_" + code;
+        AppUser user = userRepo.findByOpenId(openId)
+            .orElseGet(() -> bindMockWechatAccount(openId));
         return issueFor(user);
     }
 
@@ -85,6 +111,44 @@ public class AuthService {
         bind.setStatus("ACTIVE");
         roleRepo.save(bind);
         return saved;
+    }
+
+    private java.util.Optional<AppUser> findWechatUser(WechatOAuthClient.WechatIdentity identity) {
+        if (StringUtils.hasText(identity.unionId())) {
+            java.util.Optional<AppUser> byUnionId = userRepo.findByUnionId(identity.unionId());
+            if (byUnionId.isPresent()) {
+                return byUnionId;
+            }
+        }
+        return userRepo.findByOpenId(identity.openId());
+    }
+
+    private AppUser createWechatUser(WechatOAuthClient.WechatIdentity identity) {
+        if (!wechatAutoCreateUser) {
+            throw new BizException("WECHAT_BIND_PHONE_REQUIRED", "微信授权成功，请先使用手机号登录后绑定微信");
+        }
+        AppUser user = registerUser("wx" + shortHash(identity.openId()), null);
+        user.setOpenId(identity.openId());
+        user.setUnionId(identity.unionId());
+        return userRepo.save(user);
+    }
+
+    private String shortHash(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(bytes).substring(0, 18);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private AppUser bindMockWechatAccount(String openId) {
+        AppUser user = userRepo.findByPhone("13900000005")
+            .orElseThrow(() -> new BizException("WECHAT_DEV_USER_MISSING", "开发微信模拟账号不存在"));
+        user.setOpenId(openId);
+        user.setUnionId("union_" + openId);
+        return userRepo.save(user);
     }
 
     private LoginResponse issueFor(AppUser user) {

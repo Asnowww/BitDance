@@ -11,6 +11,7 @@ import com.bitdance.community.dto.ReportRequest;
 import com.bitdance.community.dto.TopicDto;
 import com.bitdance.community.service.CommunityService;
 import com.bitdance.iam.jwt.JwtService;
+import com.bitdance.profile.service.ProfileService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,7 @@ class CommunityControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper om;
     @MockBean CommunityService service;
+    @MockBean ProfileService profileService;
     @MockBean JwtService jwtService;
 
     @BeforeEach

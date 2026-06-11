@@ -8,6 +8,7 @@ import com.bitdance.practice.dto.JoinRequestDto;
 import com.bitdance.practice.dto.PracticeListResponse;
 import com.bitdance.practice.dto.PracticePostDto;
 import com.bitdance.practice.service.PracticeService;
+import com.bitdance.profile.service.ProfileService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,9 +25,11 @@ import java.util.List;
 public class PracticeController {
 
     private final PracticeService service;
+    private final ProfileService profileService;
 
-    public PracticeController(PracticeService service) {
+    public PracticeController(PracticeService service, ProfileService profileService) {
         this.service = service;
+        this.profileService = profileService;
     }
 
     @PostMapping("/h5/practices")
@@ -52,6 +55,9 @@ public class PracticeController {
 
     @GetMapping("/public/users/{userId}/practices")
     public ApiResponse<List<PracticePostDto>> publicPostsByUser(@PathVariable Long userId) {
+        if (!profileService.canViewPractice(userId, CurrentUser.getIdOrNull())) {
+            return ApiResponse.ok(List.of());
+        }
         return ApiResponse.ok(service.publicPostsByCreator(userId));
     }
 

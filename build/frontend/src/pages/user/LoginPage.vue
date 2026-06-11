@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { showFailToast, showSuccessToast, showToast } from 'vant';
-import { Smartphone, KeyRound, Lock, LockKeyhole, MessageSquareCode } from 'lucide-vue-next';
+import { KeyRound, Lock, LockKeyhole, MessageSquareCode, Smartphone } from 'lucide-vue-next';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
@@ -20,11 +20,16 @@ const phone = ref('');
 const code = ref('');
 const password = ref('');
 const cooldown = ref(0);
+const sendingCode = ref(false);
+const smsError = ref('');
+const loginError = ref('');
 const submitting = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
+const WECHAT_STATE_KEY = 'bitdance_wechat_state';
+const WECHAT_REDIRECT_KEY = 'bitdance_wechat_redirect';
 
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
-const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0);
+const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0 && !sendingCode.value);
 const canSubmit = computed(
   () =>
     isPhoneValid.value &&
@@ -47,20 +52,34 @@ const startCooldown = () => {
 };
 
 const onSendCode = async () => {
+  smsError.value = '';
   if (!canSendCode.value) {
     if (!isPhoneValid.value) showFailToast('请输入正确的手机号');
     return;
   }
+  sendingCode.value = true;
   try {
     await userStore.sendSmsCode(phone.value);
     showSuccessToast('验证码已发送');
     startCooldown();
-  } catch {
-    /* request interceptor shows toast */
+    sendingCode.value = false;
+  } catch (error) {
+    smsError.value = getErrorMessage(error);
+    sendingCode.value = false;
+    /* request 拦截器已弹错误 toast */
   }
 };
 
+const getErrorMessage = (error: unknown) => {
+  const err = error as {
+    message?: string;
+    response?: { data?: { message?: string } };
+  };
+  return err?.response?.data?.message || err?.message || '验证码发送失败';
+};
+
 const onSubmit = async () => {
+  loginError.value = '';
   if (!canSubmit.value) {
     showFailToast(mode.value === 'code' ? '请输入手机号与验证码' : '请输入手机号与密码');
     return;
@@ -78,14 +97,66 @@ const onSubmit = async () => {
     // 运营角色(商家/教练/平台)登录后直达管理端;普通用户走 redirect 或首页
     const redirect = isOps ? '/coach/dashboard' : (route.query.redirect as string) || '/home';
     router.replace(redirect);
-  } catch {
-    /* request interceptor shows toast */
+  } catch (error) {
+    loginError.value = getErrorMessage(error);
+    /* request 拦截器已弹错误 toast */
   } finally {
     submitting.value = false;
   }
 };
 
-const onWechat = () => showToast('请在微信客户端中授权登录');
+const onWechat = async () => {
+  submitting.value = true;
+  try {
+    const redirect = (route.query.redirect as string) || '/home';
+    const state = createWechatState();
+    sessionStorage.setItem(WECHAT_STATE_KEY, state);
+    sessionStorage.setItem(WECHAT_REDIRECT_KEY, redirect);
+    const url = await userStore.getWechatAuthorizeUrl(state);
+    window.location.href = url;
+  } catch (error) {
+    loginError.value = getErrorMessage(error);
+    showToast('微信授权登录暂不可用，请使用手机号登录');
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const createWechatState = () => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+};
+
+const consumeWechatCallback = async () => {
+  const wechatCode = route.query.wechatCode as string | undefined;
+  if (!wechatCode) return;
+
+  const expectedState = sessionStorage.getItem(WECHAT_STATE_KEY);
+  const actualState = (route.query.wechatState as string | undefined) ?? '';
+  if (expectedState && actualState !== expectedState) {
+    showFailToast('微信授权状态校验失败，请重试');
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    await userStore.loginWithWechat(wechatCode);
+    showSuccessToast('微信授权登录成功');
+    const redirect = sessionStorage.getItem(WECHAT_REDIRECT_KEY) || '/home';
+    sessionStorage.removeItem(WECHAT_STATE_KEY);
+    sessionStorage.removeItem(WECHAT_REDIRECT_KEY);
+    router.replace(redirect);
+  } catch (error) {
+    loginError.value = getErrorMessage(error);
+  } finally {
+    submitting.value = false;
+  }
+};
+
+onMounted(() => {
+  consumeWechatCallback();
+});
 
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer);
@@ -134,9 +205,11 @@ onBeforeUnmount(() => {
           :disabled="!canSendCode"
           @click="onSendCode"
         >
-          {{ cooldown > 0 ? `${cooldown}s` : '获取验证码' }}
+          {{ sendingCode ? '发送中...' : cooldown > 0 ? `${cooldown}s` : '获取验证码' }}
         </button>
       </div>
+
+      <p v-if="smsError" class="sms-error">{{ smsError }}</p>
 
       <div v-if="mode === 'code'" class="field">
         <KeyRound class="field__icon" :size="18" :stroke-width="2" />
@@ -163,6 +236,7 @@ onBeforeUnmount(() => {
       <button class="btn btn--dark" type="button" :disabled="submitting" @click="onSubmit">
         {{ submitting ? '登录中...' : mode === 'code' ? '登录 / 注册' : '登录' }}
       </button>
+      <p v-if="loginError" class="sms-error">{{ loginError }}</p>
       <button class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
     </main>
   </div>
@@ -299,6 +373,14 @@ onBeforeUnmount(() => {
       cursor: not-allowed;
     }
   }
+}
+
+.sms-error {
+  margin: -8px 4px 0;
+  color: #c02626;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .btn {

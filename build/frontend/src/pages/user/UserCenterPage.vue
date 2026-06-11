@@ -1,18 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import {
-  BookOpen,
-  ChevronLeft,
-  Music2,
-  PencilLine,
-  Play,
-  Plus,
-  Settings,
-  User
-} from 'lucide-vue-next';
+import { ChevronLeft, PencilLine, Settings, User } from 'lucide-vue-next';
+import { showFailToast, showSuccessToast } from 'vant';
 import { fetchUserPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
 import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
+import { fetchMySocialAccounts, updateSocialAccount, type SocialAccount } from '@/api/social';
 import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
@@ -20,26 +13,35 @@ const user = useUserStore();
 
 type ContentTab = 'posts' | 'reviews' | 'practices';
 
-const socials = [
-  { platform: '抖音', account: '@urban_lili', state: '公开', icon: Music2, dark: true },
-  { platform: '小红书', account: '小李练舞日记', state: '公开', icon: BookOpen, dark: false },
-  { platform: 'B站', account: '未绑定', state: '仅自己可见', icon: Play, dark: false }
-];
-
 const activeTab = ref<ContentTab>('posts');
 const posts = ref<UserContentPost[]>([]);
 const reviews = ref<UserReviewItem[]>([]);
 const practices = ref<UserPracticePost[]>([]);
+const socialAccounts = ref<SocialAccount[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
 const loading = ref(false);
 
-const profileName = computed(() => user.profile?.nickname || '小李');
-const profileId = computed(() => user.profile?.id || 1);
+const profileName = computed(() => user.detail?.nickname || user.profile?.nickname || '未命名用户');
+const profileId = computed(() => user.profile?.id || user.detail?.userId || 0);
+const primaryPreference = computed(() => {
+  const styles = user.detail?.styles ?? [];
+  return styles.find((item) => item.isPrimary) ?? styles[0];
+});
+const profileMeta = computed(() =>
+  [
+    user.detail?.cityId ? `城市 ${user.detail.cityId}` : null,
+    user.detail?.currentLevel || null,
+    user.detail?.learningGoal || null
+  ]
+    .filter(Boolean)
+    .join(' · ')
+);
+const publicSocials = computed(() => socialAccounts.value.filter((item) => item.isPublic));
 const stats = computed(() => [
   { value: String(totals.value.posts), label: '动态' },
   { value: String(totals.value.reviews), label: '评价' },
   { value: String(totals.value.practices), label: '约练' },
-  { value: '2.1k', label: '获赞' }
+  { value: String(socialAccounts.value.length), label: '社交' }
 ]);
 
 const topicLabel = (topic: string | { name?: string; topicName?: string }) =>
@@ -61,21 +63,48 @@ const practiceMeta = (item: UserPracticePost) => {
 const loadHomeData = async () => {
   loading.value = true;
   try {
-    const [postResp, reviewResp, practiceResp] = await Promise.all([
+    const [profileResult, socialResult] = await Promise.allSettled([
+      user.refreshProfile(),
+      fetchMySocialAccounts()
+    ]);
+    if (socialResult.status === 'fulfilled') {
+      socialAccounts.value = Array.isArray(socialResult.value) ? socialResult.value : [];
+    }
+    if (profileResult.status === 'rejected') {
+      showFailToast('资料刷新失败，已保留本地资料');
+    }
+
+    if (!profileId.value) return;
+    const [postResp, reviewResp, practiceResp] = await Promise.allSettled([
       fetchUserPosts(profileId.value, 1, 20),
       fetchUserReviews(profileId.value, 1, 20),
       fetchUserPractices(profileId.value)
     ]);
-    posts.value = postResp.list ?? [];
-    reviews.value = reviewResp.list ?? [];
-    practices.value = practiceResp ?? [];
-    totals.value = {
-      posts: postResp.total ?? posts.value.length,
-      reviews: reviewResp.total ?? reviews.value.length,
-      practices: practices.value.length
-    };
+
+    if (postResp.status === 'fulfilled') {
+      posts.value = postResp.value.list ?? [];
+      totals.value.posts = postResp.value.total ?? posts.value.length;
+    }
+    if (reviewResp.status === 'fulfilled') {
+      reviews.value = reviewResp.value.list ?? [];
+      totals.value.reviews = reviewResp.value.total ?? reviews.value.length;
+    }
+    if (practiceResp.status === 'fulfilled') {
+      practices.value = practiceResp.value ?? [];
+      totals.value.practices = practices.value.length;
+    }
   } finally {
     loading.value = false;
+  }
+};
+
+const toggleSocialVisibility = async (account: SocialAccount) => {
+  try {
+    const updated = await updateSocialAccount(account.id, !account.isPublic);
+    socialAccounts.value = socialAccounts.value.map((item) => (item.id === updated.id ? updated : item));
+    showSuccessToast(updated.isPublic ? '已公开展示' : '已设为仅自己可见');
+  } catch {
+    showFailToast('社交账号状态更新失败');
   }
 };
 
@@ -101,11 +130,11 @@ onMounted(loadHomeData);
         </div>
         <div class="hero-card__copy">
           <h2>{{ profileName }}</h2>
-          <p>@bitdance_lili · 零基础韩舞爱好者</p>
+          <p>{{ profileMeta || '资料暂未完善' }}</p>
           <div class="chips">
-            <span class="chip chip--active">韩舞</span>
-            <span class="chip">Jazz</span>
-            <span class="chip">北京</span>
+            <span v-if="primaryPreference" class="chip chip--active">主舞种 {{ primaryPreference.danceStyleId }}</span>
+            <span v-if="user.detail?.gender" class="chip">{{ user.detail.gender }}</span>
+            <span v-if="user.detail?.currentLevel" class="chip">{{ user.detail.currentLevel }}</span>
           </div>
         </div>
         <button class="edit-btn" type="button" aria-label="编辑资料" @click="router.push('/me/profile')">
@@ -122,31 +151,33 @@ onMounted(loadHomeData);
 
       <section class="section">
         <h2>社交账号</h2>
-        <article v-for="item in socials" :key="item.platform" class="social-row">
-          <span class="social-row__icon" :class="{ 'social-row__icon--dark': item.dark }">
-            <component :is="item.icon" :size="23" />
-          </span>
+        <p v-if="!socialAccounts.length" class="empty-state">后端暂无社交账号绑定记录。</p>
+        <article v-for="account in socialAccounts" :key="account.id" class="social-row">
           <span class="social-row__copy">
-            <strong>{{ item.platform }}</strong>
-            <em>{{ item.account }}</em>
+            <strong>{{ account.platform }}</strong>
+            <em>{{ account.accountName }}</em>
           </span>
-          <span class="state" :class="{ 'state--active': item.state === '公开' }">{{ item.state }}</span>
+          <button
+            class="state"
+            :class="{ 'state--active': account.isPublic }"
+            type="button"
+            @click="toggleSocialVisibility(account)"
+          >
+            {{ account.isPublic ? '公开' : '仅自己' }}
+          </button>
         </article>
-        <button class="bind-btn" type="button" @click="router.push('/me/profile')">
-          <Plus :size="20" />
-          <span>管理绑定</span>
-        </button>
       </section>
 
       <section class="section">
         <h2>他人视角预览</h2>
         <div class="preview-card">
-          <strong>仅展示标记为公开的社交账号</strong>
-          <div class="preview-card__chips">
-            <span>抖音 @urban_lili</span>
-            <span>小红书 小李练舞日记</span>
+          <strong>公开社交账号：{{ publicSocials.length }} 个</strong>
+          <div v-if="publicSocials.length" class="chips">
+            <span v-for="account in publicSocials" :key="account.id" class="chip chip--active">
+              {{ account.platform }} {{ account.accountName }}
+            </span>
           </div>
-          <p>按平台单独控制可见性</p>
+          <p>公开主页只展示后端返回的公开账号和公开内容。</p>
         </div>
       </section>
 
@@ -163,7 +194,7 @@ onMounted(loadHomeData);
       </nav>
 
       <section class="content-list" aria-live="polite">
-        <p v-if="loading" class="empty-state">加载中</p>
+        <p v-if="loading" class="empty-state">加载中...</p>
         <template v-else-if="activeTab === 'posts'">
           <article v-for="item in posts" :key="item.id" class="content-card">
             <h3>最近动态</h3>
@@ -197,10 +228,6 @@ onMounted(loadHomeData);
         </template>
       </section>
     </section>
-
-    <footer class="save-bar">
-      <button type="button" @click="router.push('/me/profile')">保存主页设置</button>
-    </footer>
   </main>
 </template>
 
@@ -309,8 +336,7 @@ onMounted(loadHomeData);
   place-items: center;
 }
 
-.chips,
-.preview-card__chips {
+.chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -318,7 +344,6 @@ onMounted(loadHomeData);
 }
 
 .chip,
-.preview-card__chips span,
 .state {
   display: inline-flex;
   align-items: center;
@@ -335,8 +360,11 @@ onMounted(loadHomeData);
   white-space: nowrap;
 }
 
+.state {
+  cursor: pointer;
+}
+
 .chip--active,
-.preview-card__chips span,
 .state--active {
   border-color: $pen-ink;
   background: $pen-ink;
@@ -394,22 +422,6 @@ onMounted(loadHomeData);
   border-radius: 12px;
   background: $pen-canvas;
 
-  &__icon {
-    display: grid;
-    flex: none;
-    width: 38px;
-    height: 38px;
-    border-radius: 999px;
-    background: $pen-soft;
-    color: $pen-ink;
-    place-items: center;
-
-    &--dark {
-      background: $pen-ink;
-      color: $pen-on-primary;
-    }
-  }
-
   &__copy {
     min-width: 0;
     display: flex;
@@ -434,26 +446,6 @@ onMounted(loadHomeData);
       white-space: nowrap;
     }
   }
-}
-
-.bind-btn,
-.save-bar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 999px;
-  background: $pen-ink;
-  color: $pen-on-primary;
-  font-size: 15px;
-  font-weight: 900;
-  line-height: $pen-lh;
-  cursor: pointer;
-}
-
-.bind-btn {
-  height: 46px;
 }
 
 .preview-card {
@@ -550,41 +542,5 @@ onMounted(loadHomeData);
   font-weight: 900;
   line-height: $pen-lh;
   text-align: center;
-}
-
-.save-bar {
-  position: fixed;
-  right: 0;
-  bottom: var(--app-tabbar-offset, 0px);
-  left: 0;
-  z-index: 90;
-  width: 100%;
-  max-width: 480px;
-  height: 76px;
-  margin: 0 auto;
-  padding: 12px 18px;
-  border-top: 1px solid $pen-hairline;
-  background: $pen-canvas;
-  box-sizing: border-box;
-
-  button {
-    width: 100%;
-    height: 48px;
-  }
-}
-
-@media (max-width: 360px) {
-  .hero-card {
-    align-items: flex-start;
-  }
-
-  .avatar {
-    width: 58px;
-    height: 58px;
-  }
-
-  .hero-card__copy h2 {
-    font-size: 24px;
-  }
 }
 </style>

@@ -60,5 +60,11 @@ public class ReportTicket {
     public void setReasonDetail(String v) { this.reasonDetail = v; }
     public String getReportStatus() { return reportStatus; }
     public void setReportStatus(String v) { this.reportStatus = v; }
+    public Long getHandledByUserId() { return handledByUserId; }
+    public void setHandledByUserId(Long v) { this.handledByUserId = v; }
+    public OffsetDateTime getHandledAt() { return handledAt; }
+    public void setHandledAt(OffsetDateTime v) { this.handledAt = v; }
+    public String getHandleResult() { return handleResult; }
+    public void setHandleResult(String v) { this.handleResult = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }

@@ -116,7 +116,7 @@ public class ReviewReplyService {
             r.getOverallScore(), r.getContentText(), r.getIsVerified(),
             r.getVerifiedSourceType(), r.getWeightFactor(), r.getReviewStatus(),
             r.getRiskLevel(), r.getHelpfulCount(), r.getIsPinned(),
-            r.getPublishedAt(), List.of()
+            r.getPublishedAt(), List.of(), List.of(), null
         );
     }
 }
