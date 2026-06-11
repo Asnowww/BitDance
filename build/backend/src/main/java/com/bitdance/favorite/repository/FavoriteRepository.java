@@ -14,12 +14,25 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
     boolean existsByUserIdAndTargetTypeAndTargetId(Long userId, String targetType, Long targetId);
 
+    long countByTargetTypeAndTargetId(String targetType, Long targetId);
+
     List<Favorite> findByUserIdAndTargetTypeOrderByIdDesc(Long userId, String targetType);
 
     @Query("select f.targetId from Favorite f " +
         "where f.userId = :userId and f.targetType = :targetType and f.targetId in :ids")
     List<Long> findFavoredIds(
         @Param("userId") Long userId,
+        @Param("targetType") String targetType,
+        @Param("ids") List<Long> ids
+    );
+
+    @Query("""
+        select f.targetId as targetId, count(f.id) as cnt
+        from Favorite f
+        where f.targetType = :targetType and f.targetId in :ids
+        group by f.targetId
+        """)
+    List<java.util.Map<String, Object>> countGroupedByTargetIds(
         @Param("targetType") String targetType,
         @Param("ids") List<Long> ids
     );

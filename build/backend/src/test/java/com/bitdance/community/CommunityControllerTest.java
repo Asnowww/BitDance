@@ -5,12 +5,17 @@ import com.bitdance.community.controller.CommunityController;
 import com.bitdance.community.dto.CommentDto;
 import com.bitdance.community.dto.CreateCommentRequest;
 import com.bitdance.community.dto.CreatePostRequest;
+import com.bitdance.community.dto.CreateTopicRequest;
+import com.bitdance.community.dto.FollowUserDto;
+import com.bitdance.community.dto.MediaAssetDto;
 import com.bitdance.community.dto.PostDto;
 import com.bitdance.community.dto.PostListResponse;
 import com.bitdance.community.dto.ReportRequest;
+import com.bitdance.community.dto.SharePostRequest;
 import com.bitdance.community.dto.TopicDto;
 import com.bitdance.community.service.CommunityService;
 import com.bitdance.iam.jwt.JwtService;
+import com.bitdance.profile.service.ProfileService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +49,7 @@ class CommunityControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper om;
     @MockBean CommunityService service;
+    @MockBean ProfileService profileService;
     @MockBean JwtService jwtService;
 
     @BeforeEach
@@ -56,11 +62,12 @@ class CommunityControllerTest {
 
     private PostDto fixture() {
         return new PostDto(
-            100L, 42L, "note", "今日打卡：Hiphop 状态在线",
+            100L, 42L, "舞者0042", "", "note", "今日打卡：Hiphop 状态在线",
             1L, null, null, 1L, "海淀区舞星 Studio", null, null,
             "public", "published", OffsetDateTime.now(),
             List.of(new TopicDto(1L, "checkin", "零基础打卡", null, false)),
-            5L, 2L, false
+            List.of(new MediaAssetDto(9L, "image", "/api/public/community/media/9", "cover.png", "image/png", 10L, 0, OffsetDateTime.now())),
+            5L, 2L, 1L, 3L, false, false
         );
     }
 
@@ -72,7 +79,7 @@ class CommunityControllerTest {
         var body = new CreatePostRequest(
             "note", "今日打卡", null, null, null, 1L,
             "海淀区舞星 Studio", null, null, "public",
-            List.of("零基础打卡")
+            List.of("零基础打卡"), List.of(9L)
         );
         mvc.perform(post("/h5/community/posts")
                 .header("Authorization", "Bearer fake")
@@ -87,7 +94,7 @@ class CommunityControllerTest {
     @Test
     void create_blankText_returns400() throws Exception {
         var body = new CreatePostRequest("note", "", null, null, null, null,
-            null, null, null, "public", null);
+            null, null, null, "public", null, null);
         mvc.perform(post("/h5/community/posts")
                 .header("Authorization", "Bearer fake")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -99,7 +106,7 @@ class CommunityControllerTest {
     @Test
     void create_invalidVisibility_returns400() throws Exception {
         var body = new CreatePostRequest("note", "x", null, null, null, null,
-            null, null, null, "secret", null);
+            null, null, null, "secret", null, null);
         mvc.perform(post("/h5/community/posts")
                 .header("Authorization", "Bearer fake")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -112,13 +119,26 @@ class CommunityControllerTest {
     void create_tooManyTopics_returns400() throws Exception {
         var body = new CreatePostRequest("note", "x", null, null, null, null,
             null, null, null, "public",
-            List.of("a", "b", "c", "d", "e", "f"));
+            List.of("a", "b", "c", "d", "e", "f"), null);
         mvc.perform(post("/h5/community/posts")
                 .header("Authorization", "Bearer fake")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(om.writeValueAsString(body)))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void uploadMedia_returnsAsset() throws Exception {
+        when(service.uploadMedia(eq(42L), any())).thenReturn(
+            new MediaAssetDto(9L, "image", "/api/public/community/media/9", "cover.png", "image/png", 10L, 0, OffsetDateTime.now())
+        );
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/h5/community/media")
+                .file("file", "fake-image".getBytes())
+                .header("Authorization", "Bearer fake"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.mediaType").value("image"))
+            .andExpect(jsonPath("$.data.url").value("/api/public/community/media/9"));
     }
 
     @Test
@@ -196,6 +216,29 @@ class CommunityControllerTest {
             .andExpect(jsonPath("$.code").value("POST_NOT_FOUND"));
     }
 
+    @Test
+    void share_returnsCountAndUrl() throws Exception {
+        when(service.sharePost(eq(42L), eq(100L), any()))
+            .thenReturn(Map.of("shared", true, "shareCount", 4L, "shareUrl", "/community/post/100"));
+        mvc.perform(post("/h5/community/posts/100/share")
+                .header("Authorization", "Bearer fake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new SharePostRequest("link"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.shared").value(true))
+            .andExpect(jsonPath("$.data.shareCount").value(4));
+    }
+
+    @Test
+    void share_invalidChannel_returns400() throws Exception {
+        mvc.perform(post("/h5/community/posts/100/share")
+                .header("Authorization", "Bearer fake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new SharePostRequest("unknown"))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
     // ============ Comment ============
 
     @Test
@@ -209,6 +252,20 @@ class CommunityControllerTest {
                 .content(om.writeValueAsString(new CreateCommentRequest("好棒", null, null))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.commentText").value("好棒"));
+    }
+
+    @Test
+    void createReply_returnsParentFields() throws Exception {
+        when(service.createComment(eq(42L), eq(100L), any())).thenReturn(new CommentDto(
+            3L, 100L, 42L, 1L, 43L, "回复你", "published", OffsetDateTime.now()
+        ));
+        mvc.perform(post("/h5/community/posts/100/comments")
+                .header("Authorization", "Bearer fake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new CreateCommentRequest("回复你", 1L, 43L))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.parentCommentId").value(1))
+            .andExpect(jsonPath("$.data.replyToUserId").value(43));
     }
 
     @Test
@@ -245,7 +302,7 @@ class CommunityControllerTest {
 
     @Test
     void topics_list() throws Exception {
-        when(service.listTopics()).thenReturn(List.of(
+        when(service.listTopics(eq("hot"), eq(null), eq(20))).thenReturn(List.of(
             new TopicDto(1L, "checkin", "零基础打卡", 5L, true),
             new TopicDto(2L, "street", "街舞日常", 2L, false)
         ));
@@ -256,8 +313,31 @@ class CommunityControllerTest {
     }
 
     @Test
+    void createTopic_returnsTopic() throws Exception {
+        when(service.createTopic(eq(42L), any())).thenReturn(
+            new TopicDto(8L, "u-42-1", "Kpop打卡", 0L, false)
+        );
+        mvc.perform(post("/h5/community/topics")
+                .header("Authorization", "Bearer fake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new CreateTopicRequest("Kpop打卡", "每日练习"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.topicName").value("Kpop打卡"));
+    }
+
+    @Test
+    void topicDetail_returnsTopic() throws Exception {
+        when(service.topicDetail("零基础打卡")).thenReturn(
+            new TopicDto(1L, "checkin", "零基础打卡", 5L, true)
+        );
+        mvc.perform(get("/public/community/topics/{name}", "零基础打卡"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.postCount").value(5));
+    }
+
+    @Test
     void topicPosts_returns() throws Exception {
-        when(service.postsByTopicName(eq("零基础打卡"), eq(1), eq(20), any()))
+        when(service.postsByTopicName(eq("零基础打卡"), eq("hot"), eq(1), eq(20), any()))
             .thenReturn(new PostListResponse(List.of(fixture()), 1, 20, 1L));
         mvc.perform(get("/public/community/topics/{name}/posts", "零基础打卡"))
             .andExpect(status().isOk())
@@ -290,6 +370,38 @@ class CommunityControllerTest {
         mvc.perform(get("/h5/community/follow/me").header("Authorization", "Bearer fake"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.length()").value(3));
+    }
+
+    @Test
+    void followingUsers_list() throws Exception {
+        when(service.listFollowingUsers(42L)).thenReturn(List.of(
+            new FollowUserDto(99L, "小鹿", "", true, 3L, 2L, OffsetDateTime.now())
+        ));
+        mvc.perform(get("/h5/community/follow/following").header("Authorization", "Bearer fake"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].userId").value(99))
+            .andExpect(jsonPath("$.data[0].following").value(true));
+    }
+
+    @Test
+    void followers_list() throws Exception {
+        when(service.listFollowerUsers(42L)).thenReturn(List.of(
+            new FollowUserDto(88L, "Aki", "", false, 1L, 4L, OffsetDateTime.now())
+        ));
+        mvc.perform(get("/h5/community/follow/followers").header("Authorization", "Bearer fake"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].userId").value(88));
+    }
+
+    @Test
+    void followStatus_returnsCounts() throws Exception {
+        when(service.followStatus(42L, 99L)).thenReturn(Map.of(
+            "userId", 99L, "following", true, "followerCount", 3L, "followeeCount", 2L
+        ));
+        mvc.perform(get("/h5/community/follow/99/status").header("Authorization", "Bearer fake"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.following").value(true))
+            .andExpect(jsonPath("$.data.followerCount").value(3));
     }
 
     // ============ Report ============
@@ -326,6 +438,19 @@ class CommunityControllerTest {
                 .content(om.writeValueAsString(new ReportRequest("politics", null))))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void reportComment_ok() throws Exception {
+        when(service.reportComment(eq(42L), eq(1L), any()))
+            .thenReturn(Map.of("reported", true, "ticketId", 9002L));
+        mvc.perform(post("/h5/community/comments/1/report")
+                .header("Authorization", "Bearer fake")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new ReportRequest("spam", "评论引流"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.reported").value(true))
+            .andExpect(jsonPath("$.data.ticketId").value(9002));
     }
 
     // ============ Search & 未登录 ============

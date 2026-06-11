@@ -5,11 +5,15 @@ import {
   Bell,
   CalendarDays,
   Heart,
+  ImageIcon,
   LogOut,
+  MessageSquareText,
   PackageCheck,
   RefreshCw,
   Shield,
   Star,
+  Target,
+  Users,
   UserRound,
   X
 } from 'lucide-vue-next';
@@ -39,10 +43,14 @@ const profileMeta = computed(() => {
 });
 
 const quickActions = [
+  { label: '约练', icon: Users, path: '/me/practices' },
+  { label: '作品', icon: ImageIcon, path: '/me/works' },
+  { label: '目标', icon: Target, path: '/me/goal' },
   { label: '订单', icon: PackageCheck, path: '/me/workshop-orders' },
   { label: '预约', icon: CalendarDays, path: '/me/trials' },
   { label: '评价', icon: Star, path: '/me/reviews' },
   { label: '消息', icon: Bell, path: '/messages' },
+  { label: '动态', icon: MessageSquareText, path: '/me/home?tab=posts' },
   { label: '收藏', icon: Heart, path: '/favorites' },
   { label: '隐私', icon: Shield, path: '/me/privacy' }
 ];

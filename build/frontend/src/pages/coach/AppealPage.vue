@@ -1,45 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { showFailToast, showSuccessToast } from 'vant';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { showSuccessToast } from 'vant';
 import { Star, Plus } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
-import { createReviewAppeal } from '@/api/review';
 
 const router = useRouter();
-const route = useRoute();
 
 const reasons = ['与事实不符', '恶意差评', '同行攻击', '其他'];
 const reason = ref('与事实不符');
 const detail = ref('');
-const submitting = ref(false);
-const reviewId = computed(() => Number(route.query.reviewId) || 0);
-const reviewScore = computed(() => Math.max(1, Math.min(5, Number(route.query.score) || 2)));
-const reviewAuthor = computed(() => String(route.query.author || '匿名学员'));
-const reviewContent = computed(() => String(route.query.content || '环境一般，老师迟到了十分钟。'));
 
-const onSubmit = async () => {
-  if (!reviewId.value) {
-    showFailToast('缺少评价 ID，无法提交申诉');
-    return;
-  }
-  if (detail.value.trim().length < 5) {
-    showFailToast('请补充至少 5 个字说明');
-    return;
-  }
-  submitting.value = true;
-  try {
-    await createReviewAppeal({
-      reviewId: reviewId.value,
-      appealReason: `${reason.value}：${detail.value.trim()}`,
-      // M2 申诉证据：后端当前为 evidenceNote 文本字段，文件证据待对象存储接入后扩展。
-      evidenceNote: detail.value.trim()
-    });
-    showSuccessToast('申诉已提交，等待人工审核');
-    router.back();
-  } finally {
-    submitting.value = false;
-  }
+const onSubmit = () => {
+  showSuccessToast('申诉已提交，等待人工审核');
+  router.back();
 };
 </script>
 
@@ -52,20 +26,20 @@ const onSubmit = async () => {
         <header class="quote__head">
           <span class="quote__avatar" aria-hidden="true" />
           <div class="quote__who">
-            <strong class="quote__name">{{ reviewAuthor }}</strong>
+            <strong class="quote__name">匿名学员</strong>
             <span class="quote__stars">
               <Star
                 v-for="i in 5"
                 :key="i"
                 :size="13"
                 :stroke-width="2"
-                :fill="i <= reviewScore ? '#111111' : 'none'"
-                :color="i <= reviewScore ? '#111111' : '#E5E5E5'"
+                :fill="i <= 2 ? '#111111' : 'none'"
+                :color="i <= 2 ? '#111111' : '#E5E5E5'"
               />
             </span>
           </div>
         </header>
-        <p class="quote__content">{{ reviewContent }}</p>
+        <p class="quote__content">环境一般，老师迟到了十分钟。</p>
       </div>
 
       <h2 class="block-title">申诉理由</h2>
@@ -98,9 +72,7 @@ const onSubmit = async () => {
     </section>
 
     <footer class="save-bar">
-      <button class="save-bar__btn" type="button" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '提交中' : '提交申诉' }}
-      </button>
+      <button class="save-bar__btn" type="button" @click="onSubmit">提交申诉</button>
     </footer>
   </main>
 </template>

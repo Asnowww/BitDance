@@ -236,7 +236,7 @@ const loadStudios = async () => {
     syncQueryFromState();
     const [response, favorites] = await Promise.all([
       fetchNearbyStudios(query.value),
-      canFavorite.value ? fetchFavorites('studio', { silentError: true }).catch(() => []) : Promise.resolve([])
+      canFavorite.value ? fetchFavorites('studio').catch(() => []) : Promise.resolve([])
     ]);
     const favoriteMap = Object.fromEntries((favorites ?? []).map((item) => [item.targetId, true]));
     favoriteState.value = favoriteMap;

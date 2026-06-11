@@ -6,6 +6,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 
@@ -32,9 +34,10 @@ public class Course {
     @Column(name = "difficulty_level", nullable = false, length = 16)
     private String difficultyLevel;
 
-    /** text[] 字段，由 native 查询读出后转换。 */
+    /** PostgreSQL text[] field; mapped as an array so schema validation matches the real DB. */
+    @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "target_audience", columnDefinition = "text[]", insertable = false, updatable = false)
-    private String targetAudience;
+    private String[] targetAudience;
 
     @Column(name = "price_amount", precision = 10, scale = 2, nullable = false)
     private BigDecimal priceAmount;
@@ -66,7 +69,7 @@ public class Course {
     public Long getDanceStyleId() { return danceStyleId; }
     public String getCourseName() { return courseName; }
     public String getDifficultyLevel() { return difficultyLevel; }
-    public String getTargetAudience() { return targetAudience; }
+    public String[] getTargetAudience() { return targetAudience; }
     public BigDecimal getPriceAmount() { return priceAmount; }
     public Integer getDurationMinutes() { return durationMinutes; }
     public String getIntensityLevel() { return intensityLevel; }

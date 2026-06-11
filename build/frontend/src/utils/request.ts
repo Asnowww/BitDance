@@ -42,7 +42,6 @@ const redirectToLoginWhenAuthExpired = () => {
   localStorage.removeItem(PROFILE_KEY);
   setPasswordRequired(false);
   const redirect = window.location.hash.replace(/^#/, '') || '/home';
-  // 登录态失效兜底：旧 JWT 会让路由误以为已登录，这里清理后带 redirect 回到登录页。
   window.location.hash = `#/login?redirect=${encodeURIComponent(redirect)}`;
   return true;
 };
@@ -80,8 +79,7 @@ request.interceptors.response.use(
     if (body.code === 'PASSWORD_REQUIRED') {
       redirectToPasswordSetup();
     }
-    // M1/M2 可选链路：收藏等登录态接口允许页面自行降级时，不弹全局错误遮挡主流程。
-    if (!response.config.silentError) showFailToast(body.message || '请求失败');
+    if (!response.config.silentError) showFailToast(body.message || '\u8bf7\u6c42\u5931\u8d25');
     return Promise.reject(body);
   },
   (error) => {
@@ -90,14 +88,14 @@ request.interceptors.response.use(
     const status = error?.response?.status;
     if (serverCode === 'PASSWORD_REQUIRED') {
       redirectToPasswordSetup();
-      if (!error?.config?.silentError) showFailToast(serverMessage || '请先设置登录密码');
+      if (!error?.config?.silentError) showFailToast(serverMessage || '\u8bf7\u5148\u8bbe\u7f6e\u767b\u5f55\u5bc6\u7801');
       return Promise.reject(error);
     }
     if ((status === 401 || status === 403) && redirectToLoginWhenAuthExpired()) {
-      showFailToast('登录已失效，请重新登录');
+      showFailToast('\u767b\u5f55\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55');
       return Promise.reject(error);
     }
-    if (!error?.config?.silentError) showFailToast(serverMessage || error?.message || '网络异常');
+    if (!error?.config?.silentError) showFailToast(serverMessage || error?.message || '\u7f51\u7edc\u5f02\u5e38');
     return Promise.reject(error);
   }
 );

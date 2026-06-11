@@ -5,42 +5,16 @@ import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import ReviewAggregatePanel from '@/components/review/ReviewAggregatePanel.vue';
-import { fetchCoachDetail, fetchCourseDetail, type CoachDetail, type CourseDetail } from '@/api/course';
+import { fetchCourseDetail, type CourseDetail } from '@/api/course';
 import { toggleFavorite } from '@/api/favorite';
 
 const route = useRoute();
 const router = useRouter();
 const courseId = Number(route.params.id) || 1;
 const detail = ref<CourseDetail | null>(null);
-const coach = ref<CoachDetail | null>(null);
 const favored = computed(() => detail.value?.favored ?? false);
 
-const audienceLabels: Record<string, string> = {
-  adult: '成人',
-  beginner: '零基础',
-  teen: '青少年',
-  kids: '少儿',
-  advanced: '进阶',
-  fitness: '塑形减脂'
-};
-
-const audiences = computed(() =>
-  // M1 课程详情：远端种子数据可能是 {adult,beginner} 这类枚举串，先清洗为用户可读标签。
-  (detail.value?.targetAudience || '零基础,想减脂,喜欢成品舞')
-    .replace(/[{}"]/g, '')
-    .split(/[、,，/]/)
-    .map((item) => audienceLabels[item.trim()] ?? item.trim())
-    .filter(Boolean)
-    .slice(0, 4)
-);
-
-const coachMeta = computed(() =>
-  [
-    coach.value?.teachingStyle,
-    coach.value?.avgRating ? `评分 ${coach.value.avgRating.toFixed(1)}` : '',
-    detail.value?.durationMinutes ? `${detail.value.durationMinutes}min` : ''
-  ].filter(Boolean).join(' · ') || '老师信息待完善'
-);
+const audiences = ['零基础', '想减脂', '喜欢成品舞'];
 
 const onBook = () => router.push(`/studio/${detail.value?.studioId ?? 1}/trial?courseId=${courseId}`);
 const toggleCourseFavorite = async () => {
@@ -51,8 +25,6 @@ const toggleCourseFavorite = async () => {
 
 onMounted(async () => {
   detail.value = await fetchCourseDetail(courseId);
-  // M1 课程详情：课程主档返回 coachId 后，再拉取老师主档，保证“老师详情入口”来自后端关系。
-  coach.value = await fetchCoachDetail(detail.value.coachId).catch(() => null);
 });
 </script>
 
@@ -69,10 +41,10 @@ onMounted(async () => {
       <article class="coach" @click="router.push(`/coach/${detail?.coachId ?? 1}`)">
         <span class="coach__avatar" aria-hidden="true" />
         <div class="coach__copy">
-          <strong class="coach__name">{{ coach?.displayName || `教练 #${detail?.coachId ?? '-'}` }}</strong>
-          <p class="coach__meta">{{ coachMeta }}</p>
+          <strong class="coach__name">小鹿老师</strong>
+          <p class="coach__meta">擅长韩舞 / Jazz · 6年教学</p>
         </div>
-        <span class="tag">{{ coach?.certificationStatus || '认证待核验' }}</span>
+        <span class="tag">认证</span>
       </article>
 
       <section class="block">

@@ -141,7 +141,7 @@ onMounted(loadGrowthData);
         </div>
       </section>
 
-      <section class="goal-card" aria-label="周目标">
+      <section class="goal-card" aria-label="周目标" role="button" tabindex="0" @click="router.push('/me/goal')" @keyup.enter="router.push('/me/goal')">
         <div class="section-head">
           <h2>周目标</h2>
           <span>{{ currentStats.weekSessions }}/5 次</span>
@@ -169,6 +169,18 @@ onMounted(loadGrowthData);
         </button>
         <button class="growth-actions__secondary" type="button" @click="router.push('/me/works/upload')">
           上传作品
+        </button>
+        <button class="growth-actions__secondary" type="button" @click="router.push('/me/works')">
+          阶段作品
+        </button>
+        <button class="growth-actions__secondary" type="button" @click="router.push('/growth/timeline')">
+          成长时间线
+        </button>
+        <button class="growth-actions__secondary" type="button" @click="router.push('/me/goal')">
+          训练目标
+        </button>
+        <button class="growth-actions__secondary" type="button" @click="router.push('/growth/report')">
+          成长报告
         </button>
       </section>
     </main>
@@ -411,6 +423,7 @@ onMounted(loadGrowthData);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  cursor: pointer;
 
   &__bar {
     width: 100%;
@@ -427,6 +440,11 @@ onMounted(loadGrowthData);
       transition: width 180ms ease;
     }
   }
+}
+
+.goal-card:focus-visible {
+  outline: 2px solid var(--nike-ink);
+  outline-offset: 4px;
 }
 
 .section-head {

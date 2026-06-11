@@ -20,6 +20,8 @@ public interface StudioClaimRepository extends JpaRepository<StudioClaim, Long> 
 
     Page<StudioClaim> findByClaimStatusOrderByIdAsc(String claimStatus, Pageable pageable);
 
+    List<StudioClaim> findByStudioIdAndClaimStatus(Long studioId, String claimStatus);
+
     @Query("""
         select c.studioId from StudioClaim c
         where c.applicantUserId = :userId and c.claimStatus = 'approved'

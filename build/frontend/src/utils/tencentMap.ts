@@ -33,7 +33,7 @@ export const loadTencentMap = async () => {
     script.id = 'bitdance-tencent-map-jsapi';
     script.async = true;
     // M1 腾讯地图 JSAPI：Key 只从本地 Vite 环境变量读取，避免把地图密钥写入仓库。
-    script.src = `https://map.qq.com/api/gljs?v=1.exp&key=${encodeURIComponent(import.meta.env.VITE_TENCENT_MAP_KEY ?? '')}`;
+    script.src = `https://map.qq.com/api/gljs?v=1.exp&libraries=service&key=${encodeURIComponent(import.meta.env.VITE_TENCENT_MAP_KEY ?? '')}`;
     script.onload = () => (window.TMap ? resolve(window.TMap) : reject(new Error('TMap missing')));
     script.onerror = () => reject(new Error('Tencent map script failed'));
     document.head.appendChild(script);

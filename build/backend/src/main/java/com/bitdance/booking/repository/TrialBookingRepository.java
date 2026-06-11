@@ -9,6 +9,8 @@ public interface TrialBookingRepository extends JpaRepository<TrialBooking, Long
 
     List<TrialBooking> findByUserIdOrderByIdDesc(Long userId);
 
+    List<TrialBooking> findByUserIdAndBookingStatusOrderByAttendedAtDesc(Long userId, String bookingStatus);
+
     boolean existsByUserIdAndCourseIdAndCourseScheduleIdAndBookingStatusIn(
         Long userId, Long courseId, Long courseScheduleId, List<String> statuses
     );

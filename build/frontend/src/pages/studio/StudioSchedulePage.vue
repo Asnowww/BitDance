@@ -4,8 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
-import { fetchCoachDetail, fetchCourseDetail, type CoachDetail, type CourseDetail } from '@/api/course';
-import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
 import { fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 
 const route = useRoute();
@@ -15,9 +13,6 @@ const studioId = Number(route.params.id) || 1;
 const view = ref<'day' | 'week'>('day');
 
 const slots = ref<ScheduleSlot[]>([]);
-const detail = ref<StudioDetail | null>(null);
-const courseMap = ref(new Map<number, CourseDetail>());
-const coachMap = ref(new Map<number, CoachDetail>());
 const today = new Date();
 const days = Array.from({ length: 7 }, (_, index) => {
   const date = new Date(today);
@@ -32,15 +27,12 @@ const classes = computed(() =>
       const start = new Date(slot.startAt);
       const end = new Date(slot.endAt);
       const full = slot.bookedCount >= slot.capacity;
-      const course = courseMap.value.get(slot.courseId);
-      const coach = coachMap.value.get(slot.coachId);
       return {
-        id: slot.id,
         time: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         dur: `${Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000))}min`,
-        title: course?.courseName || `课程 #${slot.courseId}`,
-        teacher: `${coach?.displayName || `教练 #${slot.coachId}`} · ${slot.classroomName || '教室待定'}`,
-        level: course?.difficultyLevel || slot.status,
+        title: `课程 #${slot.courseId}`,
+        teacher: `教练 #${slot.coachId} · ${slot.classroomName || '教室待定'}`,
+        level: slot.status,
         price: full ? '已满员' : '可预约试听',
         full
       };
@@ -48,30 +40,7 @@ const classes = computed(() =>
 );
 
 onMounted(async () => {
-  const [studioDetail, schedule] = await Promise.all([
-    fetchStudioDetail(studioId),
-    fetchStudioSchedule(studioId)
-  ]);
-  detail.value = studioDetail;
-  slots.value = schedule;
-  // M1 课表页：排期只带 ID，进入页面后补齐课程/教练名称，截图和交互都使用后端关系数据。
-  const courseIds = Array.from(new Set(schedule.map((slot) => slot.courseId)));
-  const coachIds = Array.from(new Set(schedule.map((slot) => slot.coachId)));
-  const [courseResults, coachResults] = await Promise.all([
-    Promise.allSettled(courseIds.map((id) => fetchCourseDetail(id))),
-    Promise.allSettled(coachIds.map((id) => fetchCoachDetail(id)))
-  ]);
-  courseMap.value = new Map(
-    courseResults
-      .filter((item): item is PromiseFulfilledResult<CourseDetail> => item.status === 'fulfilled')
-      .map((item) => [item.value.id, item.value])
-  );
-  coachMap.value = new Map(
-    coachResults
-      .filter((item): item is PromiseFulfilledResult<CoachDetail> => item.status === 'fulfilled')
-      .map((item) => [item.value.id, item.value])
-  );
-  if (schedule[0]) activeDay.value = schedule[0].startAt.slice(0, 10);
+  slots.value = await fetchStudioSchedule(studioId);
 });
 </script>
 
@@ -80,7 +49,7 @@ onMounted(async () => {
     <PenTopBar title="周课表" @share="showToast('课表链接已复制')" />
 
     <section class="pen-scroll">
-      <h2 class="studio">{{ detail?.name || `舞室 #${studioId}` }}</h2>
+      <h2 class="studio">Urban Flow 舞室</h2>
 
       <div class="toggle">
         <button class="toggle__btn" :class="{ 'toggle__btn--on': view === 'day' }" type="button" @click="view = 'day'">日视图</button>
@@ -103,7 +72,7 @@ onMounted(async () => {
 
       <h3 class="date-title">{{ activeDay }}</h3>
 
-      <article v-for="c in classes" :key="c.id" class="lesson">
+      <article v-for="c in classes" :key="c.time" class="lesson">
         <div class="lesson__time">
           <strong>{{ c.time }}</strong>
           <span>{{ c.dur }}</span>
@@ -117,7 +86,6 @@ onMounted(async () => {
           </div>
         </div>
       </article>
-      <p v-if="!classes.length" class="empty-hint">当前日期暂无课程，请切换日视图或查看周视图。</p>
     </section>
 
     <PenActionBar
@@ -223,14 +191,5 @@ onMounted(async () => {
   height: 32px;
   padding: 6px 12px;
   font-size: 12px;
-}
-
-.empty-hint {
-  // M1 日/周课表空态：当选中日期无课时，引导用户切换视图而不是留下空白区域。
-  margin: 0;
-  color: $pen-mute;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: $pen-lh;
 }
 </style>

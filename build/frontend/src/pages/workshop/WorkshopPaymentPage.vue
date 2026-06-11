@@ -1,309 +1,357 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
+import { showFailToast, showSuccessToast } from 'vant';
+import { CheckCircle2, Circle, WalletCards } from 'lucide-vue-next';
+import PenTopBar from '@/components/pen/PenTopBar.vue';
+import {
+  createWorkshopOrder,
+  fetchWorkshopDetail,
+  payWorkshopOrder,
+  type WorkshopDetail,
+  type WorkshopOrder
+} from '@/api/workshop';
 
 const route = useRoute();
 const router = useRouter();
 
-const workshopId = computed(() => Number(route.params.id || 1));
+const workshopId = Number(route.params.id) || 1;
+const selectedSessionId = computed(() => Number(route.query.sessionId) || null);
 const payment = ref<'wechat' | 'alipay' | 'balance'>('wechat');
+const workshop = ref<WorkshopDetail | null>(null);
 const submitting = ref(false);
+const loading = ref(false);
 
 const methods = [
-  { key: 'wechat', title: '微信支付', desc: '推荐使用，支付后自动生成二维码' },
-  { key: 'alipay', title: '支付宝', desc: '使用支付宝完成活动报名' },
-  { key: 'balance', title: '余额抵扣', desc: '使用账户余额抵扣本次报名' }
+  { key: 'wechat', title: '微信支付', desc: '演示流程会先生成订单，再模拟拉起微信支付完成回调' },
+  { key: 'alipay', title: '支付宝', desc: '保留渠道占位，联调完成后可切换为真实支付网关' },
+  { key: 'balance', title: '余额抵扣', desc: '保留渠道占位，当前环境不走真实账户扣款' }
 ] as const;
 
-const onPay = () => {
-  submitting.value = true;
-  window.setTimeout(() => {
-    submitting.value = false;
-    showSuccessToast('报名成功，活动二维码已生成');
-    router.push('/me/workshop-orders');
-  }, 500);
+const session = computed(() =>
+  workshop.value?.sessions.find((item) => item.id === selectedSessionId.value) ?? null
+);
+const amount = computed(() => session.value?.price ?? workshop.value?.priceMin ?? 0);
+
+const load = async () => {
+  loading.value = true;
+  try {
+    const detail = await fetchWorkshopDetail(workshopId);
+    workshop.value = detail;
+    if (!selectedSessionId.value || !session.value) {
+      showFailToast('请先从详情页选择场次');
+      router.replace(`/workshop/${workshopId}`);
+    }
+  } finally {
+    loading.value = false;
+  }
 };
+
+const onPay = async () => {
+  if (!selectedSessionId.value || submitting.value) return;
+  submitting.value = true;
+  try {
+    const order = await createWorkshopOrder({
+      workshopId,
+      sessionId: selectedSessionId.value,
+      idempotencyToken: `workshop-${workshopId}-${selectedSessionId.value}-${Date.now()}`
+    });
+    let paidOrder: WorkshopOrder = order;
+    if (order.status === 'UNPAID') {
+      paidOrder = await payWorkshopOrder(order.id);
+    }
+    showSuccessToast('支付成功，签到码已生成');
+    router.replace(`/workshop-checkin/${paidOrder.id}`);
+  } finally {
+    submitting.value = false;
+  }
+};
+
+onMounted(load);
 </script>
 
 <template>
-  <main class="payment-page">
-    <header class="topbar">
-      <button class="icon-btn" aria-label="返回" @click="router.back()">‹</button>
-      <div>
-        <p class="eyebrow">WORKSHOP</p>
-        <h1>订单确认</h1>
-      </div>
-      <span class="order-id">#{{ workshopId }}</span>
-    </header>
+  <main class="pen-page pen-page--with-bar">
+    <PenTopBar title="订单确认" :show-share="false" />
 
-    <section class="order-card">
-      <div class="order-card__media">
-        <span>LOCKING</span>
-      </div>
-      <div class="order-card__body">
-        <p class="section-label">Workshop 报名</p>
-        <h2>Locking 大师课</h2>
-        <p class="muted">5/30 14:00 · 1 人 · Joy Studio</p>
-        <div class="price">¥199</div>
-      </div>
+    <section class="pen-scroll">
+      <section class="order-card">
+        <div class="order-card__cover">
+          <WalletCards :size="34" :stroke-width="2" />
+        </div>
+        <div class="order-card__body">
+          <p class="eyebrow">WORKSHOP 报名支付</p>
+          <h1>{{ workshop?.title || '加载中…' }}</h1>
+          <p class="muted">
+            {{ session ? `${session.date} ${session.startTime}-${session.endTime}` : '请选择场次' }}
+            · {{ workshop?.studioName || workshop?.area }}
+          </p>
+          <div class="price">¥{{ amount }}</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <h2>支付方式</h2>
+          <span>当前为演示支付环境，已预留真实微信支付网关接入位</span>
+        </div>
+        <button
+          v-for="item in methods"
+          :key="item.key"
+          class="method"
+          :class="{ 'method--active': payment === item.key }"
+          type="button"
+          @click="payment = item.key"
+        >
+          <component :is="payment === item.key ? CheckCircle2 : Circle" :size="18" :stroke-width="2" />
+          <div class="method__copy">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.desc }}</span>
+          </div>
+        </button>
+      </section>
+
+      <section class="panel panel--soft">
+        <div class="panel__head">
+          <h2>支付链路说明</h2>
+        </div>
+        <ul class="rule-list">
+          <li>先创建报名订单，再发起支付渠道请求</li>
+          <li>真实环境可由后端 WechatPayGateway 对接微信支付 v3 下单、回调和退款</li>
+          <li>当前联调环境会模拟支付成功，并继续生成签到二维码与签到码</li>
+        </ul>
+      </section>
     </section>
 
-    <section class="panel">
-      <div class="panel__head">
-        <h2>支付方式</h2>
-        <span>3 OPTIONS</span>
+    <footer class="pay-bar">
+      <div class="pay-bar__copy">
+        <strong>实付 ¥{{ amount }}</strong>
+        <span>{{ session ? `剩余 ${Math.max(0, session.capacity - session.taken)} 位` : '等待选择场次' }}</span>
       </div>
-      <button
-        v-for="item in methods"
-        :key="item.key"
-        class="pay-row"
-        :class="{ active: payment === item.key }"
-        @click="payment = item.key"
-      >
-        <span class="pay-row__mark">{{ payment === item.key ? '✓' : '' }}</span>
-        <span class="pay-row__text">
-          <strong>{{ item.title }}</strong>
-          <em>{{ item.desc }}</em>
-        </span>
-        <span v-if="payment === item.key" class="selected">已选</span>
-      </button>
-    </section>
-
-    <section class="qr-note">
-      <div class="qr-note__icon">QR</div>
-      <div>
-        <strong>报名成功后生成活动二维码</strong>
-        <p>到场时出示二维码即可完成签到核销。</p>
-      </div>
-    </section>
-
-    <footer class="sticky-action">
-      <button class="primary-btn" :disabled="submitting" @click="onPay">
-        {{ submitting ? '支付中' : '确认支付' }}
+      <button class="pay-bar__btn" type="button" :disabled="submitting || loading || !session" @click="onPay">
+        {{ submitting ? '拉起支付中…' : payment === 'wechat' ? '调起微信支付（演示）' : '确认支付并报名' }}
       </button>
     </footer>
   </main>
 </template>
 
 <style lang="scss" scoped>
-.payment-page {
-  min-height: 100vh;
-  padding: 18px 18px 96px;
-  background: #fff;
-  color: #111;
+@import '@/styles/pen-nike.scss';
+
+.pen-page {
+  @include pen-page;
+
+  &--with-bar {
+    padding-bottom: calc(86px + env(safe-area-inset-bottom));
+  }
 }
 
-.topbar {
-  display: grid;
-  grid-template-columns: 44px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  h1 {
-    margin: 0;
-    font-size: 28px;
-    line-height: 1;
-    font-weight: 900;
+.pen-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+}
+
+.order-card,
+.panel {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.order-card {
+  background: $pen-soft;
+
+  &__cover {
+    height: 180px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    display: grid;
+    place-items: center;
+  }
+
+  &__body {
+    padding: 16px;
+    background: $pen-canvas;
   }
 }
 
 .eyebrow,
-.section-label {
-  margin: 0 0 4px;
+.muted,
+.price,
+.panel__head h2,
+.panel__head span {
+  margin: 0;
+}
+
+.eyebrow {
+  color: $pen-mute;
   font-size: 11px;
   font-weight: 800;
-  color: #707072;
-  letter-spacing: 0;
+  line-height: $pen-lh;
 }
 
-.icon-btn {
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 999px;
-  background: #f5f5f5;
-  color: #111;
-  font-size: 30px;
-  line-height: 1;
-}
-
-.order-id {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #111;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.order-card {
-  margin-top: 24px;
-  overflow: hidden;
-  border-radius: 28px;
-  background: #f5f5f5;
-  &__media {
-    height: 220px;
-    display: flex;
-    align-items: flex-end;
-    padding: 22px;
-    background:
-      linear-gradient(135deg, rgba(17, 17, 17, 0.05), rgba(17, 17, 17, 0.62)),
-      radial-gradient(circle at 72% 18%, #cacacb 0 18%, transparent 19%),
-      linear-gradient(135deg, #e5e5e5, #9e9ea0);
-    span {
-      color: #fff;
-      font-size: 44px;
-      line-height: 0.9;
-      font-weight: 900;
-    }
-  }
-  &__body {
-    padding: 18px;
-    background: #fff;
-    border: 1px solid #e5e5e5;
-    border-top: 0;
-    border-radius: 0 0 28px 28px;
-    h2 {
-      margin: 0;
-      font-size: 24px;
-      line-height: 1.15;
-      font-weight: 900;
-    }
-  }
+h1 {
+  margin: 6px 0 0;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.12;
 }
 
 .muted {
-  margin: 8px 0 0;
-  color: #707072;
+  margin-top: 8px;
+  color: $pen-mute;
   font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .price {
-  margin-top: 18px;
-  font-size: 32px;
+  margin-top: 16px;
+  font-size: 30px;
   font-weight: 900;
+  line-height: 1;
 }
 
 .panel {
-  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid $pen-hairline;
+  background: $pen-canvas;
+
+  &--soft {
+    background: $pen-soft;
+  }
+
   &__head {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+
     h2 {
-      margin: 0;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 900;
+      line-height: $pen-lh;
     }
+
     span {
-      color: #707072;
-      font-size: 11px;
-      font-weight: 800;
+      color: $pen-mute;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: $pen-lh;
     }
   }
 }
 
-.pay-row {
+.method {
   width: 100%;
-  min-height: 72px;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 10px;
-  padding: 12px;
-  border: 1px solid #e5e5e5;
-  border-radius: 24px;
-  background: #f5f5f5;
-  color: #111;
+  padding: 14px 0;
+  border: 0;
+  border-top: 1px solid $pen-hairline;
+  background: transparent;
+  color: $pen-ink;
   text-align: left;
-  &.active {
-    background: #111;
-    color: #fff;
-    border-color: #111;
-    .pay-row__text em {
-      color: #cacacb;
-    }
+  cursor: pointer;
+
+  &:first-of-type {
+    border-top: 0;
   }
-  &__mark {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    background: #fff;
-    color: #111;
-    font-weight: 900;
+
+  &--active {
+    color: $pen-ink;
   }
-  &__text {
-    flex: 1;
-    display: grid;
+
+  &__copy {
+    display: flex;
+    flex-direction: column;
     gap: 3px;
-    strong {
-      font-size: 15px;
-    }
-    em {
-      color: #707072;
-      font-size: 12px;
-      font-style: normal;
-    }
+    min-width: 0;
+    flex: 1;
   }
-}
 
-.selected {
-  font-size: 12px;
-  font-weight: 800;
-}
+  strong {
+    font-size: 15px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
 
-.qr-note {
-  display: flex;
-  gap: 12px;
-  margin-top: 22px;
-  padding: 16px;
-  border-radius: 24px;
-  background: #f5f5f5;
-  p {
-    margin: 4px 0 0;
-    color: #707072;
+  span {
+    color: $pen-mute;
     font-size: 12px;
-  }
-  &__icon {
-    width: 46px;
-    height: 46px;
-    border-radius: 16px;
-    display: grid;
-    place-items: center;
-    background: #111;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 900;
+    font-weight: 600;
+    line-height: 1.4;
   }
 }
 
-.sticky-action {
+.rule-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: $pen-ink;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.pay-bar {
   position: fixed;
-  left: 50%;
+  right: 0;
   bottom: var(--app-tabbar-offset, 0px);
+  left: 0;
+  z-index: 10;
   width: 100%;
   max-width: 480px;
-  transform: translateX(-50%);
+  margin: 0 auto;
   padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.94);
-  border-top: 1px solid #e5e5e5;
-}
+  border-top: 1px solid $pen-hairline;
+  background: $pen-canvas;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
 
-.primary-btn {
-  width: 100%;
-  height: 56px;
-  border: 0;
-  border-radius: 999px;
-  background: #111;
-  color: #fff;
-  font-size: 17px;
-  font-weight: 900;
-  &:disabled {
-    opacity: 0.65;
+  &__copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  strong {
+    font-size: 18px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  span {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: $pen-lh;
+  }
+
+  &__btn {
+    height: 46px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-ink;
+    color: $pen-on-primary;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   }
 }
 </style>

@@ -32,8 +32,8 @@ class AuthControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper om;
     @MockBean AuthService authService;
-    @MockBean JwtService jwtService;
     @MockBean WechatOAuthClient wechatOAuthClient;
+    @MockBean JwtService jwtService;
 
     @Test
     void sendSms_invalidPhone_returns400() throws Exception {

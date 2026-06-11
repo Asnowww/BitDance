@@ -9,6 +9,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AppLayout: typeof import('./../components/AppLayout.vue')['default']
     AppTabBar: typeof import('./../components/AppTabBar.vue')['default']
+    CommunityMediaGallery: typeof import('./../components/community/CommunityMediaGallery.vue')['default']
     EmptyState: typeof import('./../components/EmptyState.vue')['default']
     ErrorState: typeof import('./../components/ErrorState.vue')['default']
     NikeIcon: typeof import('./../components/NikeIcon.vue')['default']

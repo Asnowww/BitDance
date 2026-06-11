@@ -16,7 +16,15 @@ public interface WorkshopOrderRepository extends JpaRepository<WorkshopOrder, Lo
         Long userId, Long workshopSessionId, List<String> statuses
     );
 
+    Optional<WorkshopOrder> findFirstByUserIdAndWorkshopIdAndOrderStatusIn(
+        Long userId, Long workshopId, List<String> statuses
+    );
+
     List<WorkshopOrder> findByUserIdOrderByIdDesc(Long userId);
+
+    List<WorkshopOrder> findByUserIdAndOrderStatusInOrderByIdDesc(Long userId, List<String> statuses);
+
+    List<WorkshopOrder> findByOrderStatusIn(List<String> statuses);
 
     /** 用于 unpaid 自动关单定时任务：扫描超过指定时间未支付的订单。 */
     List<WorkshopOrder> findByOrderStatusAndCreatedAtBefore(

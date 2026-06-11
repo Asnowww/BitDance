@@ -52,7 +52,9 @@ class MerchantWorkshopControllerTest {
             10L, 1L, 7L, 1L, 1L, "Yumi Hiphop Workshop",
             null, "限定档期", "学院路", "海淀区舞星",
             new BigDecimal("199.00"), 5, 30, null,
-            publish, audit, List.of(), false
+            publish, audit, "Yumi", "导师介绍", new BigDecimal("4.90"),
+            "海淀区舞星", "学院路", "地铁直达", null, null,
+            0L, BigDecimal.ZERO, List.of(), List.of(), false
         );
     }
 

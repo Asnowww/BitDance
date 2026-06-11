@@ -28,8 +28,14 @@ interface Workshop {
   taken: number;
   coachId: number;
   coachName: string;
+  coachIntro: string;
+  coachRating: number;
   studioId: number;
   studioName: string;
+  studioAddress: string;
+  studioTransportInfo: string;
+  latitude: number;
+  longitude: number;
   intro: string;
   pastReviews: Array<{ id: number; author: string; text: string; rating: number }>;
   sessions: Session[];
@@ -54,6 +60,15 @@ const STYLES = ['Hiphop', 'Jazz', 'Breaking', 'Locking', 'Popping', 'Kpop', 'Waa
 const CITIES = ['北京', '上海', '广州', '深圳', '杭州'];
 const AREAS = ['海淀区', '朝阳区', '浦东新区', '天河区', '南山区'];
 const COACHES = ['Yumi', 'Leo', 'Aki', 'Mira', 'Bobo', 'Sara', 'Ken'];
+const STYLE_ID: Record<string, number> = {
+  Hiphop: 1,
+  Jazz: 2,
+  Breaking: 3,
+  Locking: 4,
+  Popping: 5,
+  Kpop: 6,
+  Waacking: 7
+};
 
 const seed = (): Workshop[] => {
   const out: Workshop[] = [];
@@ -92,8 +107,14 @@ const seed = (): Workshop[] => {
       taken: sessions.reduce((s, x) => s + x.taken, 0),
       coachId: 1000 + (i % 30),
       coachName: COACHES[i % COACHES.length],
+      coachIntro: `${COACHES[i % COACHES.length]} 擅长以律动拆解和编舞复盘帮助舞者建立稳定表达。`,
+      coachRating: 4.4 + ((i % 5) * 0.1),
       studioId: (i % 6) + 1,
       studioName: `舞星 Studio ${(i % 6) + 1}`,
+      studioAddress: `${CITIES[i % CITIES.length]}${AREAS[i % AREAS.length]}灵动街区 ${(i % 9) + 1} 号`,
+      studioTransportInfo: '地铁步行 5 分钟可达，场馆支持更衣与寄存。',
+      latitude: 39.90 + i * 0.01,
+      longitude: 116.40 + i * 0.01,
       intro: '一场围绕基础律动与编舞 routine 的深度课程，限定档期，适合有 1-3 个月经验的舞者。',
       pastReviews: [
         { id: 1, author: '小喵', text: '老师超棒，节奏抓得稳！', rating: 5 },
@@ -158,13 +179,27 @@ const saveOrders = (items: Order[]) => localStorage.setItem(ORDER_KEY, JSON.stri
 mock('get', /\/workshops$/, ({ params }) => {
   const p = (params ?? {}) as Record<string, unknown>;
   let items = loadWorkshops();
-  if (p.city) items = items.filter((it) => it.city === p.city);
-  if (p.style) items = items.filter((it) => it.styles.includes(p.style as string));
+  if (p.cityId) items = items.filter((it) => CITIES[Number(p.cityId) - 1] === it.city);
+  if (p.danceStyleId) {
+    const styleName = Object.entries(STYLE_ID).find(([, id]) => id === Number(p.danceStyleId))?.[0];
+    items = styleName ? items.filter((it) => it.styles.includes(styleName)) : [];
+  }
   const page = Number(p.page ?? 1);
   const pageSize = Number(p.pageSize ?? 20);
   const start = (page - 1) * pageSize;
   return {
-    list: items.slice(start, start + pageSize),
+    list: items.slice(start, start + pageSize).map((item) => {
+      const nextSession = item.sessions[0];
+      return {
+        ...item,
+        workshopName: item.title,
+        locationName: item.area,
+        nextSessionStartAt: nextSession ? `${nextSession.date}T${nextSession.startTime}:00+08:00` : null,
+        nextSessionEndAt: nextSession ? `${nextSession.date}T${nextSession.endTime}:00+08:00` : null,
+        capacity: nextSession?.capacity ?? 0,
+        soldCount: nextSession?.taken ?? 0
+      };
+    }),
     page,
     pageSize,
     total: items.length
@@ -173,7 +208,17 @@ mock('get', /\/workshops$/, ({ params }) => {
 
 mock('get', /\/workshops\/\d+$/, ({ url }) => {
   const id = Number(url.split('/').pop());
-  return loadWorkshops().find((it) => it.id === id) ?? null;
+  const workshop = loadWorkshops().find((it) => it.id === id);
+  if (!workshop) return null;
+  return {
+    ...workshop,
+    workshopName: workshop.title,
+    locationName: workshop.studioName,
+    address: workshop.studioAddress,
+    reviewCount: workshop.pastReviews.length,
+    reviewAverage:
+      workshop.pastReviews.reduce((sum, review) => sum + review.rating, 0) / Math.max(1, workshop.pastReviews.length)
+  };
 });
 
 mock('post', /\/(?:h5\/)?workshop-orders$/, ({ data }) => {
@@ -260,6 +305,11 @@ mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/refund$/, ({ url }) => {
 
 mock('get', /\/(?:h5\/)?workshop-orders\/mine$/, () => loadOrders());
 
+mock('get', /\/(?:h5\/)?workshop-orders\/\d+$/, ({ url }) => {
+  const id = Number(url.split('/').pop());
+  return loadOrders().find((it) => it.id === id) ?? null;
+});
+
 mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/checkin$/, ({ url, data }) => {
   const id = Number(url.split('/').slice(-2)[0]);
   const body = (data ?? {}) as Record<string, unknown>;
@@ -271,4 +321,52 @@ mock('post', /\/(?:h5\/)?workshop-orders\/\d+\/checkin$/, ({ url, data }) => {
   orders[idx].status = 'CHECKED_IN';
   saveOrders(orders);
   return orders[idx];
+});
+
+mock('get', /\/(?:h5\/)?workshop-calendar$/, () => {
+  const workshops = loadWorkshops();
+  const now = Date.now();
+  return loadOrders()
+    .filter((order) => ['PAID', 'CHECKED_IN', 'COMPLETED'].includes(order.status))
+    .map((order) => {
+      const workshop = workshops.find((item) => item.id === order.workshopId);
+      const session = workshop?.sessions.find((item) => item.id === order.sessionId);
+      const startAt = session ? `${session.date}T${session.startTime}:00+08:00` : new Date(now).toISOString();
+      const endAt = session ? `${session.date}T${session.endTime}:00+08:00` : new Date(now + 7200000).toISOString();
+      const startMs = Date.parse(startAt);
+      let reminderStage = 'upcoming';
+      let reminderTitle = '已加入日历';
+      let reminderBody = '后续会在开场前继续提醒你。';
+      if (now >= startMs - 24 * 60 * 60 * 1000 && now < startMs - 60 * 60 * 1000) {
+        reminderStage = 'tomorrow';
+        reminderTitle = '明日开跳';
+        reminderBody = '记得提前安排出发时间和穿着装备。';
+      } else if (now >= startMs - 60 * 60 * 1000 && now < Date.parse(endAt)) {
+        reminderStage = 'starting_soon';
+        reminderTitle = '即将开场';
+        reminderBody = '已进入签到时间，打开签到页完成扫码。';
+      } else if (now >= Date.parse(endAt)) {
+        reminderStage = 'ended';
+        reminderTitle = '活动已结束';
+        reminderBody = '欢迎回到订单页补充评价与复盘。';
+      }
+      return {
+        orderId: order.id,
+        workshopId: order.workshopId,
+        sessionId: order.sessionId,
+        workshopName: order.workshopTitle,
+        coachName: workshop?.coachName ?? '特邀导师',
+        locationName: workshop?.studioName ?? '活动场地',
+        address: workshop?.studioAddress ?? workshop?.area ?? '',
+        orderStatus: order.status,
+        amountPaid: order.amount,
+        checkinCode: order.checkinCode || null,
+        startAt,
+        endAt,
+        reminderStage,
+        reminderTitle,
+        reminderBody,
+        allowCheckin: now >= startMs - 60 * 60 * 1000 && now < Date.parse(endAt)
+      };
+    });
 });

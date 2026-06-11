@@ -27,7 +27,7 @@ public class WorkshopCheckin {
     private Long checkedInByUserId;
 
     @Column(name = "checkin_status", nullable = false, length = 16)
-    private String checkinStatus = "checked_in";
+    private String checkinStatus = "pending";
 
     @Column(name = "checkin_code", length = 64)
     private String checkinCode;

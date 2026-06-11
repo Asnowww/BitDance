@@ -52,7 +52,7 @@ class StudioControllerTest {
         )).thenReturn(new StudioListResponse(List.of(
             new StudioCard(101L, "舞星 Studio", "海淀区学院路 1 号", 1L, null, null,
                 new BigDecimal("0.8"), new BigDecimal("39.901"), new BigDecimal("116.401"), false)
-        ), 1, 20, 1));
+        ), 1, 20));
 
         mvc.perform(get("/public/studios/nearby")
                 .param("cityId", "1")
@@ -64,8 +64,7 @@ class StudioControllerTest {
             .andExpect(jsonPath("$.data.list[0].id").value(101))
             .andExpect(jsonPath("$.data.list[0].name").value("舞星 Studio"))
             .andExpect(jsonPath("$.data.list[0].distanceKm").value(0.8))
-            .andExpect(jsonPath("$.data.list[0].favored").value(false))
-            .andExpect(jsonPath("$.data.total").value(1));
+            .andExpect(jsonPath("$.data.list[0].favored").value(false));
     }
 
     @Test
@@ -76,7 +75,7 @@ class StudioControllerTest {
         )).thenReturn(new StudioListResponse(List.of(
             new StudioCard(202L, "灵动 Studio", "朝阳区", 1L, null, null,
                 null, null, null, true)
-        ), 1, 20, 1));
+        ), 1, 20));
 
         mvc.perform(get("/public/studios/nearby").header("Authorization", "Bearer fake"))
             .andExpect(status().isOk())
@@ -88,7 +87,7 @@ class StudioControllerTest {
         when(studioService.searchNearby(
             any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
             eq(1), eq(20), eq(null)
-        )).thenReturn(new StudioListResponse(List.of(), 1, 20, 0));
+        )).thenReturn(new StudioListResponse(List.of(), 1, 20));
 
         mvc.perform(get("/public/studios/nearby")
                 .param("danceStyleId", "2")

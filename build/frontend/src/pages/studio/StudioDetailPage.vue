@@ -21,7 +21,6 @@ import { fetchCoachDetail, type CoachDetail } from '@/api/course';
 import { fetchStudioDetail, type StudioDetail } from '@/api/studio';
 import { fetchStudioSchedule, type ScheduleSlot } from '@/api/trial';
 import { toggleFavorite } from '@/api/favorite';
-import { buildTencentMarkerUrl, buildTencentSearchUrl } from '@/utils/tencentMap';
 
 type DetailTab = '概览' | '课程' | '老师' | '评价' | '课表';
 
@@ -126,14 +125,7 @@ const toggleStudioFavorite = async () => {
 };
 
 const openNavigation = () => {
-  const longitude = detail.value?.longitude;
-  const latitude = detail.value?.latitude;
-  // M1 腾讯地图联动：有后端标注坐标时打开 marker，缺坐标时保留地址搜索兜底。
-  const url =
-    longitude !== undefined && latitude !== undefined
-      ? buildTencentMarkerUrl(latitude, longitude, detail.value?.name ?? '舞室', detail.value?.address)
-      : buildTencentSearchUrl(detail.value?.address ?? detail.value?.name ?? '舞室');
-  window.open(url);
+  window.open(`https://uri.amap.com/search?keyword=${encodeURIComponent(detail.value?.address ?? '')}`);
 };
 
 const callStudio = () => {
@@ -144,17 +136,13 @@ const callStudio = () => {
 const onBook = () => router.push(`/studio/${studioId.value}/trial`);
 
 onMounted(async () => {
-  // M1 详情页先渲染舞室主档，避免课表为空或接口短暂失败时把名称、地址等基础信息一起降级成静态兜底。
-  detail.value = await fetchStudioDetail(studioId.value);
-  try {
-    const scheduleResp = await fetchStudioSchedule(studioId.value);
-    schedule.value = scheduleResp;
-    await loadCoaches(scheduleResp);
-  } catch {
-    schedule.value = [];
-    coaches.value = [];
-    showToast('课表暂未更新');
-  }
+  const [detailResp, scheduleResp] = await Promise.all([
+    fetchStudioDetail(studioId.value),
+    fetchStudioSchedule(studioId.value)
+  ]);
+  detail.value = detailResp;
+  schedule.value = scheduleResp;
+  await loadCoaches(scheduleResp);
 });
 </script>
 
@@ -300,9 +288,9 @@ onMounted(async () => {
     </section>
 
     <PenActionBar
-      soft-label=""
-      hide-soft
+      :soft-label="favored ? '已收藏' : '收藏'"
       dark-label="预约试听"
+      @soft="toggleStudioFavorite"
       @dark="onBook"
     />
   </main>
