@@ -123,6 +123,8 @@ bitdance:
       - http://192.168.*.*:5174
       - http://10.*.*.*:5173
       - http://10.*.*.*:5174
+  media:
+    upload-dir: ${BITDANCE_MEDIA_UPLOAD_DIR:uploads}
 
 springdoc:
   swagger-ui:

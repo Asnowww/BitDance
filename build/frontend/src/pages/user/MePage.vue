@@ -5,12 +5,15 @@ import {
   Bell,
   CalendarDays,
   Heart,
+  ImageIcon,
   LogOut,
   MessageSquareText,
   PackageCheck,
   RefreshCw,
   Shield,
   Star,
+  Target,
+  Users,
   UserRound
 } from 'lucide-vue-next';
 import { showConfirmDialog, showSuccessToast, showToast } from 'vant';
@@ -27,6 +30,9 @@ const profileMeta = computed(() => {
 });
 
 const quickActions = [
+  { label: '约练', icon: Users, path: '/me/practices' },
+  { label: '作品', icon: ImageIcon, path: '/me/works' },
+  { label: '目标', icon: Target, path: '/me/goal' },
   { label: '订单', icon: PackageCheck, path: '/me/workshop-orders' },
   { label: '预约', icon: CalendarDays, path: '/me/trials' },
   { label: '评价', icon: Star, path: '/me/reviews' },

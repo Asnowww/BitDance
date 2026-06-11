@@ -79,8 +79,8 @@ class FavoriteControllerTest {
     @Test
     void list_byType_returnsItems() throws Exception {
         when(favoriteService.list(11L, "studio")).thenReturn(List.of(
-            new FavoriteDto(1L, "studio", 101L, OffsetDateTime.now()),
-            new FavoriteDto(2L, "studio", 102L, OffsetDateTime.now())
+            new FavoriteDto(1L, "studio", 101L, OffsetDateTime.now(), null),
+            new FavoriteDto(2L, "studio", 102L, OffsetDateTime.now(), null)
         ));
         mvc.perform(get("/h5/favorites")
                 .header("Authorization", "Bearer fake")

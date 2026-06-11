@@ -7,6 +7,7 @@ import com.bitdance.iam.dto.SendSmsRequest;
 import com.bitdance.iam.dto.UserSummary;
 import com.bitdance.iam.jwt.JwtService;
 import com.bitdance.iam.service.AuthService;
+import com.bitdance.iam.service.WechatOAuthClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ class AuthControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper om;
     @MockBean AuthService authService;
+    @MockBean WechatOAuthClient wechatOAuthClient;
     @MockBean JwtService jwtService;
 
     @Test

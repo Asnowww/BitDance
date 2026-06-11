@@ -24,6 +24,7 @@ const dims = [
 ];
 
 const targetUserId = () => Number(route.query.toUserId ?? route.query.targetUserId ?? 1);
+const targetName = () => String(route.query.toName ?? `用户 #${targetUserId()}`);
 
 const onSubmit = async () => {
   if (submitting.value) return;
@@ -57,7 +58,7 @@ const onSubmit = async () => {
       <div class="target">
         <span class="target__avatar" aria-hidden="true" />
         <div class="target__copy">
-          <strong class="target__name">阿 May</strong>
+          <strong class="target__name">{{ targetName() }}</strong>
           <p class="target__meta">本次约练：周六 Hiphop 中级</p>
         </div>
       </div>

@@ -8,5 +8,6 @@ public record CreateWorkRequest(
     @NotBlank @Size(max = 200) String workTitle,
     @Size(max = 2000) String workDescription,
     Long coverAssetId,
-    Boolean isPublic
+    Boolean isPublic,
+    java.util.List<Long> mediaAssetIds
 ) {}
