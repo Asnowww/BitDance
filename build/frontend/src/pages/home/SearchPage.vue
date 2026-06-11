@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
-import { ChevronRight, ListFilter, Music, Search, Star, UserRound } from 'lucide-vue-next';
+import { Check, ChevronDown, ChevronRight, ListFilter, Music, Search, Star, UserRound, X } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
 import StudioFilterDrawer, { type StudioFilterValue } from '@/components/studio/StudioFilterDrawer.vue';
@@ -59,6 +59,7 @@ const buildPresetFilters = (preset?: SearchPreset): StudioFilterValue => {
 
 const drawerVisible = ref(false);
 const searchEditorVisible = ref(false);
+const searchModeSheetVisible = ref(false);
 const searchMode = ref<SearchMode>(parseRouteSearchMode());
 const searchValue = ref<StudioSearchEditorValue>(parseRouteSearch());
 const locatedCoords = ref<{ latitude: number; longitude: number } | null>(null);
@@ -81,7 +82,15 @@ let tencentMapApi: Record<string, any> | null = null;
 let map: any = null;
 let markerLayer: any = null;
 
+const searchModeOptions: Array<{ value: SearchMode; label: string; meta: string }> = [
+  { value: 'studio', label: '舞室等', meta: '舞室、课程、老师与评价' },
+  { value: 'user', label: '用户', meta: '昵称、公开主页与舞蹈资料' }
+];
+
 const isUserMode = computed(() => searchMode.value === 'user');
+const activeSearchModeLabel = computed(
+  () => searchModeOptions.find((option) => option.value === searchMode.value)?.label ?? '舞室等'
+);
 const selectedMapStudio = computed(() => studios.value.find((studio) => studio.id === selectedMapStudioId.value) ?? null);
 const compareSelectedStudioIds = computed(() =>
   Object.entries(compareSelection.value).filter(([, on]) => on).map(([id]) => Number(id))
@@ -357,6 +366,10 @@ const openSearchEditor = () => {
   searchEditorVisible.value = true;
 };
 
+const openSearchModeSheet = () => {
+  searchModeSheetVisible.value = true;
+};
+
 const applySearch = (value: StudioSearchEditorValue) => {
   searchValue.value = value;
   searchEditorVisible.value = false;
@@ -368,8 +381,10 @@ const applySearch = (value: StudioSearchEditorValue) => {
   void loadStudios().then(renderMap);
 };
 
-const applySearchMode = (event: Event) => {
-  searchMode.value = (event.target as HTMLSelectElement).value as SearchMode;
+const applySearchMode = (mode: SearchMode) => {
+  searchModeSheetVisible.value = false;
+  if (searchMode.value === mode) return;
+  searchMode.value = mode;
   compareMode.value = false;
   compareSelection.value = {};
   selectedMapStudioId.value = undefined;
@@ -490,16 +505,15 @@ onUnmounted(() => {
     <section class="pen-scroll">
       <section class="search-summary" aria-label="搜索结果摘要">
         <Search class="search-summary__icon" :size="18" :stroke-width="2" />
-        <select
+        <button
+          type="button"
           class="search-summary__mode"
-          :value="searchMode"
           aria-label="选择搜索类型"
-          @click.stop
-          @change="applySearchMode"
+          @click.stop="openSearchModeSheet"
         >
-          <option value="studio">舞室等</option>
-          <option value="user">用户</option>
-        </select>
+          <span>{{ activeSearchModeLabel }}</span>
+          <ChevronDown :size="15" :stroke-width="2.4" />
+        </button>
         <button
           type="button"
           class="search-summary__button"
@@ -618,6 +632,54 @@ onUnmounted(() => {
       @apply="applyFilters"
     />
 
+    <Teleport to="body">
+      <Transition name="mode-sheet-fade">
+        <button
+          v-if="searchModeSheetVisible"
+          class="mode-sheet-mask"
+          type="button"
+          aria-label="关闭搜索类型选择"
+          @click="searchModeSheetVisible = false"
+        />
+      </Transition>
+      <Transition name="mode-sheet-slide">
+        <aside v-if="searchModeSheetVisible" class="mode-sheet" role="dialog" aria-modal="true" aria-label="选择搜索类型">
+          <div class="mode-sheet__handle" />
+          <header class="mode-sheet__head">
+            <div>
+              <span>Search Scope</span>
+              <h2>选择搜索类型</h2>
+            </div>
+            <button type="button" class="mode-sheet__close" aria-label="关闭" @click="searchModeSheetVisible = false">
+              <X :size="18" :stroke-width="2.5" />
+            </button>
+          </header>
+          <div class="mode-sheet__options">
+            <button
+              v-for="option in searchModeOptions"
+              :key="option.value"
+              type="button"
+              class="mode-sheet__option"
+              :class="{ 'mode-sheet__option--active': searchMode === option.value }"
+              @click="applySearchMode(option.value)"
+            >
+              <span class="mode-sheet__icon" aria-hidden="true">
+                <Music v-if="option.value === 'studio'" :size="20" :stroke-width="2.3" />
+                <UserRound v-else :size="20" :stroke-width="2.3" />
+              </span>
+              <span class="mode-sheet__copy">
+                <strong>{{ option.label }}</strong>
+                <em>{{ option.meta }}</em>
+              </span>
+              <span class="mode-sheet__check" aria-hidden="true">
+                <Check v-if="searchMode === option.value" :size="17" :stroke-width="2.8" />
+              </span>
+            </button>
+          </div>
+        </aside>
+      </Transition>
+    </Teleport>
+
     <StudioSearchEditor
       :visible="searchEditorVisible"
       :value="searchValue"
@@ -675,7 +737,11 @@ onUnmounted(() => {
 
   &__mode {
     flex: none;
-    width: 86px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 88px;
     height: 40px;
     padding: 0 10px;
     border: 1px solid $pen-hairline;
@@ -685,6 +751,7 @@ onUnmounted(() => {
     font-size: 13px;
     font-weight: 900;
     line-height: $pen-lh;
+    cursor: pointer;
   }
 
   &__button {
@@ -1052,5 +1119,179 @@ onUnmounted(() => {
   font-weight: 900;
   line-height: $pen-lh;
   text-align: center;
+}
+
+.mode-sheet-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  border: 0;
+  background: rgb(17 17 17 / 42%);
+  backdrop-filter: blur(5px);
+  cursor: pointer;
+}
+
+.mode-sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 130;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: $pen-canvas;
+  box-shadow: 0 -4px 18px rgb(0 0 0 / 12%);
+  box-sizing: border-box;
+
+  &__handle {
+    width: 46px;
+    height: 5px;
+    margin: 0 auto 14px;
+    border-radius: 999px;
+    background: $pen-hairline;
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    div {
+      min-width: 0;
+    }
+
+    span {
+      color: $pen-mute;
+      font-size: 12px;
+      line-height: $pen-lh;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 6px 0 0;
+      color: $pen-ink;
+      font-size: 24px;
+      line-height: $pen-lh;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+  }
+
+  &__close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+    cursor: pointer;
+  }
+
+  &__options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 18px;
+  }
+
+  &__option {
+    min-height: 74px;
+    padding: 12px;
+    border: 1px solid $pen-hairline;
+    border-radius: 18px;
+    background: $pen-canvas;
+    color: $pen-ink;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    cursor: pointer;
+
+    &--active {
+      border-color: $pen-ink;
+      background: $pen-ink;
+      color: $pen-on-primary;
+
+      .mode-sheet__icon,
+      .mode-sheet__check {
+        background: $pen-on-primary;
+        color: $pen-ink;
+      }
+
+      .mode-sheet__copy em {
+        color: $pen-subtle-text;
+      }
+    }
+  }
+
+  &__icon,
+  &__check {
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: $pen-soft;
+    color: $pen-ink;
+  }
+
+  &__icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  &__check {
+    width: 30px;
+    height: 30px;
+  }
+
+  &__copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    strong {
+      font-size: 16px;
+      line-height: $pen-lh;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    em {
+      color: $pen-mute;
+      font-size: 12px;
+      line-height: $pen-lh;
+      font-style: normal;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+  }
+}
+
+.mode-sheet-fade-enter-active,
+.mode-sheet-fade-leave-active,
+.mode-sheet-slide-enter-active,
+.mode-sheet-slide-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mode-sheet-fade-enter-from,
+.mode-sheet-fade-leave-to {
+  opacity: 0;
+}
+
+.mode-sheet-slide-enter-from,
+.mode-sheet-slide-leave-to {
+  opacity: 0;
+  transform: translateY(24px);
 }
 </style>

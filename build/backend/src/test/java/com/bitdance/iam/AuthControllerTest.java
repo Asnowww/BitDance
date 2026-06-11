@@ -7,6 +7,7 @@ import com.bitdance.iam.dto.SendSmsRequest;
 import com.bitdance.iam.dto.UserSummary;
 import com.bitdance.iam.jwt.JwtService;
 import com.bitdance.iam.service.AuthService;
+import com.bitdance.iam.service.WechatOAuthClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,7 @@ class AuthControllerTest {
     @Autowired ObjectMapper om;
     @MockBean AuthService authService;
     @MockBean JwtService jwtService;
+    @MockBean WechatOAuthClient wechatOAuthClient;
 
     @Test
     void sendSms_invalidPhone_returns400() throws Exception {
@@ -66,13 +68,15 @@ class AuthControllerTest {
         when(authService.loginWithSms(eq("13800000000"), eq("123456")))
             .thenReturn(new LoginResponse(
                 "mock-token",
-                new UserSummary(1L, "13800000000", "舞者0000", null, List.of("USER"))
+                new UserSummary(1L, "13800000000", "舞者0000", null, List.of("USER")),
+                false
             ));
         mvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(om.writeValueAsString(new LoginRequest("13800000000", "123456"))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.token").value("mock-token"))
-            .andExpect(jsonPath("$.data.user.id").value(1));
+            .andExpect(jsonPath("$.data.user.id").value(1))
+            .andExpect(jsonPath("$.data.passwordRequired").value(false));
     }
 }

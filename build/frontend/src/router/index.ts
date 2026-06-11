@@ -1,6 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
-import { getToken } from '@/utils/request';
+import { getToken, isPasswordRequired } from '@/utils/request';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -333,6 +333,9 @@ router.beforeEach((to) => {
   if (to.meta?.requiresAuth && !getToken()) {
     // 登录态统一守卫：点击“我的”等受保护入口时先去登录页，登录成功后按 redirect 回到原目标页。
     return { path: '/login', query: { redirect: to.fullPath } };
+  }
+  if (to.meta?.requiresAuth && isPasswordRequired()) {
+    return { path: '/login', query: { setupPassword: '1', redirect: to.fullPath } };
   }
   return true;
 });

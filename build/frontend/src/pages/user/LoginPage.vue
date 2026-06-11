@@ -20,6 +20,9 @@ const methods = [
 const phone = ref('');
 const code = ref('');
 const password = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
+const needsPasswordSetup = ref(false);
 const cooldown = ref(0);
 const sendingCode = ref(false);
 const smsError = ref('');
@@ -31,12 +34,21 @@ const WECHAT_REDIRECT_KEY = 'bitdance_wechat_redirect';
 
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
 const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0 && !sendingCode.value);
+const canSetPassword = computed(
+  () => newPassword.value.length >= 6 && newPassword.value.length <= 32 && newPassword.value === confirmPassword.value
+);
 const canSubmit = computed(
   () =>
-    isPhoneValid.value &&
     !submitting.value &&
-    (mode.value === 'code' ? code.value.length >= 4 : password.value.length >= 6)
+    (needsPasswordSetup.value
+      ? canSetPassword.value
+      : isPhoneValid.value && (mode.value === 'code' ? code.value.length >= 4 : password.value.length >= 6))
 );
+const submitText = computed(() => {
+  if (submitting.value) return needsPasswordSetup.value ? '设置中...' : '登录中...';
+  if (needsPasswordSetup.value) return '完成设置并进入';
+  return mode.value === 'code' ? '登录 / 注册' : '登录';
+});
 
 const heroImage =
   'https://images.unsplash.com/photo-1761882628233-1e23102da76d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3Nzk3ODEzMzV8&ixlib=rb-4.1.0&q=80&w=1080';
@@ -79,8 +91,19 @@ const getErrorMessage = (error: unknown) => {
   return err?.response?.data?.message || err?.message || '验证码发送失败';
 };
 
+const enterPasswordSetup = () => {
+  password.value = '';
+  newPassword.value = '';
+  confirmPassword.value = '';
+  needsPasswordSetup.value = true;
+};
+
 const onSubmit = async () => {
   loginError.value = '';
+  if (needsPasswordSetup.value) {
+    await onSetPassword();
+    return;
+  }
   if (!canSubmit.value) {
     showFailToast(mode.value === 'code' ? '请输入手机号与验证码' : '请输入手机号与密码');
     return;
@@ -90,7 +113,12 @@ const onSubmit = async () => {
     if (mode.value === 'password') {
       await userStore.loginWithPassword(phone.value, password.value);
     } else {
-      await userStore.login(phone.value, code.value);
+      const result = await userStore.login(phone.value, code.value);
+      if (result.passwordRequired) {
+        enterPasswordSetup();
+        showToast('验证码通过，请设置登录密码');
+        return;
+      }
     }
     showSuccessToast('登录成功');
     const redirect = (route.query.redirect as string) || '/home';
@@ -98,6 +126,30 @@ const onSubmit = async () => {
   } catch (error) {
     loginError.value = getErrorMessage(error);
     /* request 拦截器已弹错误 toast */
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const onSetPassword = async () => {
+  if (newPassword.value.length < 6 || newPassword.value.length > 32) {
+    showFailToast('密码长度需为 6-32 位');
+    return;
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    showFailToast('两次输入的密码不一致');
+    return;
+  }
+  submitting.value = true;
+  try {
+    await userStore.setPassword(newPassword.value);
+    showSuccessToast('密码设置成功');
+    const redirect = (route.query.redirect as string) || sessionStorage.getItem(WECHAT_REDIRECT_KEY) || '/home';
+    sessionStorage.removeItem(WECHAT_STATE_KEY);
+    sessionStorage.removeItem(WECHAT_REDIRECT_KEY);
+    router.replace(redirect);
+  } catch (error) {
+    loginError.value = getErrorMessage(error);
   } finally {
     submitting.value = false;
   }
@@ -139,7 +191,12 @@ const consumeWechatCallback = async () => {
 
   submitting.value = true;
   try {
-    await userStore.loginWithWechat(wechatCode);
+    const result = await userStore.loginWithWechat(wechatCode);
+    if (result.passwordRequired) {
+      enterPasswordSetup();
+      showToast('微信授权成功，请设置登录密码');
+      return;
+    }
     showSuccessToast('微信授权登录成功');
     const redirect = sessionStorage.getItem(WECHAT_REDIRECT_KEY) || '/home';
     sessionStorage.removeItem(WECHAT_STATE_KEY);
@@ -153,6 +210,9 @@ const consumeWechatCallback = async () => {
 };
 
 onMounted(() => {
+  if ((userStore.passwordRequired || route.query.setupPassword === '1') && userStore.token) {
+    enterPasswordSetup();
+  }
   consumeWechatCallback();
 });
 
@@ -170,7 +230,7 @@ onBeforeUnmount(() => {
     </section>
 
     <main class="login__form">
-      <div class="mode-seg">
+      <div v-if="!needsPasswordSetup" class="mode-seg">
         <button
           v-for="m in methods"
           :key="m.key"
@@ -184,9 +244,13 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <h1 class="login__title">{{ mode === 'code' ? '手机号验证码登录' : '手机号密码登录' }}</h1>
+      <h1 class="login__title">
+        {{ needsPasswordSetup ? '设置登录密码' : mode === 'code' ? '手机号验证码登录' : '手机号密码登录' }}
+      </h1>
 
-      <div class="field">
+      <p v-if="needsPasswordSetup" class="verified-phone">已验证 {{ userStore.profile?.phone || phone }}，请设置密码完成注册。</p>
+
+      <div v-if="!needsPasswordSetup" class="field">
         <Smartphone class="field__icon" :size="18" :stroke-width="2" />
         <input
           v-model="phone"
@@ -209,7 +273,30 @@ onBeforeUnmount(() => {
 
       <p v-if="smsError" class="sms-error">{{ smsError }}</p>
 
-      <div v-if="mode === 'code'" class="field">
+      <template v-if="needsPasswordSetup">
+        <div class="field">
+          <Lock class="field__icon" :size="18" :stroke-width="2" />
+          <input
+            v-model="newPassword"
+            class="field__input"
+            type="password"
+            maxlength="32"
+            placeholder="设置 6-32 位密码"
+          />
+        </div>
+        <div class="field">
+          <Lock class="field__icon" :size="18" :stroke-width="2" />
+          <input
+            v-model="confirmPassword"
+            class="field__input"
+            type="password"
+            maxlength="32"
+            placeholder="再次输入密码"
+          />
+        </div>
+      </template>
+
+      <div v-else-if="mode === 'code'" class="field">
         <KeyRound class="field__icon" :size="18" :stroke-width="2" />
         <input
           v-model="code"
@@ -232,10 +319,10 @@ onBeforeUnmount(() => {
       </div>
 
       <button class="btn btn--dark" type="button" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '登录中...' : mode === 'code' ? '登录 / 注册' : '登录' }}
+        {{ submitText }}
       </button>
       <p v-if="loginError" class="sms-error">{{ loginError }}</p>
-      <button class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
+      <button v-if="!needsPasswordSetup" class="btn btn--soft" type="button" @click="onWechat">微信授权登录</button>
     </main>
   </div>
 </template>
@@ -379,6 +466,14 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.verified-phone {
+  margin: -6px 4px 0;
+  color: var(--nike-mute);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .btn {

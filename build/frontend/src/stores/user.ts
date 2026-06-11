@@ -8,7 +8,7 @@ import {
   type StylePreference,
   type UpdateProfileRequest
 } from '@/api/profile';
-import request, { clearToken, getToken, setToken } from '@/utils/request';
+import request, { clearToken, getToken, isPasswordRequired, setPasswordRequired, setToken } from '@/utils/request';
 
 export interface UserProfile {
   id: number;
@@ -16,6 +16,12 @@ export interface UserProfile {
   nickname: string;
   avatar: string | null;
   roles: string[];
+}
+
+export interface LoginResult {
+  token: string;
+  user: UserProfile;
+  passwordRequired?: boolean;
 }
 
 const PROFILE_KEY = 'bitdance_profile';
@@ -47,6 +53,7 @@ export const useUserStore = defineStore('user', () => {
   const profile = ref<UserProfile | null>(loadProfile());
   const detail = ref<ProfileResponse | null>(null);
   const token = ref<string>(getToken());
+  const passwordRequired = ref(isPasswordRequired());
 
   const isLogin = computed(() => Boolean(token.value && profile.value));
   const roleSet = computed(() => new Set((profile.value?.roles ?? []).map((role) => role.toUpperCase())));
@@ -82,16 +89,18 @@ export const useUserStore = defineStore('user', () => {
     return request.post<unknown, { sent: boolean; expiresIn: number }>('/auth/sms/send', { phone });
   };
 
-  const applyLogin = (data: { token: string; user: UserProfile }) => {
+  const applyLogin = (data: LoginResult) => {
     token.value = data.token;
     profile.value = normalizeUser(data.user);
+    passwordRequired.value = Boolean(data.passwordRequired);
     setToken(data.token);
+    setPasswordRequired(passwordRequired.value);
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile.value));
     return profile.value;
   };
 
   const refreshProfile = async () => {
-    if (!token.value) return null;
+    if (!token.value || passwordRequired.value) return null;
     const data = await fetchProfile();
     detail.value = data;
     if (profile.value) {
@@ -132,33 +141,42 @@ export const useUserStore = defineStore('user', () => {
     });
 
   const login = async (phone: string, code: string) => {
-    const data = await request.post<unknown, { token: string; user: UserProfile }>('/auth/login', {
+    const data = await request.post<unknown, LoginResult>('/auth/login', {
       phone,
       code
     });
     applyLogin(data);
-    await refreshProfile();
-    return profile.value;
+    if (!data.passwordRequired) await refreshProfile();
+    return data;
   };
 
   const loginWithPassword = async (phone: string, password: string) => {
-    const data = await request.post<unknown, { token: string; user: UserProfile }>(
+    const data = await request.post<unknown, LoginResult>(
       '/auth/login/password',
       { phone, password }
     );
     applyLogin(data);
     await refreshProfile();
-    return profile.value;
+    return data;
   };
 
   const loginWithWechat = async (code = 'dev_mock_coach') => {
-    const data = await request.post<unknown, { token: string; user: UserProfile }>(
+    const data = await request.post<unknown, LoginResult>(
       '/auth/login/wechat',
       { code }
     );
     applyLogin(data);
+    if (!data.passwordRequired) await refreshProfile();
+    return data;
+  };
+
+  const setPassword = async (password: string) => {
+    const data = await request.post<unknown, LoginResult>('/auth/password', { password });
+    applyLogin(data);
+    passwordRequired.value = false;
+    setPasswordRequired(false);
     await refreshProfile();
-    return profile.value;
+    return data;
   };
 
   const getWechatAuthorizeUrl = async (state: string) => {
@@ -172,8 +190,10 @@ export const useUserStore = defineStore('user', () => {
     token.value = '';
     profile.value = null;
     detail.value = null;
+    passwordRequired.value = false;
     activeRole.value = 'user';
     clearToken();
+    setPasswordRequired(false);
     localStorage.removeItem(PROFILE_KEY);
     localStorage.removeItem(ROLE_KEY);
   };
@@ -182,6 +202,7 @@ export const useUserStore = defineStore('user', () => {
     profile,
     detail,
     token,
+    passwordRequired,
     isLogin,
     isCoach,
     isStudioAdmin,
@@ -193,6 +214,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     loginWithPassword,
     loginWithWechat,
+    setPassword,
     getWechatAuthorizeUrl,
     refreshProfile,
     saveProfileDetail,
