@@ -1,15 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Bell, CheckCheck, Star, Ticket, User, Users } from 'lucide-vue-next';
+import { useRouter } from 'vue-router';
+import {
+  Bell,
+  CalendarDays,
+  CheckCheck,
+  ChevronRight,
+  Star,
+  Ticket,
+  User,
+  Users
+} from 'lucide-vue-next';
 import { showSuccessToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { fetchMessages, markAllRead, markRead, type MessageItem } from '@/api/message';
 
-const cats = [
+type MessageTab = 'all' | 'practice' | 'review' | 'trial' | 'system' | 'workshop';
+
+const router = useRouter();
+
+const cats: Array<{ key: MessageTab; label: string }> = [
   { key: 'all', label: '全部' },
   { key: 'practice', label: '约练' },
   { key: 'review', label: '评价' },
   { key: 'trial', label: '试听' },
+  { key: 'workshop', label: '活动' },
   { key: 'system', label: '系统' }
 ];
 
@@ -17,10 +32,11 @@ const iconMap = {
   practice: Users,
   review: Star,
   trial: Ticket,
+  workshop: CalendarDays,
   system: Bell
 };
 
-const activeCat = ref('all');
+const activeCat = ref<MessageTab>('all');
 const messages = ref<MessageItem[]>([]);
 const unread = ref(0);
 const loading = ref(false);
@@ -39,28 +55,68 @@ const formatTime = (value?: string) => {
   });
 };
 
+const targetPath = (item: MessageItem) => {
+  const id = item.targetId;
+  switch (item.targetType) {
+    case 'practice_post':
+      return id ? `/practice/${id}` : '/me/practices';
+    case 'practice_request':
+      return '/me/practices';
+    case 'review':
+    case 'review_reply':
+      return '/me/reviews';
+    case 'trial':
+    case 'trial_order':
+      return '/me/trials';
+    case 'workshop':
+      return id ? `/workshop/${id}` : '/workshops';
+    case 'workshop_order':
+      return '/me/workshop-orders';
+    case 'workshop_session':
+      return '/me/workshop-calendar';
+    case 'content_post':
+      return id ? `/community/post/${id}` : '/community';
+    case 'group_class_intent':
+      return '/practice/group-class';
+    case 'user':
+      return id ? `/user/${id}` : undefined;
+    default:
+      if (item.category === 'practice') return '/me/practices';
+      if (item.category === 'review') return '/me/reviews';
+      if (item.category === 'trial') return '/me/trials';
+      if (item.category === 'workshop') return '/me/workshop-orders';
+      return undefined;
+  }
+};
+
 const loadMessages = async () => {
   loading.value = true;
   try {
     const data = await fetchMessages(activeCat.value);
-    messages.value = data.list;
-    unread.value = data.unread;
+    messages.value = data.list ?? [];
+    unread.value = data.unread ?? 0;
   } finally {
     loading.value = false;
   }
 };
 
-const selectCat = async (key: string) => {
+const selectCat = async (key: MessageTab) => {
   activeCat.value = key;
   await loadMessages();
 };
 
 const readOne = async (item: MessageItem) => {
-  if (item.isRead || item.read) return;
-  await markRead(item.id);
-  item.isRead = true;
-  item.read = true;
-  unread.value = Math.max(0, unread.value - 1);
+  const wasUnread = !(item.isRead || item.read);
+  if (wasUnread) {
+    await markRead(item.id);
+    item.isRead = true;
+    item.read = true;
+    unread.value = Math.max(0, unread.value - 1);
+  }
+  const path = targetPath(item);
+  if (path) {
+    await router.push(path);
+  }
 };
 
 const readAll = async () => {
@@ -79,7 +135,7 @@ onMounted(loadMessages);
 
     <section class="pen-scroll">
       <header class="summary">
-        <div>
+        <div class="summary__count">
           <strong>{{ unread }}</strong>
           <span>条未读消息</span>
         </div>
@@ -106,25 +162,27 @@ onMounted(loadMessages);
       <p v-else-if="!visibleMessages.length" class="empty">当前分类暂无消息</p>
 
       <template v-else>
-        <article
+        <button
           v-for="m in visibleMessages"
           :key="m.id"
           class="msg"
           :class="{ 'msg--read': m.isRead || m.read }"
+          type="button"
           @click="readOne(m)"
         >
           <span class="msg__dot" :class="{ 'msg__dot--on': !(m.isRead || m.read) }" aria-hidden="true" />
           <span class="msg__avatar" aria-hidden="true">
             <component :is="iconMap[m.category] || User" :size="22" :stroke-width="2" />
           </span>
-          <div class="msg__body">
-            <div class="msg__top">
+          <span class="msg__body">
+            <span class="msg__top">
               <span class="msg__name">{{ m.title }}</span>
               <span class="msg__time">{{ formatTime(m.createdAt) }}</span>
-            </div>
-            <p class="msg__preview">{{ m.content || m.body }}</p>
-          </div>
-        </article>
+            </span>
+            <span class="msg__preview">{{ m.content || m.body }}</span>
+          </span>
+          <ChevronRight class="msg__arrow" :size="18" aria-hidden="true" />
+        </button>
       </template>
     </section>
   </main>
@@ -150,7 +208,7 @@ onMounted(loadMessages);
   gap: 12px;
   min-height: 64px;
 
-  div {
+  &__count {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -158,7 +216,7 @@ onMounted(loadMessages);
   }
 
   strong {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 900;
     line-height: $pen-lh;
   }
@@ -175,7 +233,8 @@ onMounted(loadMessages);
     align-items: center;
     justify-content: center;
     gap: 6px;
-    height: 38px;
+    min-width: 104px;
+    height: 40px;
     padding: 8px 14px;
     border: 0;
     border-radius: 999px;
@@ -194,17 +253,26 @@ onMounted(loadMessages);
 
 .chip-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  margin: 0 -18px;
+  padding: 0 18px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .chip {
   @include pen-chip;
+  flex: none;
 }
 
 .empty {
   margin: 0;
-  padding: 22px 12px;
+  padding: 28px 12px;
   border: 1px solid $pen-hairline;
   border-radius: 8px;
   color: $pen-mute;
@@ -217,15 +285,18 @@ onMounted(loadMessages);
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  min-height: 74px;
   padding: 12px 0;
   border: 0;
   border-bottom: 1px solid $pen-hairline;
   background: transparent;
+  color: $pen-ink;
   text-align: left;
   cursor: pointer;
 
   &--read {
-    opacity: 0.72;
+    opacity: 0.7;
   }
 
   &__dot {
@@ -256,7 +327,7 @@ onMounted(loadMessages);
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
   }
 
   &__top {
@@ -285,6 +356,7 @@ onMounted(loadMessages);
   }
 
   &__preview {
+    display: block;
     margin: 0;
     color: $pen-mute;
     font-size: 13px;
@@ -293,6 +365,11 @@ onMounted(loadMessages);
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  &__arrow {
+    flex: none;
+    color: $pen-mute;
   }
 }
 </style>

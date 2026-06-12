@@ -22,8 +22,9 @@ public class NotificationService {
         this.repo = repo;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public NotificationListResponse list(Long userId, String category, int page, int pageSize) {
+        ensureWelcomeNotification(userId);
         int safePage = Math.max(1, page);
         int safeSize = Math.min(Math.max(1, pageSize), 100);
         PageRequest pr = PageRequest.of(safePage - 1, safeSize);
@@ -55,11 +56,30 @@ public class NotificationService {
     }
 
     private NotificationDto toDto(Notification n) {
+        OffsetDateTime createdAt = n.getCreatedAt() == null ? n.getSentAt() : n.getCreatedAt();
         return new NotificationDto(
             n.getId(), n.getNoticeType(), n.getCategory(),
             n.getTitle(), n.getContent(),
             n.getTargetType(), n.getTargetId(),
-            n.getIsRead(), n.getReadAt(), n.getCreatedAt()
+            n.getIsRead(), n.getReadAt(), createdAt
         );
+    }
+
+    private void ensureWelcomeNotification(Long userId) {
+        if (repo.existsByUserIdAndNoticeTypeAndTargetTypeAndTargetId(
+            userId, "system_welcome", "system", userId)) {
+            return;
+        }
+        Notification n = new Notification();
+        n.setUserId(userId);
+        n.setNoticeType("system_welcome");
+        n.setCategory("system");
+        n.setTitle("欢迎来到丰台区舞蹈社区");
+        n.setContent("新的约练、评价互动和活动提醒会及时送达。");
+        n.setTargetType("system");
+        n.setTargetId(userId);
+        n.setIsRead(false);
+        n.setSentAt(OffsetDateTime.now());
+        repo.save(n);
     }
 }

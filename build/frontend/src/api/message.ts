@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 
-export type MessageCategory = 'system' | 'practice' | 'review' | 'trial';
+export type MessageCategory = 'system' | 'practice' | 'review' | 'trial' | 'workshop';
 
 export interface MessageItem {
   id: number;

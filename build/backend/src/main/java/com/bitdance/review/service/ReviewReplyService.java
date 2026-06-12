@@ -1,6 +1,8 @@
 package com.bitdance.review.service;
 
 import com.bitdance.common.exception.BizException;
+import com.bitdance.message.domain.Notification;
+import com.bitdance.message.repository.NotificationRepository;
 import com.bitdance.review.domain.Review;
 import com.bitdance.review.domain.ReviewReply;
 import com.bitdance.review.dto.CreateReplyRequest;
@@ -10,17 +12,25 @@ import com.bitdance.review.repository.ReviewRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class ReviewReplyService {
 
     private final ReviewReplyRepository replyRepo;
     private final ReviewRepository reviewRepo;
+    private final NotificationRepository notificationRepo;
 
-    public ReviewReplyService(ReviewReplyRepository replyRepo, ReviewRepository reviewRepo) {
+    public ReviewReplyService(
+        ReviewReplyRepository replyRepo,
+        ReviewRepository reviewRepo,
+        NotificationRepository notificationRepo
+    ) {
         this.replyRepo = replyRepo;
         this.reviewRepo = reviewRepo;
+        this.notificationRepo = notificationRepo;
     }
 
     @Transactional
@@ -35,7 +45,9 @@ public class ReviewReplyService {
         rr.setReplierUserId(replierId);
         rr.setReplyContent(req.replyContent());
         rr.setIsOfficial(Boolean.TRUE.equals(req.isOfficial()));
-        return toDto(replyRepo.save(rr));
+        ReviewReply saved = replyRepo.save(rr);
+        notifyReviewAuthor(r, replierId);
+        return toDto(saved);
     }
 
     @Transactional
@@ -64,5 +76,22 @@ public class ReviewReplyService {
             r.getId(), r.getReviewId(), r.getReplierUserId(),
             r.getReplyContent(), r.getIsOfficial(), r.getCreatedAt()
         );
+    }
+
+    private void notifyReviewAuthor(Review review, Long replierId) {
+        if (Objects.equals(review.getUserId(), replierId)) {
+            return;
+        }
+        Notification n = new Notification();
+        n.setUserId(review.getUserId());
+        n.setNoticeType("review_replied");
+        n.setCategory("review");
+        n.setTitle("你的评价收到回复");
+        n.setContent("有人回复了你的评价，点击查看互动详情。");
+        n.setTargetType("review");
+        n.setTargetId(review.getId());
+        n.setIsRead(false);
+        n.setSentAt(OffsetDateTime.now());
+        notificationRepo.save(n);
     }
 }

@@ -3,6 +3,8 @@ package com.bitdance.practice.service;
 import com.bitdance.buddy.domain.PracticeRating;
 import com.bitdance.buddy.repository.PracticeRatingRepository;
 import com.bitdance.common.exception.BizException;
+import com.bitdance.message.domain.Notification;
+import com.bitdance.message.repository.NotificationRepository;
 import com.bitdance.practice.domain.PracticeCompletionConfirm;
 import com.bitdance.practice.domain.PracticeJoinRequest;
 import com.bitdance.practice.domain.PracticePost;
@@ -59,19 +61,22 @@ public class PracticeService {
     private final UserDancePreferenceRepository preferenceRepo;
     private final PracticeCompletionConfirmRepository completionRepo;
     private final PracticeRatingRepository ratingRepo;
+    private final NotificationRepository notificationRepo;
 
     public PracticeService(
         PracticePostRepository postRepo,
         PracticeJoinRequestRepository joinRepo,
         UserDancePreferenceRepository preferenceRepo,
         PracticeCompletionConfirmRepository completionRepo,
-        PracticeRatingRepository ratingRepo
+        PracticeRatingRepository ratingRepo,
+        NotificationRepository notificationRepo
     ) {
         this.postRepo = postRepo;
         this.joinRepo = joinRepo;
         this.preferenceRepo = preferenceRepo;
         this.completionRepo = completionRepo;
         this.ratingRepo = ratingRepo;
+        this.notificationRepo = notificationRepo;
     }
 
     @Transactional
@@ -257,7 +262,17 @@ public class PracticeService {
         r.setJoinMessage(req == null ? null : req.message());
         r.setActedByUserId(null);
         r.setActedAt(null);
-        return toJoinDto(joinRepo.save(r));
+        PracticeJoinRequest saved = joinRepo.save(r);
+        createNotification(
+            p.getCreatorUserId(),
+            "practice_join_applied",
+            "practice",
+            "有人申请加入约练",
+            "你的约练收到一条加入申请，请及时处理。",
+            "practice_post",
+            p.getId()
+        );
+        return toJoinDto(saved);
     }
 
     @Transactional
@@ -284,6 +299,15 @@ public class PracticeService {
             p.setPostStatus("confirmed");
         }
         postRepo.save(p);
+        createNotification(
+            r.getApplicantUserId(),
+            "practice_join_accepted",
+            "practice",
+            "约练申请已通过",
+            "你的约练申请已通过，记得按时赴约。",
+            "practice_post",
+            p.getId()
+        );
         return toJoinDto(r);
     }
 
@@ -297,7 +321,17 @@ public class PracticeService {
         r.setJoinStatus("rejected");
         r.setActedByUserId(creatorId);
         r.setActedAt(OffsetDateTime.now());
-        return toJoinDto(joinRepo.save(r));
+        PracticeJoinRequest saved = joinRepo.save(r);
+        createNotification(
+            r.getApplicantUserId(),
+            "practice_join_rejected",
+            "practice",
+            "约练申请未通过",
+            "你的约练申请暂未通过，可以继续寻找合适的约练。",
+            "practice_post",
+            p.getId()
+        );
+        return toJoinDto(saved);
     }
 
     @Transactional
@@ -333,6 +367,15 @@ public class PracticeService {
                 p.setPostStatus("published");
             }
             postRepo.save(p);
+            createNotification(
+                p.getCreatorUserId(),
+                "practice_join_canceled",
+                "practice",
+                "约练成员已退出",
+                "一位已通过的成员退出了约练，请留意人数变化。",
+                "practice_post",
+                p.getId()
+            );
         }
         return toJoinDto(r);
     }
@@ -484,6 +527,28 @@ public class PracticeService {
         return "matched".equals(p.getPostStatus())
             && p.getEndAt() != null
             && !p.getEndAt().isAfter(OffsetDateTime.now());
+    }
+
+    private void createNotification(
+        Long userId,
+        String noticeType,
+        String category,
+        String title,
+        String content,
+        String targetType,
+        Long targetId
+    ) {
+        Notification n = new Notification();
+        n.setUserId(userId);
+        n.setNoticeType(noticeType);
+        n.setCategory(category);
+        n.setTitle(title);
+        n.setContent(content);
+        n.setTargetType(targetType);
+        n.setTargetId(targetId);
+        n.setIsRead(false);
+        n.setSentAt(OffsetDateTime.now());
+        notificationRepo.save(n);
     }
 
     private int recommendationScore(
