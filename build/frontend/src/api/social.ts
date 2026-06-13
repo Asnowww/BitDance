@@ -9,11 +9,27 @@ export interface SocialAccount {
   isPublic: boolean;
 }
 
+export interface SocialAccountPayload {
+  platform?: string;
+  accountName?: string;
+  profileUrl?: string;
+  isPublic?: boolean;
+}
+
 export const fetchMySocialAccounts = () =>
   request.get<unknown, SocialAccount[]>('/h5/social-accounts');
 
 export const updateSocialAccount = (id: number, isPublic: boolean) =>
   request.put<unknown, SocialAccount>(`/h5/social-accounts/${id}`, { isPublic });
+
+export const createSocialAccount = (body: SocialAccountPayload) =>
+  request.post<unknown, SocialAccount>('/h5/social-accounts', body);
+
+export const saveSocialAccount = (id: number, body: SocialAccountPayload) =>
+  request.put<unknown, SocialAccount>(`/h5/social-accounts/${id}`, body);
+
+export const deleteSocialAccount = (id: number) =>
+  request.delete<unknown, boolean>(`/h5/social-accounts/${id}`);
 
 export const fetchPublicSocialAccounts = (userId: number) =>
   request.get<unknown, SocialAccount[]>(`/public/users/${userId}/social-accounts`);

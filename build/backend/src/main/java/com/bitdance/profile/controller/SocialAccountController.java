@@ -9,6 +9,8 @@ import com.bitdance.profile.service.SocialAccountService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,12 +35,23 @@ public class SocialAccountController {
         return ApiResponse.ok(service.mine(CurrentUser.getId()));
     }
 
+    @PostMapping("/h5/social-accounts")
+    public ApiResponse<SocialAccountDto> create(@Valid @RequestBody UpdateSocialAccountRequest body) {
+        return ApiResponse.ok(service.createMine(CurrentUser.getId(), body));
+    }
+
     @PutMapping("/h5/social-accounts/{id}")
     public ApiResponse<SocialAccountDto> update(
         @PathVariable Long id,
         @Valid @RequestBody UpdateSocialAccountRequest body
     ) {
         return ApiResponse.ok(service.updateMine(CurrentUser.getId(), id, body));
+    }
+
+    @DeleteMapping("/h5/social-accounts/{id}")
+    public ApiResponse<Boolean> delete(@PathVariable Long id) {
+        service.deleteMine(CurrentUser.getId(), id);
+        return ApiResponse.ok(true);
     }
 
     @GetMapping("/public/users/{userId}/social-accounts")

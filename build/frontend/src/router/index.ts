@@ -337,10 +337,10 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '创建 Workshop', requiresAuth: true, requiredRoles: ['COACH'] }
   },
   {
-    path: '/coach/orders',
-    name: 'coach-orders',
+    path: '/merchant/orders',
+    name: 'merchant-orders',
     component: () => import('@/pages/coach/CoachOrdersPage.vue'),
-    meta: { title: '学员订单与核销', requiresAuth: true, requiredRoles: ['COACH'] }
+    meta: { title: '学员订单与核销', requiresAuth: true, requiredRoles: ['STUDIO_ADMIN'] }
   },
   {
     path: '/coach/replies',
@@ -353,6 +353,12 @@ const routes: RouteRecordRaw[] = [
     name: 'coach-dashboard',
     component: () => import('@/pages/coach/CoachDashboardPage.vue'),
     meta: { title: '经营看板', requiresAuth: true, requiredRoles: ['COACH'] }
+  },
+  {
+    path: '/merchant/dashboard',
+    name: 'merchant-dashboard',
+    component: () => import('@/pages/merchant/MerchantDashboardPage.vue'),
+    meta: { title: '舞室管理员工作台', requiresAuth: true, requiredRoles: ['STUDIO_ADMIN'] }
   },
   {
     path: '/admin/reports',

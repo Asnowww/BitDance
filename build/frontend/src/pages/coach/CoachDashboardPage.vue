@@ -1,49 +1,49 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { Home, MessageSquareText, PenLine, RefreshCw, Star } from 'lucide-vue-next';
 import { fetchCoachDashboard, type CoachDashboard } from '@/api/coachOps';
 
 const router = useRouter();
 const data = ref<CoachDashboard | null>(null);
+const loading = ref(false);
+
+const load = async () => {
+  loading.value = true;
+  try {
+    data.value = await fetchCoachDashboard();
+  } finally {
+    loading.value = false;
+  }
+};
 
 const quickActions = [
-  { title: '发布课程', path: '/coach/workshop-create' },
-  { title: '发布 Workshop', path: '/coach/workshop-create' },
-  { title: '签到核销', path: '/coach/orders' },
-  { title: '回复评价', path: '/coach/replies' }
+  { title: '个人主页', desc: '维护学员可见资料', icon: Home, path: '/me/coach-home' },
+  { title: '回复评价', desc: '处理老师评价反馈', icon: MessageSquareText, path: '/coach/replies' },
+  { title: '发布课程', desc: '创建可预约课程内容', icon: PenLine, path: '/coach/workshop-create' }
 ];
 
-const manageRows = [
-  { title: '舞室入驻认领', path: '/me/coach-home' },
-  { title: '课表管理', path: '/coach/workshop-create' },
-  { title: '教练账号管理', path: '/me/profile' },
-  { title: '订单与退款', path: '/coach/orders' },
-  { title: '数据看板', path: '/coach/dashboard' },
-  { title: '收益结算', path: '/coach/dashboard' }
-];
-
-const overview = computed(() => [
-  { value: data.value?.monthStudents ?? 18, label: '预约' },
-  { value: data.value?.monthSessions ?? 11, label: '核销' },
-  { value: data.value?.pendingReplies ?? 3, label: '待评价' },
-  { value: data.value ? `¥${(data.value.monthIncome / 1000).toFixed(1)}k` : '¥2.4k', label: '营收' }
+const metrics = computed(() => [
+  { value: data.value?.monthSessions ?? 0, label: '本月课时' },
+  { value: data.value?.pendingReviewReplies ?? data.value?.pendingReplies ?? 0, label: '待回复评价' },
+  { value: data.value?.ratingCount ?? 0, label: '评价数' },
+  { value: Number(data.value?.avgRating ?? data.value?.ratingAvg ?? 0).toFixed(1), label: '老师评分' }
 ]);
 
-onMounted(async () => {
-  data.value = await fetchCoachDashboard();
-});
+onMounted(load);
 </script>
 
 <template>
-  <main class="dashboard-page">
+  <main class="coach-page">
     <header class="hero">
-      <button class="icon-btn" aria-label="返回" @click="router.back()">‹</button>
-      <p>ROLE WORKSPACE</p>
-      <h1>舞室管理员工作台</h1>
+      <button class="back" type="button" aria-label="返回" @click="router.back()">‹</button>
+      <span>COACH WORKSPACE</span>
+      <h1>教练工作台</h1>
+      <p>{{ loading ? '正在同步后端数据' : '管理主页、评价与可预约课程' }}</p>
     </header>
 
-    <section class="metric-grid">
-      <article v-for="item in overview" :key="item.label" class="metric">
+    <section class="metric-grid" aria-label="教练经营数据">
+      <article v-for="item in metrics" :key="item.label" class="metric">
         <strong>{{ item.value }}</strong>
         <span>{{ item.label }}</span>
       </article>
@@ -51,66 +51,87 @@ onMounted(async () => {
 
     <section class="panel">
       <div class="section-head">
-        <h2>快捷操作</h2>
-        <span>QUICK</span>
-      </div>
-      <div class="quick-grid">
-        <button v-for="item in quickActions" :key="item.title" @click="router.push(item.path)">
-          <span>{{ item.title.slice(0, 2) }}</span>
-          {{ item.title }}
+        <div>
+          <h2>教练权限</h2>
+          <p>来自 /h5/coach/dashboard 的实时数据</p>
+        </div>
+        <button type="button" aria-label="刷新教练数据" @click="load">
+          <RefreshCw :size="17" :stroke-width="2.3" />
         </button>
       </div>
+      <button v-for="item in quickActions" :key="item.title" class="action-row" type="button" @click="router.push(item.path)">
+        <span class="action-row__icon">
+          <component :is="item.icon" :size="19" :stroke-width="2.3" />
+        </span>
+        <span class="action-row__copy">
+          <strong>{{ item.title }}</strong>
+          <em>{{ item.desc }}</em>
+        </span>
+        <span class="action-row__arrow">›</span>
+      </button>
     </section>
 
-    <section class="panel">
-      <div class="section-head">
-        <h2>管理页面</h2>
-        <span>MANAGE</span>
+    <section class="rating-panel">
+      <Star :size="20" :stroke-width="2.3" />
+      <div>
+        <strong>{{ Number(data?.avgRating ?? data?.ratingAvg ?? 0).toFixed(1) }}</strong>
+        <span>{{ data?.ratingCount ?? 0 }} 条公开评价，{{ data?.pendingReviewReplies ?? data?.pendingReplies ?? 0 }} 条待回复</span>
       </div>
-      <button v-for="item in manageRows" :key="item.title" class="manage-row" @click="router.push(item.path)">
-        <span>{{ item.title }}</span>
-        <em>进入</em>
-      </button>
     </section>
   </main>
 </template>
 
 <style lang="scss" scoped>
-.dashboard-page {
+.coach-page {
   min-height: 100vh;
-  padding: 18px 18px 28px;
+  padding: 18px 18px 32px;
   background: #fff;
   color: #111;
+  box-sizing: border-box;
 }
 
 .hero {
   position: relative;
-  min-height: 160px;
+  min-height: 172px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   padding: 18px;
-  border-radius: 30px;
-  background:
-    linear-gradient(135deg, rgba(17, 17, 17, 0.05), rgba(17, 17, 17, 0.74)),
-    linear-gradient(135deg, #e5e5e5, #9e9ea0);
+  background: #111;
   color: #fff;
+  box-sizing: border-box;
+
+  span,
+  h1,
   p {
-    margin: 0 0 8px;
-    color: #e5e5e5;
+    margin: 0;
+    letter-spacing: 0;
+  }
+
+  span {
+    color: #d8d8d8;
     font-size: 11px;
+    line-height: 1.2;
     font-weight: 900;
   }
+
   h1 {
-    width: 260px;
-    margin: 0;
+    margin-top: 8px;
     font-size: 36px;
-    line-height: 0.95;
+    line-height: 1.02;
     font-weight: 900;
+  }
+
+  p {
+    margin-top: 8px;
+    color: #d8d8d8;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 700;
   }
 }
 
-.icon-btn {
+.back {
   position: absolute;
   top: 14px;
   left: 14px;
@@ -118,120 +139,188 @@ onMounted(async () => {
   height: 40px;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  background: #fff;
   color: #111;
-  font-size: 30px;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
-  overflow: hidden;
-  margin-top: 16px;
-  border-radius: 28px;
+  margin-top: 14px;
   background: #111;
 }
 
 .metric {
-  min-height: 80px;
+  min-height: 88px;
+  padding: 10px 8px;
+  background: #f5f5f5;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 10px 8px;
-  background: #111;
-  color: #fff;
+  gap: 8px;
+  box-sizing: border-box;
+
   strong {
-    font-size: 24px;
+    font-size: 23px;
     line-height: 1;
     font-weight: 900;
   }
+
   span {
-    margin-top: 8px;
-    color: #cacacb;
+    color: #707072;
     font-size: 11px;
+    line-height: 1.2;
     font-weight: 800;
   }
 }
 
 .panel {
-  margin-top: 24px;
+  margin-top: 22px;
 }
 
 .section-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 900;
-  }
-  span {
-    color: #707072;
-    font-size: 11px;
-    font-weight: 900;
-  }
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  button {
-    min-height: 64px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 0;
-    border-radius: 24px;
-    padding: 12px;
-    background: #f5f5f5;
-    color: #111;
-    font-size: 14px;
-    font-weight: 900;
-    text-align: left;
-    span {
-      width: 36px;
-      height: 36px;
-      display: grid;
-      place-items: center;
-      flex: 0 0 auto;
-      border-radius: 999px;
-      background: #111;
-      color: #fff;
-      font-size: 12px;
-    }
-  }
-}
-
-.manage-row {
-  width: 100%;
-  min-height: 56px;
+  min-height: 44px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
-  border: 0;
-  border-radius: 22px;
-  padding: 0 14px 0 18px;
-  background: #f5f5f5;
-  color: #111;
-  text-align: left;
-  span {
-    font-size: 15px;
+
+  div {
+    min-width: 0;
+    flex: 1;
+  }
+
+  h2,
+  p {
+    margin: 0;
+    letter-spacing: 0;
+  }
+
+  h2 {
+    font-size: 22px;
+    line-height: 1.2;
     font-weight: 900;
   }
-  em {
-    padding: 7px 12px;
-    border-radius: 999px;
-    background: #fff;
-    color: #111;
+
+  p {
+    margin-top: 3px;
+    color: #707072;
     font-size: 12px;
-    font-style: normal;
+    line-height: 1.3;
+    font-weight: 700;
+  }
+
+  button {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 999px;
+    background: #f5f5f5;
+    color: #111;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+}
+
+.action-row {
+  width: 100%;
+  min-height: 68px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid #e5e5e5;
+  background: #fff;
+  color: #111;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.action-row__icon {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.action-row__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  strong,
+  em {
+    overflow-wrap: anywhere;
+    letter-spacing: 0;
+  }
+
+  strong {
+    font-size: 15px;
+    line-height: 1.25;
     font-weight: 900;
+  }
+
+  em {
+    color: #707072;
+    font-size: 12px;
+    line-height: 1.35;
+    font-style: normal;
+    font-weight: 700;
+  }
+}
+
+.action-row__arrow {
+  color: #707072;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.rating-panel {
+  margin-top: 22px;
+  min-height: 74px;
+  padding: 14px;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+
+  div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  strong {
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 900;
+  }
+
+  span {
+    color: #707072;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 360px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

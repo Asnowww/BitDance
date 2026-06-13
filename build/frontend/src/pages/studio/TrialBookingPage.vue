@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showSuccessToast } from 'vant';
+import { showFailToast, showSuccessToast } from 'vant';
 import { Music } from 'lucide-vue-next';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import PenActionBar from '@/components/pen/PenActionBar.vue';
@@ -32,6 +32,20 @@ const slots = computed(() =>
   )
 );
 const activeSlot = ref('');
+const selectedSlot = computed(() => {
+  const selectedIndex = slots.value.indexOf(activeSlot.value);
+  return availableSlots.value[selectedIndex] ?? availableSlots.value[0] ?? null;
+});
+const studioName = computed(() => detail.value?.name || '正在读取舞室信息');
+const studioMeta = computed(() => {
+  if (!detail.value) return '正在读取后端舞室地址与交通信息';
+  return [detail.value.address, detail.value.transportInfo].filter(Boolean).join(' · ') || '舞室信息待完善';
+});
+const studioAvailability = computed(() => {
+  if (!schedule.value.length) return '暂无可预约课表';
+  if (!availableSlots.value.length) return '当天暂无可选时段';
+  return `${availableSlots.value.length} 个可选时段`;
+});
 
 const fields = [
   { label: '姓名', value: '请输入称呼' },
@@ -40,9 +54,11 @@ const fields = [
 ];
 
 const onConfirm = async () => {
-  const selectedIndex = slots.value.indexOf(activeSlot.value);
-  const selected = availableSlots.value[selectedIndex] ?? availableSlots.value[0] ?? schedule.value[0];
-  if (!selected) return;
+  const selected = selectedSlot.value;
+  if (!selected) {
+    showFailToast('当前舞室暂无可预约时段');
+    return;
+  }
   await createTrialBooking({
     courseId: requestedCourseId ?? selected.courseId,
     courseScheduleId: selected.id,
@@ -70,9 +86,9 @@ onMounted(async () => {
       <div class="studio">
         <div class="studio__cover" aria-hidden="true"><Music :size="26" :stroke-width="2" /></div>
         <div class="studio__copy">
-          <strong class="studio__name">Urban Flow 舞室</strong>
-          <span class="studio__meta">五道口地铁站 320m · 韩舞强</span>
-          <strong class="studio__price">¥79 体验课</strong>
+          <strong class="studio__name">{{ studioName }}</strong>
+          <span class="studio__meta">{{ studioMeta }}</span>
+          <strong class="studio__price">{{ studioAvailability }}</strong>
         </div>
       </div>
 
@@ -103,6 +119,7 @@ onMounted(async () => {
         >
           {{ s }}
         </button>
+        <p v-if="!slots.length" class="empty-state">当天暂无可预约时段，请切换日期或稍后再试。</p>
       </div>
 
       <h2 class="block-title">报名信息</h2>
@@ -116,6 +133,7 @@ onMounted(async () => {
     <PenActionBar
       soft-label="收藏"
       dark-label="确认预约"
+      :dark-disabled="!selectedSlot"
       @soft="showSuccessToast('已收藏')"
       @dark="onConfirm"
     />
@@ -179,6 +197,15 @@ onMounted(async () => {
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { @include pen-chip; }
+
+.empty-state {
+  width: 100%;
+  margin: 0;
+  color: $pen-mute;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: $pen-lh;
+}
 
 .rows { display: flex; flex-direction: column; }
 

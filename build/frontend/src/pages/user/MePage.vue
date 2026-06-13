@@ -59,7 +59,7 @@ const quickActions = [
 
 const workbench = computed(() => [
   { title: '教练主页运营', status: user.isCoach ? '已开通' : '未认证', path: '/me/coach-home', enabled: user.isCoach },
-  { title: '舞室管理员入口', status: user.isStudioAdmin ? '已开通' : '未认证', path: '/coach/dashboard', enabled: user.isStudioAdmin },
+  { title: '舞室管理员入口', status: user.isStudioAdmin ? '已开通' : '未认证', path: '/merchant/dashboard', enabled: user.isStudioAdmin },
   { title: '平台举报后台', status: user.isPlatformAdmin ? '已开通' : '未开通', path: '/admin/reports', enabled: user.isPlatformAdmin }
 ]);
 const accountAction = ref<AccountActionDialog | null>(null);

@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ChevronLeft, PencilLine, Settings, User } from 'lucide-vue-next';
+import { ChevronLeft, PencilLine, Plus, Settings, Trash2, User, X } from 'lucide-vue-next';
 import { showFailToast, showSuccessToast } from 'vant';
 import { fetchMyCommunityPosts, fetchUserPractices, fetchUserReviews } from '@/api/userHome';
 import type { UserContentPost, UserPracticePost, UserReviewItem } from '@/api/userHome';
-import { fetchMySocialAccounts, updateSocialAccount, type SocialAccount } from '@/api/social';
+import {
+  createSocialAccount,
+  deleteSocialAccount,
+  fetchMySocialAccounts,
+  saveSocialAccount,
+  updateSocialAccount,
+  type SocialAccount
+} from '@/api/social';
 import { fetchFollowers, fetchFollowing } from '@/api/community';
 import { useUserStore } from '@/stores/user';
 import { getDefaultAvatar } from '@/utils/defaultAvatars';
@@ -27,6 +34,15 @@ const socialAccounts = ref<SocialAccount[]>([]);
 const totals = ref({ posts: 0, reviews: 0, practices: 0 });
 const followTotals = ref({ following: 0, followers: 0 });
 const loading = ref(false);
+const socialSaving = ref(false);
+const socialEditorOpen = ref(false);
+const editingSocialId = ref<number | null>(null);
+const socialForm = ref({
+  platform: '',
+  accountName: '',
+  profileUrl: '',
+  isPublic: true
+});
 
 const profileName = computed(() => user.detail?.nickname || user.profile?.nickname || '未命名用户');
 const profileId = computed(() => user.profile?.id || user.detail?.userId || 0);
@@ -118,6 +134,81 @@ const toggleSocialVisibility = async (account: SocialAccount) => {
   }
 };
 
+const openCreateSocial = () => {
+  editingSocialId.value = null;
+  socialForm.value = {
+    platform: '',
+    accountName: '',
+    profileUrl: '',
+    isPublic: true
+  };
+  socialEditorOpen.value = true;
+};
+
+const openEditSocial = (account: SocialAccount) => {
+  editingSocialId.value = account.id;
+  socialForm.value = {
+    platform: account.platform,
+    accountName: account.accountName,
+    profileUrl: account.profileUrl ?? '',
+    isPublic: account.isPublic
+  };
+  socialEditorOpen.value = true;
+};
+
+const closeSocialEditor = () => {
+  socialEditorOpen.value = false;
+  editingSocialId.value = null;
+};
+
+const submitSocialForm = async () => {
+  const platform = socialForm.value.platform.trim();
+  const accountName = socialForm.value.accountName.trim();
+  const profileUrl = socialForm.value.profileUrl.trim();
+  if (!platform || !accountName) {
+    showFailToast('请填写平台和账号名');
+    return;
+  }
+  socialSaving.value = true;
+  try {
+    const body = {
+      platform,
+      accountName,
+      profileUrl: profileUrl || undefined,
+      isPublic: socialForm.value.isPublic
+    };
+    const saved = editingSocialId.value
+      ? await saveSocialAccount(editingSocialId.value, body)
+      : await createSocialAccount(body);
+    const exists = socialAccounts.value.some((item) => item.id === saved.id);
+    socialAccounts.value = exists
+      ? socialAccounts.value.map((item) => (item.id === saved.id ? saved : item))
+      : [...socialAccounts.value, saved];
+    showSuccessToast(editingSocialId.value ? '社交账号已更新' : '社交账号已添加');
+    closeSocialEditor();
+  } catch {
+    showFailToast('社交账号保存失败');
+  } finally {
+    socialSaving.value = false;
+  }
+};
+
+const removeSocialAccount = async (account: SocialAccount) => {
+  socialSaving.value = true;
+  try {
+    await deleteSocialAccount(account.id);
+    socialAccounts.value = socialAccounts.value.filter((item) => item.id !== account.id);
+    if (editingSocialId.value === account.id) {
+      closeSocialEditor();
+    }
+    showSuccessToast('社交账号已删除');
+  } catch {
+    showFailToast('社交账号删除失败');
+  } finally {
+    socialSaving.value = false;
+  }
+};
+
 onMounted(loadHomeData);
 watch(
   () => route.query.tab,
@@ -178,21 +269,76 @@ watch(
       </section>
 
       <section class="section">
-        <h2>社交账号</h2>
-        <p v-if="!socialAccounts.length" class="empty-state">后端暂无社交账号绑定记录。</p>
+        <div class="section-headline">
+          <h2>社交账号</h2>
+          <button class="icon-action" type="button" aria-label="添加社交账号" @click="openCreateSocial">
+            <Plus :size="18" :stroke-width="2.5" />
+          </button>
+        </div>
+
+        <form v-if="socialEditorOpen" class="social-editor" @submit.prevent="submitSocialForm">
+          <label>
+            <span>平台</span>
+            <input v-model="socialForm.platform" maxlength="32" placeholder="小红书 / 抖音 / B站" />
+          </label>
+          <label>
+            <span>账号名</span>
+            <input v-model="socialForm.accountName" maxlength="100" placeholder="@bitdance" />
+          </label>
+          <label>
+            <span>主页链接</span>
+            <input v-model="socialForm.profileUrl" maxlength="512" placeholder="https://..." />
+          </label>
+          <label class="social-editor__switch">
+            <span>公开展示</span>
+            <button
+              class="state"
+              :class="{ 'state--active': socialForm.isPublic }"
+              type="button"
+              @click="socialForm.isPublic = !socialForm.isPublic"
+            >
+              {{ socialForm.isPublic ? '公开' : '仅自己' }}
+            </button>
+          </label>
+          <div class="social-editor__actions">
+            <button class="state" type="button" @click="closeSocialEditor">
+              <X :size="15" :stroke-width="2.5" />
+              <span>取消</span>
+            </button>
+            <button class="state state--active" type="submit" :disabled="socialSaving">
+              {{ socialSaving ? '保存中' : editingSocialId ? '保存修改' : '添加账号' }}
+            </button>
+          </div>
+        </form>
+
+        <p v-if="!socialAccounts.length && !socialEditorOpen" class="empty-state">暂无社交账号。</p>
         <article v-for="account in socialAccounts" :key="account.id" class="social-row">
           <span class="social-row__copy">
             <strong>{{ account.platform }}</strong>
             <em>{{ account.accountName }}</em>
+            <em v-if="account.profileUrl">{{ account.profileUrl }}</em>
           </span>
-          <button
-            class="state"
-            :class="{ 'state--active': account.isPublic }"
-            type="button"
-            @click="toggleSocialVisibility(account)"
-          >
-            {{ account.isPublic ? '公开' : '仅自己' }}
-          </button>
+          <span class="social-row__actions">
+            <button
+              class="state"
+              :class="{ 'state--active': account.isPublic }"
+              type="button"
+              @click="toggleSocialVisibility(account)"
+            >
+              {{ account.isPublic ? '公开' : '仅自己' }}
+            </button>
+            <button class="icon-action" type="button" aria-label="编辑社交账号" @click="openEditSocial(account)">
+              <PencilLine :size="16" :stroke-width="2.5" />
+            </button>
+            <button
+              class="icon-action icon-action--danger"
+              type="button"
+              aria-label="删除社交账号"
+              @click="removeSocialAccount(account)"
+            >
+              <Trash2 :size="16" :stroke-width="2.5" />
+            </button>
+          </span>
         </article>
       </section>
 
@@ -459,6 +605,86 @@ watch(
   }
 }
 
+.section-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.icon-action {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid $pen-hairline;
+  border-radius: 999px;
+  background: $pen-canvas;
+  color: $pen-ink;
+  cursor: pointer;
+  place-items: center;
+}
+
+.icon-action--danger {
+  color: #c62828;
+}
+
+.social-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid $pen-hairline;
+  border-radius: 14px;
+  background: $pen-soft;
+
+  label {
+    display: grid;
+    gap: 6px;
+  }
+
+  label > span {
+    color: $pen-mute;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: $pen-lh;
+  }
+
+  input {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 1px solid $pen-hairline;
+    border-radius: 12px;
+    outline: none;
+    background: $pen-canvas;
+    color: $pen-ink;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: $pen-lh;
+  }
+}
+
+.social-editor__switch,
+.social-editor__actions {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.social-editor__actions {
+  justify-content: flex-end;
+
+  .state {
+    gap: 6px;
+  }
+
+  button:disabled {
+    cursor: wait;
+    opacity: 0.62;
+  }
+}
+
 .social-row {
   display: flex;
   align-items: center;
@@ -492,6 +718,13 @@ watch(
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+  }
+
+  &__actions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
   }
 }
 

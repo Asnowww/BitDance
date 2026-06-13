@@ -6,8 +6,10 @@ import com.bitdance.iam.dto.LoginResponse;
 import com.bitdance.iam.dto.PasswordLoginRequest;
 import com.bitdance.iam.dto.SendSmsRequest;
 import com.bitdance.iam.dto.SetPasswordRequest;
+import com.bitdance.iam.dto.WechatBindPhoneRequest;
 import com.bitdance.iam.dto.WechatAuthorizeUrlResponse;
 import com.bitdance.iam.dto.WechatLoginRequest;
+import com.bitdance.iam.dto.WechatLoginResponse;
 import com.bitdance.iam.security.CurrentUser;
 import com.bitdance.iam.service.AuthService;
 import com.bitdance.iam.service.WechatOAuthClient;
@@ -56,8 +58,13 @@ public class AuthController {
     }
 
     @PostMapping("/login/wechat")
-    public ApiResponse<LoginResponse> loginWechat(@Valid @RequestBody WechatLoginRequest body) {
+    public ApiResponse<WechatLoginResponse> loginWechat(@Valid @RequestBody WechatLoginRequest body) {
         return ApiResponse.ok(authService.loginWithWechat(body.code()));
+    }
+
+    @PostMapping("/login/wechat/bind-phone")
+    public ApiResponse<LoginResponse> bindWechatPhone(@Valid @RequestBody WechatBindPhoneRequest body) {
+        return ApiResponse.ok(authService.bindWechatPhone(body.bindToken(), body.phone(), body.code()));
     }
 
     @GetMapping("/wechat/authorize-url")

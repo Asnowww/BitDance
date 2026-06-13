@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import { showSuccessToast } from 'vant';
 import PenTopBar from '@/components/pen/PenTopBar.vue';
 import { useUserStore } from '@/stores/user';
 import type { StylePreference } from '@/api/profile';
 import { DEFAULT_AVATARS, getDefaultAvatar } from '@/utils/defaultAvatars';
 
-const router = useRouter();
 const user = useUserStore();
 
 const form = reactive({
@@ -164,7 +162,6 @@ const onSave = async () => {
       styles: normalizedStyles
     });
     showSuccessToast('资料已保存');
-    router.back();
   } finally {
     saving.value = false;
   }

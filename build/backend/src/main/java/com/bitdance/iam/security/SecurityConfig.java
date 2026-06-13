@@ -44,7 +44,7 @@ public class SecurityConfig {
                     "/actuator/health"
                 ).permitAll()
                 .requestMatchers("/h5/**").authenticated()
-                .requestMatchers("/merchant/**").hasAnyRole("STUDIO_ADMIN", "PLATFORM_ADMIN")
+                .requestMatchers("/merchant/**").hasAnyRole("COACH", "STUDIO_ADMIN", "PLATFORM_ADMIN")
                 .requestMatchers("/admin/**").hasRole("PLATFORM_ADMIN")
                 .anyRequest().authenticated()
             )

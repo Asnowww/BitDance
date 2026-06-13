@@ -24,6 +24,15 @@ export interface LoginResult {
   passwordRequired?: boolean;
 }
 
+export interface WechatLoginResult {
+  token?: string;
+  user?: UserProfile;
+  passwordRequired?: boolean;
+  bindPhoneRequired?: boolean;
+  bindToken?: string;
+  bindExpiresIn?: number;
+}
+
 const PROFILE_KEY = 'bitdance_profile';
 const ROLE_KEY = 'bitdance_active_role';
 
@@ -163,9 +172,25 @@ export const useUserStore = defineStore('user', () => {
   };
 
   const loginWithWechat = async (code = 'dev_mock_coach') => {
-    const data = await request.post<unknown, LoginResult>(
+    const data = await request.post<unknown, WechatLoginResult>(
       '/auth/login/wechat',
       { code }
+    );
+    if (data.bindPhoneRequired) {
+      return data;
+    }
+    if (!data.token || !data.user) {
+      throw new Error('微信授权登录返回数据不完整');
+    }
+    applyLogin(data as LoginResult);
+    if (!data.passwordRequired) await refreshProfile();
+    return data;
+  };
+
+  const bindWechatPhone = async (bindToken: string, phone: string, code: string) => {
+    const data = await request.post<unknown, LoginResult>(
+      '/auth/login/wechat/bind-phone',
+      { bindToken, phone, code }
     );
     applyLogin(data);
     if (!data.passwordRequired) await refreshProfile();
@@ -217,6 +242,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     loginWithPassword,
     loginWithWechat,
+    bindWechatPhone,
     setPassword,
     getWechatAuthorizeUrl,
     refreshProfile,

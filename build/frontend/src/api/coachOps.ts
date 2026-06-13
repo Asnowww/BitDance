@@ -21,6 +21,23 @@ export interface CoachWorkshopDraft {
   sessions: Array<{ date: string; startTime: string; endTime: string; capacity: number; price: number }>;
 }
 
+export interface CreateWorkshopPayload {
+  studioId: number;
+  coachId?: number;
+  cityId: number;
+  danceStyleId?: number;
+  workshopName: string;
+  coverAssetId?: number;
+  intro?: string;
+  address: string;
+  locationName: string;
+  priceAmount: number;
+  minPeople?: number;
+  maxPeople?: number;
+  signupDeadline?: string | null;
+  sourceType?: 'studio' | 'coach';
+}
+
 export interface CoachWorkshopOrderRow {
   orderId: number;
   workshopId: number;
@@ -40,21 +57,24 @@ export interface CoachReviewReplyBody {
 
 export interface CoachDashboard {
   monthSessions: number;
-  monthStudents: number;
+  monthStudents?: number;
+  monthWorkshopOrders?: number;
   monthIncome: number;
-  pendingReplies: number;
-  ratingAvg: number;
+  pendingReplies?: number;
+  pendingReviewReplies?: number;
+  ratingAvg?: number;
+  avgRating?: number;
   ratingCount: number;
-  conversionRate: number;
+  conversionRate?: number;
 }
 
 export const submitAppeal = (body: { reviewId: number; reason: string; evidence: string }) =>
-  request.post<unknown, ReviewAppeal>('/coach/appeals', body);
+  request.post<unknown, ReviewAppeal>('/h5/review-appeals', body);
 
-export const fetchAppeals = () => request.get<unknown, ReviewAppeal[]>('/coach/appeals');
+export const fetchAppeals = () => request.get<unknown, ReviewAppeal[]>('/h5/review-appeals/mine');
 
-export const createCoachWorkshop = (body: CoachWorkshopDraft) =>
-  request.post<unknown, { id: number; status: string }>('/coach/workshops', body);
+export const createCoachWorkshop = (body: CreateWorkshopPayload) =>
+  request.post<unknown, { id: number; status: string }>('/merchant/workshops', body);
 
 export const fetchCoachOrders = () =>
   request.get<unknown, CoachWorkshopOrderRow[]>('/merchant/workshop-orders');
@@ -63,7 +83,7 @@ export const checkinByCoach = (orderId: number, code: string) =>
   request.post<unknown, { ok: boolean }>(`/merchant/workshop-orders/${orderId}/checkin`, { code });
 
 export const replyReview = (body: CoachReviewReplyBody) =>
-  request.post<unknown, { ok: boolean }>('/coach/review-replies', body);
+  request.post<unknown, { ok: boolean }>('/h5/review-replies', body);
 
 export const fetchCoachDashboard = () =>
-  request.get<unknown, CoachDashboard>('/coach/dashboard');
+  request.get<unknown, CoachDashboard>('/h5/coach/dashboard');

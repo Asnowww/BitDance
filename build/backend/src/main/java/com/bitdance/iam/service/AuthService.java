@@ -5,23 +5,29 @@ import com.bitdance.iam.domain.AppUser;
 import com.bitdance.iam.domain.UserRoleBinding;
 import com.bitdance.iam.dto.LoginResponse;
 import com.bitdance.iam.dto.UserSummary;
+import com.bitdance.iam.dto.WechatLoginResponse;
 import com.bitdance.iam.jwt.JwtService;
 import com.bitdance.iam.repository.AppUserRepository;
 import com.bitdance.iam.repository.UserRoleBindingRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
+
+    private static final Duration WECHAT_BIND_TOKEN_TTL = Duration.ofMinutes(10);
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final SmsCodeService smsCodeService;
     private final AppUserRepository userRepo;
@@ -29,7 +35,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final WechatOAuthClient wechatOAuthClient;
-    private final boolean wechatAutoCreateUser;
+    private final Map<String, PendingWechatBind> pendingWechatBinds = new ConcurrentHashMap<>();
 
     public AuthService(
         SmsCodeService smsCodeService,
@@ -37,8 +43,7 @@ public class AuthService {
         UserRoleBindingRepository roleRepo,
         JwtService jwtService,
         PasswordEncoder passwordEncoder,
-        WechatOAuthClient wechatOAuthClient,
-        @Value("${bitdance.wechat.auto-create-user:false}") boolean wechatAutoCreateUser
+        WechatOAuthClient wechatOAuthClient
     ) {
         this.smsCodeService = smsCodeService;
         this.userRepo = userRepo;
@@ -46,7 +51,6 @@ public class AuthService {
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.wechatOAuthClient = wechatOAuthClient;
-        this.wechatAutoCreateUser = wechatAutoCreateUser;
     }
 
     public void sendSmsCode(String phone) {
@@ -72,16 +76,57 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponse loginWithWechat(String code) {
+    public WechatLoginResponse loginWithWechat(String code) {
         if (!code.startsWith("dev_mock_")) {
             WechatOAuthClient.WechatIdentity identity = wechatOAuthClient.exchangeCode(code);
-            AppUser user = findWechatUser(identity)
-                .orElseGet(() -> createWechatUser(identity));
-            return issueFor(user, !StringUtils.hasText(user.getPasswordHash()));
+            Optional<AppUser> user = findWechatUser(identity);
+            if (user.isPresent() && hasRealPhone(user.get().getPhone())) {
+                return WechatLoginResponse.loggedIn(issueFor(user.get(), !StringUtils.hasText(user.get().getPasswordHash())));
+            }
+            return WechatLoginResponse.phoneBindingRequired(
+                createWechatBindToken(identity),
+                WECHAT_BIND_TOKEN_TTL.toSeconds()
+            );
         }
         String openId = "wx_" + code;
         AppUser user = userRepo.findByOpenId(openId)
             .orElseGet(() -> bindMockWechatAccount(openId));
+        return WechatLoginResponse.loggedIn(issueFor(user, !StringUtils.hasText(user.getPasswordHash())));
+    }
+
+    @Transactional
+    public LoginResponse bindWechatPhone(String bindToken, String phone, String code) {
+        PendingWechatBind pending = consumeWechatBindToken(bindToken);
+        smsCodeService.verify(phone, code);
+
+        WechatOAuthClient.WechatIdentity identity = pending.identity();
+        Optional<AppUser> existingWechatUser = findWechatUser(identity);
+        Optional<AppUser> existingPhoneUser = userRepo.findByPhone(phone);
+
+        AppUser user;
+        if (existingWechatUser.isPresent()) {
+            AppUser wechatUser = existingWechatUser.get();
+            if (hasRealPhone(wechatUser.getPhone())) {
+                return issueFor(wechatUser, !StringUtils.hasText(wechatUser.getPasswordHash()));
+            }
+            if (existingPhoneUser.isPresent() && !existingPhoneUser.get().getId().equals(wechatUser.getId())) {
+                user = existingPhoneUser.get();
+                ensureWechatIdentityAvailableFor(user, identity);
+                wechatUser.setOpenId(null);
+                wechatUser.setUnionId(null);
+                userRepo.save(wechatUser);
+            } else {
+                user = wechatUser;
+                user.setPhone(phone);
+            }
+        } else {
+            user = existingPhoneUser.orElseGet(() -> registerUser(phone, null));
+            ensureWechatIdentityAvailableFor(user, identity);
+        }
+
+        user.setOpenId(identity.openId());
+        user.setUnionId(identity.unionId());
+        user = userRepo.save(user);
         return issueFor(user, !StringUtils.hasText(user.getPasswordHash()));
     }
 
@@ -122,9 +167,9 @@ public class AuthService {
         return saved;
     }
 
-    private java.util.Optional<AppUser> findWechatUser(WechatOAuthClient.WechatIdentity identity) {
+    private Optional<AppUser> findWechatUser(WechatOAuthClient.WechatIdentity identity) {
         if (StringUtils.hasText(identity.unionId())) {
-            java.util.Optional<AppUser> byUnionId = userRepo.findByUnionId(identity.unionId());
+            Optional<AppUser> byUnionId = userRepo.findByUnionId(identity.unionId());
             if (byUnionId.isPresent()) {
                 return byUnionId;
             }
@@ -132,23 +177,52 @@ public class AuthService {
         return userRepo.findByOpenId(identity.openId());
     }
 
-    private AppUser createWechatUser(WechatOAuthClient.WechatIdentity identity) {
-        if (!wechatAutoCreateUser) {
-            throw new BizException("WECHAT_BIND_PHONE_REQUIRED", "微信授权成功，请先使用手机号登录后绑定微信");
-        }
-        AppUser user = registerUser("wx" + shortHash(identity.openId()), null);
-        user.setOpenId(identity.openId());
-        user.setUnionId(identity.unionId());
-        return userRepo.save(user);
+    private boolean hasRealPhone(String phone) {
+        return phone != null && phone.matches("^1[3-9]\\d{9}$");
     }
 
-    private String shortHash(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes).substring(0, 18);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException(ex);
+    private String createWechatBindToken(WechatOAuthClient.WechatIdentity identity) {
+        cleanupExpiredWechatBindTokens();
+        byte[] bytes = new byte[24];
+        RANDOM.nextBytes(bytes);
+        String token = HexFormat.of().formatHex(bytes);
+        pendingWechatBinds.put(token, new PendingWechatBind(identity, Instant.now().plus(WECHAT_BIND_TOKEN_TTL)));
+        return token;
+    }
+
+    private PendingWechatBind consumeWechatBindToken(String token) {
+        PendingWechatBind pending = pendingWechatBinds.remove(token);
+        if (pending == null || pending.expiresAt().isBefore(Instant.now())) {
+            throw new BizException("WECHAT_BIND_TOKEN_EXPIRED", "微信绑定状态已过期，请重新授权");
+        }
+        return pending;
+    }
+
+    private void cleanupExpiredWechatBindTokens() {
+        Instant now = Instant.now();
+        pendingWechatBinds.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(now));
+    }
+
+    private void ensureWechatIdentityAvailableFor(AppUser target, WechatOAuthClient.WechatIdentity identity) {
+        if (StringUtils.hasText(target.getOpenId()) && !target.getOpenId().equals(identity.openId())) {
+            throw new BizException("PHONE_ALREADY_BOUND_TO_WECHAT", "该手机号已绑定其他微信");
+        }
+        if (StringUtils.hasText(target.getUnionId())
+            && StringUtils.hasText(identity.unionId())
+            && !target.getUnionId().equals(identity.unionId())) {
+            throw new BizException("PHONE_ALREADY_BOUND_TO_WECHAT", "该手机号已绑定其他微信");
+        }
+        userRepo.findByOpenId(identity.openId())
+            .filter(user -> !user.getId().equals(target.getId()))
+            .ifPresent(user -> {
+                throw new BizException("WECHAT_ALREADY_BOUND", "该微信已绑定其他账号");
+            });
+        if (StringUtils.hasText(identity.unionId())) {
+            userRepo.findByUnionId(identity.unionId())
+                .filter(user -> !user.getId().equals(target.getId()))
+                .ifPresent(user -> {
+                    throw new BizException("WECHAT_ALREADY_BOUND", "该微信已绑定其他账号");
+                });
         }
     }
 
@@ -171,5 +245,8 @@ public class AuthService {
 
     private String maskNick(String phone) {
         return "舞者" + phone.substring(phone.length() - 4);
+    }
+
+    private record PendingWechatBind(WechatOAuthClient.WechatIdentity identity, Instant expiresAt) {
     }
 }

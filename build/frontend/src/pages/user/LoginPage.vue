@@ -25,11 +25,14 @@ const sendingCode = ref(false);
 const smsError = ref('');
 const loginError = ref('');
 const submitting = ref(false);
+const wechatBindToken = ref('');
+const wechatBindNotice = ref('');
 let timer: ReturnType<typeof setInterval> | null = null;
 const WECHAT_STATE_KEY = 'bitdance_wechat_state';
 const WECHAT_REDIRECT_KEY = 'bitdance_wechat_redirect';
 
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value));
+const isWechatBinding = computed(() => Boolean(wechatBindToken.value));
 const canSendCode = computed(() => isPhoneValid.value && cooldown.value === 0 && !sendingCode.value);
 const canSubmit = computed(
   () =>
@@ -88,7 +91,11 @@ const onSubmit = async () => {
   }
   submitting.value = true;
   try {
-    if (mode.value === 'password') {
+    if (isWechatBinding.value) {
+      await userStore.bindWechatPhone(wechatBindToken.value, phone.value, code.value);
+      wechatBindToken.value = '';
+      wechatBindNotice.value = '';
+    } else if (mode.value === 'password') {
       await userStore.loginWithPassword(phone.value, password.value);
     } else {
       await userStore.login(phone.value, code.value);
@@ -139,6 +146,8 @@ const onQuickEnter = async () => {
 
 const onWechat = async () => {
   submitting.value = true;
+  wechatBindToken.value = '';
+  wechatBindNotice.value = '';
   try {
     const redirect = (route.query.redirect as string) || '/home';
     const state = createWechatState();
@@ -173,7 +182,21 @@ const consumeWechatCallback = async () => {
 
   submitting.value = true;
   try {
-    await userStore.loginWithWechat(wechatCode);
+    const result = await userStore.loginWithWechat(wechatCode);
+    if (result.bindPhoneRequired) {
+      if (!result.bindToken) {
+        throw new Error('微信绑定状态缺失，请重新授权');
+      }
+      mode.value = 'code';
+      wechatBindToken.value = result.bindToken;
+      wechatBindNotice.value = '微信授权成功，请先绑定真实手机号并完成验证码验证';
+      phone.value = '';
+      code.value = '';
+      sessionStorage.removeItem(WECHAT_STATE_KEY);
+      router.replace('/login');
+      showToast(wechatBindNotice.value);
+      return;
+    }
     showSuccessToast('微信授权登录成功');
     const redirect = sessionStorage.getItem(WECHAT_REDIRECT_KEY) || '/home';
     sessionStorage.removeItem(WECHAT_STATE_KEY);
@@ -204,7 +227,7 @@ onBeforeUnmount(() => {
     </section>
 
     <main class="login__form">
-      <div class="mode-seg">
+      <div v-if="!isWechatBinding" class="mode-seg">
         <button
           v-for="m in methods"
           :key="m.key"
@@ -218,7 +241,11 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <h1 class="login__title">{{ mode === 'code' ? '手机号验证码登录' : '手机号密码登录' }}</h1>
+      <h1 class="login__title">
+        {{ isWechatBinding ? '绑定手机号' : mode === 'code' ? '手机号验证码登录' : '手机号密码登录' }}
+      </h1>
+
+      <p v-if="wechatBindNotice" class="sms-hint">{{ wechatBindNotice }}</p>
 
       <div class="field">
         <Smartphone class="field__icon" :size="18" :stroke-width="2" />
@@ -266,7 +293,7 @@ onBeforeUnmount(() => {
       </div>
 
       <button class="btn btn--dark" type="button" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '登录中...' : mode === 'code' ? '登录 / 注册' : '登录' }}
+        {{ submitting ? '登录中...' : isWechatBinding ? '绑定并登录' : mode === 'code' ? '登录 / 注册' : '登录' }}
       </button>
       <p v-if="loginError" class="sms-error">{{ loginError }}</p>
       <button
@@ -422,6 +449,14 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.sms-hint {
+  margin: -8px 4px 0;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .btn {

@@ -23,7 +23,7 @@ public class UserSocialAccount {
     @Column(name = "platform", nullable = false, length = 32)
     private String platform;
 
-    @Column(name = "account_name", nullable = false, length = 128)
+    @Column(name = "account_name", nullable = false, length = 100)
     private String accountName;
 
     @Column(name = "profile_url", length = 512)
